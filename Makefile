@@ -26,6 +26,11 @@ install: $(ZIP)
 uninstall:
 	@echo "Uninstalling AddOn: $(NAME)"
 	@rm -rvf "$(PREFIX)/$(NAME)"
+
+prefixcopy:
+	@echo "Overwriting with files from AddOn folder: $(NAME)"
+	@cp -rT "$(PREFIX)/$(NAME)" .
+
 clean:
 	@rm -vf "$(NAME)_"*.zip*
 	@rm -rvf "$(NAME)"
