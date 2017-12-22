@@ -19,7 +19,7 @@ BINDING_HEADER_DOOMED = 'Doomed'
 
 local function InitializeVariables()
 	local function SetDefaults(t, ref)
-		for k, v in pairs(ref) do
+		for k, v in next, ref do
 			if t[k] == nil then
 				local pchar
 				if type(v) == 'boolean' then
@@ -29,7 +29,6 @@ local function InitializeVariables()
 				else
 					pchar = v
 				end
-				print('initializing ' .. k .. ' to ' .. pchar)
 				t[k] = v
 			elseif type(t[k]) == 'table' then
 				SetDefaults(t[k], v)
@@ -88,7 +87,7 @@ local SPEC = {
 	DESTRUCTION = 3
 }
 
-local events, abilities, abilityBySpellId, glows = {}, {}, {}, {}
+local events, glows = {}, {}
 
 local me, abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0, 0
 
@@ -256,7 +255,7 @@ doomedShieldPanel.text:SetJustifyH("CENTER")
 doomedShieldPanel.text:SetJustifyV("CENTER")
 ]]
 
-local Ability = {}
+local Ability, abilities, abilityBySpellId = {}, {}, {}
 Ability.__index = Ability
 
 function Ability.add(spellId, buff, player, spellId2)
@@ -438,29 +437,32 @@ function Ability:updateTargetsHit()
 end
 ]]
 
-local SummonedPet = {}
+local SummonedPet, petsByUnitName = {}, {}
 SummonedPet.__index = SummonedPet
 
-function SummonedPet.add(name, summonedBy, count)
+function SummonedPet.add(name, unitName, duration)
 	local pet = {
 		name = name,
-		summoned_by = summonedBy,
-		summon_count = count or 1
+		unit_name = unitName,
+		duration = duration,
+		active_units = {}
 	}
 	setmetatable(pet, SummonedPet)
+	petsByUnitName[unitName] = pet
 	return pet
 end
 
 function SummonedPet:remains()
-	local _, name, startTime, duration
-	local remains = 0
-	for i = 1, 6 do
-		_, name, startTime, duration = GetTotemInfo(i)
-		if name == self.name then
-			remains = max(remains, startTime + duration - var.time - var.cast_remains)
+	local remains, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > remains then
+			remains = unit_remains
 		end
 	end
-	return remains
+	return min(self.duration, max(0, remains - var.cast_remains))
 end
 
 function SummonedPet:up()
@@ -471,28 +473,61 @@ function SummonedPet:down()
 	return self:remains() <= 0
 end
 
-function SummonedPet:stack()
-	local _, name, startTime, duration
-	local stack = 0
-	for i = 1, 6 do
-		_, name, startTime, duration = GetTotemInfo(i)
-		if name == self.name and startTime + duration - var.time > var.cast_remains then
-			stack = stack + 1
+function SummonedPet:count()
+	local count, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains then
+			count = count + 1
 		end
 	end
-	return stack
+	return count
 end
 
-function SummonedPet:count()
-	return self.summon_count * self:stack()
+function SummonedPet:empowered()
+	local count, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains and unit.empowered then
+			count = count + 1
+		end
+	end
+	return count
 end
 
-function SummonedPet:ready()
-	return self.summoned_by:ready()
+function SummonedPet:notEmpowered()
+	local count, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains and not unit.empowered then
+			count = count + 1
+		end
+	end
+	return count
 end
 
-function SummonedPet:cooldown()
-	return self.summoned_by:cooldown()
+function SummonedPet:addUnit(guid)
+	self.active_units[guid] = {
+		spawn_time = GetTime()
+	}
+end
+
+function SummonedPet:removeUnit(guid, reason)
+	if self.active_units[guid] then
+		self.active_units[guid] = nil
+	end
+end
+
+function SummonedPet:empowerUnit(guid)
+	if self.active_units[guid] then
+		self.active_units[guid].empowered = true
+	end
 end
 
 -- Warlock Abilities
@@ -645,9 +680,9 @@ local DemonicSynergyPet = Ability.add(171975, 'pet', true, 171982)
 local PowerTrip = Ability.add(196605, true, true)
 local ShadowyInspiration = Ability.add(196269, true, true, 196606)
 ---- Summoned Pets
-local Darkglare = SummonedPet.add('Darkglare', SummonDarkglare)
-local Dreadstalkers = SummonedPet.add('Dreadstalkers', CallDreadstalkers, 2)
-local WildImps = SummonedPet.add('Wild Imps', HandOfGuldan, 4)
+local Darkglare = SummonedPet.add('Darkglare', 'Darkglare', 12)
+local Dreadstalkers = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
+WildImps = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
 -- Tier Bonuses
 -- Racials
 local ArcaneTorrent = Ability.add(136222, true, false) -- Blood Elf
@@ -665,6 +700,10 @@ function ReapSouls:usable()
 		return false
 	end
 	return Ability.usable(self)
+end
+
+function Implosion:usable()
+	return WildImps:up() and Ability.usable(self)
 end
 
 function Corruption:up()
@@ -1059,8 +1098,8 @@ actions+=/life_tap
 ]]
 
 local function DetermineAbilityDemonology()
-	if Implosion.known and Implosion:ready() and WildImps:remains() <= ShadowBolt:castTime() and (DemonicSynergy:up() or SoulConduit.known or (not SoulConduit.known and Enemies() > 1) or WildImps:count() <= 4) then
-		return Implosion
+	if Implosion.known and Implosion:usable() and WildImps:remains() <= ShadowBolt:castTime() and (DemonicSynergy:up() or SoulConduit.known or (not SoulConduit.known and Enemies() > 1) or WildImps:count() <= 4) then
+		UseCooldown(Implosion)
 	end
 	if CallDreadstalkers:usable() and ((not SummonDarkglare.known or PowerTrip.known) and (Enemies() < 3 or not Implosion.known())) and not (SoulShards() == 5 and DemonicCalling:up()) then
 		return CallDreadstalkers
@@ -1093,9 +1132,9 @@ local function DetermineAbilityDemonology()
 		return Shadowflame
 	end
 	if ThalkielsConsumption:ready() and (Dreadstalkers:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImps:count() > 3 and Dreadstalkers:count() <= 2 or WildImps:count() > 5) and WildImps:remains() > ThalkielsConsumption:castTime() then
-		return ThalkielsConsumption
+		UseCooldown(ThalkielsConsumption)
 	end
-	if ManaPct() <= 15 or (ManaPct() <= 65 and ((Dreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((Dreadstalkers:cooldown() < GCD() * 2) and (SummonDoomguardCD:cooldown() <= 0.75) and SoulShards() >= 3))) then
+	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and (SummonDoomguardCD:cooldown() <= 0.75) and SoulShards() >= 3))) then
 		return LifeTap
 	end
 	if Enemies() >= 3 or PlayerIsMoving() then
@@ -1492,46 +1531,58 @@ function events:ADDON_LOADED(name)
 end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName)
-	if srcGUID == me then
-		if eventType == 'SPELL_CAST_SUCCESS' then
-			local castedAbility = abilityBySpellId[spellId]
-			if castedAbility then
-				var.last_ability = castedAbility
-				if var.last_ability.triggers_gcd then
-					var.last_gcd = var.last_ability
-				end
-				if Doomed.previous and doomedPanel:IsVisible() then
-					doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
-					doomedPreviousPanel.icon:SetTexture(var.last_ability.icon)
-					doomedPreviousPanel:Show()
-				end
-			end
-		end
-		if eventType == 'SPELL_MISSED' then
-			if Doomed.previous and doomedPanel:IsVisible() and Doomed.miss_effect and var.last_ability and spellId == var.last_ability.spellId then
-				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
-			end
-		end
-		--[[
-		if Doomed.auto_aoe then
-			if eventType == 'SPELL_CAST_SUCCESS' then
-				if spellId == Corruption.spellId then
-					Doomed_SetTargetMode(1)
-				elseif spellId == SeedOfCorruption.spellId then
-					SeedOfCorruption.first_hit_time = nil
-				elseif spellId == PhantomSingularity.spellId then
-					PhantomSingularity.first_hit_time = nil
-				end
-			elseif eventType == 'SPELL_DAMAGE' then
-				if spellId == SeedOfCorruption.spellId then
-					SeedOfCorruption:recordTargetsHit()
-				elseif spellId == PhantomSingularity.spellId then
-					PhantomSingularity:recordTargetsHit()
-				end
-			end
-		end
-		]]
+	if srcGUID ~= me then
+		return
 	end
+	if eventType == 'SPELL_CAST_SUCCESS' then
+		local castedAbility = abilityBySpellId[spellId]
+		if castedAbility then
+			var.last_ability = castedAbility
+			if var.last_ability.triggers_gcd then
+				var.last_gcd = var.last_ability
+			end
+			if Doomed.previous and doomedPanel:IsVisible() then
+				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+				doomedPreviousPanel.icon:SetTexture(var.last_ability.icon)
+				doomedPreviousPanel:Show()
+			end
+		end
+		return
+	end
+	if eventType == 'SPELL_MISSED' then
+		if Doomed.previous and doomedPanel:IsVisible() and Doomed.miss_effect and var.last_ability and spellId == var.last_ability.spellId then
+			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
+		end
+		return
+	end
+	if petsByUnitName[dstName] then
+		if eventType == 'SPELL_SUMMON' then
+			petsByUnitName[dstName]:addUnit(dstGUID)
+		elseif eventType == 'UNIT_DIED' or eventType == 'SPELL_INSTAKILL' then
+			petsByUnitName[dstName]:removeUnit(dstGUID)
+		elseif eventType == 'SPELL_AURA_APPLIED' and spellId == DemonicEmpowerment.spellId then
+			petsByUnitName[dstName]:empowerUnit(dstGUID)
+		end
+	end
+	--[[
+	if Doomed.auto_aoe then
+		if eventType == 'SPELL_CAST_SUCCESS' then
+			if spellId == Corruption.spellId then
+				Doomed_SetTargetMode(1)
+			elseif spellId == SeedOfCorruption.spellId then
+				SeedOfCorruption.first_hit_time = nil
+			elseif spellId == PhantomSingularity.spellId then
+				PhantomSingularity.first_hit_time = nil
+			end
+		elseif eventType == 'SPELL_DAMAGE' then
+			if spellId == SeedOfCorruption.spellId then
+				SeedOfCorruption:recordTargetsHit()
+			elseif spellId == PhantomSingularity.spellId then
+				PhantomSingularity:recordTargetsHit()
+			end
+		end
+	end
+	]]
 end
 
 local function UpdateTargetInfo()
@@ -1656,7 +1707,7 @@ doomedPanel:SetScript('OnUpdate', function(self, elapsed)
 end)
 
 doomedPanel:SetScript('OnEvent', function(self, event, ...) events[event](self, ...) end)
-for event in pairs(events) do
+for event in next, events do
 	doomedPanel:RegisterEvent(event)
 end
 
@@ -1920,7 +1971,7 @@ function SlashCmdList.Doomed(msg, editbox)
 	end
 	print('Doomed (version: |cFFFFD000' .. GetAddOnMetadata('Doomed', 'Version') .. '|r) - Commands:')
 	local _, cmd
-	for _, cmd in pairs({
+	for _, cmd in next, {
 		'locked |cFF00C000on|r/|cFFC00000off|r - lock the Doomed UI so that it can\'t be moved',
 		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the Doomed UI to the Blizzard combat resources frame',
 		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000glow|r - adjust the scale of the Doomed UI icons',
@@ -1945,7 +1996,7 @@ function SlashCmdList.Doomed(msg, editbox)
 ]]
 		'pot |cFF00C000on|r/|cFFC00000off|r - show Prolonged Power potions in cooldown UI',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
-	}) do
+	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
 	end
 	print('Need to threaten with the wrath of doom? You can still use |cFFFFD000/wrath|r!')
