@@ -298,6 +298,9 @@ function Ability:usable(seconds)
 	if self.requires_charge and self:charges() == 0 then
 		return false
 	end
+	if self.requires_pet and (not UnitExists('pet') or UnitIsDead('pet')) then
+		return false
+	end
 	return self:ready(seconds)
 end
 
@@ -984,7 +987,7 @@ local function DetermineAbilityAffliction()
 	if PhantomSingularity.known and PhantomSingularity:ready() then
 		UseCooldown(PhantomSingularity)
 	end
-	if SoulHarvest.known and UnstableAffliction:stack() > 1 and SoulHarvest:remains() <= 8 and (not DeathsEmbrace.known or Target.timeToDie >= 136 or Target.timeToDie <= 40) then
+	if SoulHarvest.known and SoulHarvest:ready() and UnstableAffliction:stack() > 1 and SoulHarvest:remains() <= 8 and (not DeathsEmbrace.known or Target.timeToDie >= 136 or Target.timeToDie <= 40) then
 		UseCooldown(SoulHarvest)
 	end
 	if Doomed.pot and ProlongedPower:ready() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
