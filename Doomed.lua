@@ -19,6 +19,7 @@ BINDING_HEADER_DOOMED = 'Doomed'
 
 local function InitializeVariables()
 	local function SetDefaults(t, ref)
+		local k, v
 		for k, v in next, ref do
 			if t[k] == nil then
 				local pchar
@@ -310,7 +311,7 @@ function Ability:remains()
 	if self.buff_duration > 0 and self:casting() then
 		return self:duration()
 	end
-	local _, id, expires
+	local _, i, id, expires
 	for i = 1, 40 do
 		_, _, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
@@ -337,7 +338,7 @@ function Ability:up(excludeCasting)
 	if not excludeCasting and self.buff_duration > 0 and self:casting() then
 		return true
 	end
-	local _, id, expires
+	local _, i, id, expires
 	for i = 1, 40 do
 		_, _, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
@@ -362,7 +363,7 @@ function Ability:cooldown()
 end
 
 function Ability:stack()
-	local _, id, expires, count
+	local _, i, id, expires, count
 	for i = 1, 40 do
 		_, _, _, count, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
@@ -870,6 +871,7 @@ local function GetAbilityCasting()
 	if not var.cast_name then
 		return
 	end
+	local i
 	for i = 1,#abilities do
 		if abilities[i].name == var.cast_name then
 			return abilities[i]
@@ -967,7 +969,7 @@ function ProlongedPower:cooldown()
 end
 
 local function BloodlustActive()
-	local _, id
+	local _, i, id
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
 		if id == 2825 or id == 32182 or id == 80353 or id == 90355 or id == 160452 or id == 146555 then
@@ -1267,7 +1269,7 @@ end
 hooksecurefunc('ActionButton_ShowOverlayGlow', DenyOverlayGlow) -- Disable Blizzard's built-in action button glowing
 
 local function UpdateGlowColorAndScale()
-	local w, h, glow
+	local w, h, glow, i
 	local r = Doomed.glow.color.r
 	local g = Doomed.glow.color.g
 	local b = Doomed.glow.color.b
@@ -1287,6 +1289,7 @@ local function UpdateGlowColorAndScale()
 end
 
 local function CreateOverlayGlows()
+	local b, i
 	local GenerateGlow = function(button)
 		if button then
 			local glow = CreateFrame('Frame', nil, button, 'ActionBarButtonSpellActivationAlert')
@@ -1323,7 +1326,7 @@ local function CreateOverlayGlows()
 end
 
 local function UpdateGlows()
-	local glow, icon
+	local glow, icon, i
 	for i = 1, #glows do
 		glow = glows[i]
 		icon = glow.button.icon:GetTexture()
@@ -1401,8 +1404,9 @@ function Equipped(name, slot)
 	if slot then
 		return SlotMatches(name, slot)
 	end
-	for slot = 1, 19 do
-		if SlotMatches(name, slot) then
+	local i
+	for i = 1, 19 do
+		if SlotMatches(name, i) then
 			return true
 		end
 	end
@@ -1411,7 +1415,7 @@ end
 
 function EquippedTier(name)
 	local slot = { 1, 3, 5, 7, 10, 15 }
-	local equipped = 0
+	local equipped, i = 0
 	for i = 1, #slot do
 		if Equipped(name, slot) then
 			equipped = equipped + 1
@@ -1487,6 +1491,7 @@ end
 
 local function UpdateHealthArray()
 	Target.healthArray = {}
+	local i
 	for i = 1, floor(3 / Doomed.frequency) do
 		Target.healthArray[i] = 0
 	end
@@ -1648,6 +1653,7 @@ local function UpdateTargetInfo()
 		Target.guid = nil
 		Target.boss = false
 		Target.hostile = true
+		local i
 		for i = 1, #Target.healthArray do
 			Target.healthArray[i] = 0
 		end
@@ -1661,6 +1667,7 @@ local function UpdateTargetInfo()
 	end
 	if guid ~= Target.guid then
 		Target.guid = UnitGUID('target')
+		local i
 		for i = 1, #Target.healthArray do
 			Target.healthArray[i] = UnitHealth('target')
 		end
@@ -1718,6 +1725,7 @@ end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 	if unitName == 'player' then
+		local i
 		for i = 1, #abilities do
 			abilities[i].name, _, abilities[i].icon = GetSpellInfo(abilities[i].spellId)
 			abilities[i].known = IsPlayerSpell(abilities[i].spellId)
@@ -1762,6 +1770,7 @@ doomedPanel:SetScript('OnUpdate', function(self, elapsed)
 end)
 
 doomedPanel:SetScript('OnEvent', function(self, event, ...) events[event](self, ...) end)
+local event
 for event in next, events do
 	doomedPanel:RegisterEvent(event)
 end
