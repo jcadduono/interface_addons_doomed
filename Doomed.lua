@@ -91,6 +91,8 @@ local events, glows = {}, {}
 
 local me, abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0, 0
 
+local Targets = {}
+
 -- tier set equipped pieces count
 local Tier = {
 	T19P = 0,
@@ -255,7 +257,7 @@ doomedShieldPanel.text:SetJustifyH("CENTER")
 doomedShieldPanel.text:SetJustifyV("CENTER")
 ]]
 
-local Ability, abilities, abilityBySpellId = {}, {}, {}
+local Ability, abilities, abilityBySpellId, abilitiesAutoAoe = {}, {}, {}, {}
 Ability.__index = Ability
 
 function Ability.add(spellId, buff, player, spellId2)
@@ -413,35 +415,75 @@ function Ability:previous()
 	return var.last_gcd == self or var.last_ability == self
 end
 
---[[
-function Ability:recordTargetsHit()
-	if not self.first_hit_time then
-		self.first_hit_time = var.time
-		self.target_hit_count = 0
+function Ability:setAutoAoe(enabled)
+	if enabled and not self.auto_aoe then
+		self.auto_aoe = true
+		self.first_hit_time = nil
+		self.targets_hit = {}
+		abilitiesAutoAoe[#abilitiesAutoAoe + 1] = self
 	end
-	self.target_hit_count = self.target_hit_count + 1
-	for i = 1, #targetModes[currentSpec] do
-		if self.target_hit_count >= targetModes[currentSpec][i][1] and targetModes[currentSpec][i][1] > targetModes[currentSpec][targetMode][1] then
-			Doomed_SetTargetMode(i)
+	if not enabled and self.auto_aoe then
+		self.auto_aoe = nil
+		self.first_hit_time = nil
+		self.targets_hit = nil
+		local i
+		for i = 1, #abilitiesAutoAoe do
+			if abilitiesAutoAoe[i] == self then
+				abilitiesAutoAoe[i] = nil
+				break
+			end
 		end
 	end
 end
 
-function Ability:updateTargetsHit()
-	if self.first_hit_time and var.time - self.first_hit_time >= 0.3 then
-		self.first_hit_time = nil
-		local highestTargetMode = 1
-		for i = 1, #targetModes[currentSpec] do
-			if self.target_hit_count >= targetModes[currentSpec][i][1] and targetModes[currentSpec][i][1] > highestTargetMode then
-				highestTargetMode = i
-			end
-		end
-		if highestTargetMode ~= targetMode then
-			Doomed_SetTargetMode(highestTargetMode)
+function Ability:recordTargetHit(guid)
+	local t = GetTime()
+	self.targets_hit[guid] = t
+	Targets[guid] = t
+	if not self.first_hit_time then
+		self.first_hit_time = t
+	end
+end
+
+local function AutoAoeUpdateTargetMode()
+	local count, i = 0
+	for i in next, Targets do
+		count = count + 1
+	end
+	if count <= 1 then
+		Doomed_SetTargetMode(1)
+		return
+	end
+	for i = #targetModes[currentSpec], 1, -1 do
+		if count >= targetModes[currentSpec][i][1] then
+			Doomed_SetTargetMode(i)
+			return
 		end
 	end
 end
-]]
+
+local function AutoAoeRemoveTarget(guid)
+	if Targets[guid] then
+		Targets[guid] = nil
+		AutoAoeUpdateTargetMode()
+	end
+end
+
+function Ability:updateTargetsHit()
+	if self.first_hit_time and GetTime() - self.first_hit_time >= 0.3 then
+		self.first_hit_time = nil
+		local guid
+		for guid in next, Targets do
+			if not self.targets_hit[guid] then
+				Targets[guid] = nil
+			end
+		end
+		for guid in next, self.targets_hit do
+			self.targets_hit[guid] = nil
+		end
+		AutoAoeUpdateTargetMode()
+	end
+end
 
 local SummonedPet, petsByUnitName = {}, {}
 SummonedPet.__index = SummonedPet
@@ -591,6 +633,7 @@ local SeedOfCorruption = Ability.add(27243, false, true)
 SeedOfCorruption.shard_cost = 1
 SeedOfCorruption.buff_duration = 18
 SeedOfCorruption.hasted_duration = true
+SeedOfCorruption:setAutoAoe(true)
 local TormentedSouls = ReapSouls
 local UnstableAffliction = Ability.add(30108, false, true)
 UnstableAffliction.shard_cost = 1
@@ -616,6 +659,7 @@ local PhantomSingularity = Ability.add(205179, false, true)
 PhantomSingularity.buff_duration = 16
 PhantomSingularity.cooldown_duration = 40
 PhantomSingularity.hasted_duration = true
+PhantomSingularity:setAutoAoe(true)
 local SiphonLife = Ability.add(63106, false, true)
 SiphonLife.tick_interval = 3
 local SowTheSeeds = Ability.add(196226, false, true)
@@ -629,6 +673,7 @@ Demonwrath.mana_cost = 2.5
 Demonwrath.buff_duration = 3
 Demonwrath.tick_interval = 1
 Demonwrath.hasted_duration = true
+Demonwrath:setAutoAoe(true)
 DemonicEmpowerment = Ability.add(193396, 'pet', true)
 DemonicEmpowerment.requires_pet = true
 DemonicEmpowerment.mana_cost = 6
@@ -645,6 +690,7 @@ DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 local HandOfGuldan = Ability.add(105174, false, true)
 HandOfGuldan.shard_cost = 4
+HandOfGuldan:setAutoAoe(true)
 local ShadowBolt = Ability.add(686, false, true)
 ShadowBolt.mana_cost = 6
 ShadowBolt.shard_cost = -1
@@ -1537,6 +1583,11 @@ function events:ADDON_LOADED(name)
 end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName)
+	if eventType == 'UNIT_DIED' or eventType == 'SPELL_INSTAKILL' then
+		if Doomed.auto_aoe then
+			AutoAoeRemoveTarget(dstGUID)
+		end
+	end
 	if srcGUID ~= me then
 		return
 	end
@@ -1553,6 +1604,11 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 				doomedPreviousPanel:Show()
 			end
 		end
+		if Doomed.auto_aoe then
+			if spellId == Corruption.spellId then
+				Doomed_SetTargetMode(1)
+			end
+		end
 		return
 	end
 	if eventType == 'SPELL_MISSED' then
@@ -1560,6 +1616,16 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
 		end
 		return
+	end
+	if eventType == 'SPELL_DAMAGE' then
+		if Doomed.auto_aoe then
+			local i
+			for i = 1, #abilitiesAutoAoe do
+				if spellId == abilitiesAutoAoe[i].spellId or spellId == abilitiesAutoAoe[i].spellId2 then
+					abilitiesAutoAoe[i]:recordTargetHit(dstGUID)
+				end
+			end
+		end
 	end
 	if petsByUnitName[dstName] then
 		if eventType == 'SPELL_SUMMON' then
@@ -1570,25 +1636,6 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			petsByUnitName[dstName]:empowerUnit(dstGUID)
 		end
 	end
-	--[[
-	if Doomed.auto_aoe then
-		if eventType == 'SPELL_CAST_SUCCESS' then
-			if spellId == Corruption.spellId then
-				Doomed_SetTargetMode(1)
-			elseif spellId == SeedOfCorruption.spellId then
-				SeedOfCorruption.first_hit_time = nil
-			elseif spellId == PhantomSingularity.spellId then
-				PhantomSingularity.first_hit_time = nil
-			end
-		elseif eventType == 'SPELL_DAMAGE' then
-			if spellId == SeedOfCorruption.spellId then
-				SeedOfCorruption:recordTargetsHit()
-			elseif spellId == PhantomSingularity.spellId then
-				PhantomSingularity:recordTargetsHit()
-			end
-		end
-	end
-	]]
 end
 
 local function UpdateTargetInfo()
@@ -1652,6 +1699,10 @@ end
 function events:PLAYER_REGEN_ENABLED()
 	combatStartTime = 0
 	if Doomed.auto_aoe then
+		local guid
+		for guid in next, Targets do
+			Targets[guid] = nil
+		end
 		Doomed_SetTargetMode(1)
 	end
 end
@@ -1700,14 +1751,12 @@ end)
 doomedPanel:SetScript('OnUpdate', function(self, elapsed)
 	abilityTimer = abilityTimer + elapsed
 	if abilityTimer >= Doomed.frequency then
-		--[[
 		if Doomed.auto_aoe then
-			if currentSpec == SPEC.AFFLICTION then
-				SeedOfCorruption:updateTargetsHit()
-				PhantomSingularity:updateTargetsHit()
+			local i
+			for i = 1, #abilitiesAutoAoe do
+				abilitiesAutoAoe[i]:updateTargetsHit()
 			end
 		end
-		]]
 		UpdateCombat()
 	end
 end)
@@ -1945,13 +1994,13 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Show an icon for Power Word: Shield cooldown (discipline): ' .. (Doomed.shield and '|cFF00C000On' or '|cFFC00000Off'))
 	end
+]]
 	if msg[1] == 'auto' then
 		if msg[2] then
 			Doomed.auto_aoe = msg[2] == 'on'
 		end
 		return print('Doomed - Automatically change target mode on AoE spells: ' .. (Doomed.auto_aoe and '|cFF00C000On' or '|cFFC00000Off'))
 	end
-]]
 	if startsWith(msg[1], 'pot') then
 		if msg[2] then
 			Doomed.pot = msg[2] == 'on'
@@ -1998,8 +2047,8 @@ function SlashCmdList.Doomed(msg, editbox)
 --[[
 		'atone |cFF00C000on|r/|cFFC00000off|r - show an icon for atonement count (discipline)',
 		'shield |cFF00C000on|r/|cFFC00000off|r - show an icon for Power Word: Shield cooldown (discipline)',
-		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 ]]
+		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show Prolonged Power potions in cooldown UI',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
 	} do
