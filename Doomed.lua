@@ -105,7 +105,8 @@ local Tier = {
 local ItemEquipped = {
 	SigilOfSuperiorSummoning = false,
 	SindoreiSpite = false,
-	ReapAndSow = false
+	ReapAndSow = false,
+	RecurrentRitual = false,
 }
 
 local var = {
@@ -292,7 +293,7 @@ function Ability:ready(seconds)
 end
 
 function Ability:usable(seconds)
-	if self:cost() > var.mana then
+	if self:manaCost() > var.mana then
 		return false
 	end
 	if self.shard_cost > var.soul_shards then
@@ -359,7 +360,14 @@ function Ability:cooldown()
 		return self.cooldown_duration
 	end
 	local start, duration = GetSpellCooldown(self.spellId)
-	return start > 0 and max(0, (duration - (var.time - start)) - var.cast_remains) or 0
+	if start == 0 then
+		return 0
+	end
+	local cooldown = (duration - (var.time - start)) - var.cast_remains
+	if cooldown < 0.001 then -- account for rounding errors in GCD
+		return 0
+	end
+	return cooldown
 end
 
 function Ability:stack()
@@ -376,8 +384,12 @@ function Ability:stack()
 	return 0
 end
 
-function Ability:cost()
+function Ability:manaCost()
 	return self.mana_cost > 0 and (self.mana_cost / 100 * var.mana_max) or 0
+end
+
+function Ability:shardCost()
+	return self.shard_cost
 end
 
 function Ability:charges()
@@ -389,7 +401,7 @@ function Ability:duration()
 end
 
 function Ability:casting()
-	return var.cast_name == self.name
+	return var.cast_ability == self
 end
 
 function Ability:channeling()
@@ -410,8 +422,11 @@ function Ability:tickInterval()
 end
 
 function Ability:previous()
-	if self:casting() or self:channeling() then
+	if self:channeling() then
 		return true
+	end
+	if var.cast_ability then
+		return var.cast_ability == self
 	end
 	return var.last_gcd == self or var.last_ability == self
 end
@@ -536,26 +551,49 @@ function SummonedPet:count()
 end
 
 function SummonedPet:empowered()
-	local count, guid, unit, unit_remains = 0
+	local count, guid, unit, unit_remains, empower_remains = 0
+	local casting_de = DemonicEmpowerment:casting()
 	for guid, unit in next, self.active_units do
 		unit_remains = unit.spawn_time + self.duration - var.time
 		if unit_remains <= 0 then
 			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains and unit.empowered then
-			count = count + 1
+		elseif unit_remains > var.cast_remains then
+			if casting_de then
+				count = count + 1
+			elseif unit.empower_time then
+				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
+				if empower_remains <= 0 then
+					unit.empower_time = nil
+				elseif empower_remains > var.cast_remains then
+					count = count + 1
+				end
+			end
 		end
 	end
 	return count
 end
 
 function SummonedPet:notEmpowered()
-	local count, guid, unit, unit_remains = 0
+	if DemonicEmpowerment:casting() then
+		return 0
+	end
+	local count, guid, unit, unit_remains, empower_remains = 0
 	for guid, unit in next, self.active_units do
 		unit_remains = unit.spawn_time + self.duration - var.time
 		if unit_remains <= 0 then
 			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains and not unit.empowered then
-			count = count + 1
+		elseif unit_remains > var.cast_remains then
+			if unit.empower_time then
+				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
+				if empower_remains <= var.cast_remains then
+					if empower_remains <= 0 then
+						unit.empower_time = nil
+					end
+					count = count + 1
+				end
+			else
+				count = count + 1
+			end
 		end
 	end
 	return count
@@ -575,7 +613,7 @@ end
 
 function SummonedPet:empowerUnit(guid)
 	if self.active_units[guid] then
-		self.active_units[guid].empowered = true
+		self.active_units[guid].empower_time = GetTime()
 	end
 end
 
@@ -675,8 +713,7 @@ Demonwrath.buff_duration = 3
 Demonwrath.tick_interval = 1
 Demonwrath.hasted_duration = true
 Demonwrath:setAutoAoe(true)
-DemonicEmpowerment = Ability.add(193396, 'pet', true)
-DemonicEmpowerment.requires_pet = true
+local DemonicEmpowerment = Ability.add(193396, 'pet', true)
 DemonicEmpowerment.mana_cost = 6
 DemonicEmpowerment.buff_duration = 12
 local Doom = Ability.add(603, false, true)
@@ -690,7 +727,7 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 local HandOfGuldan = Ability.add(105174, false, true)
-HandOfGuldan.shard_cost = 4
+HandOfGuldan.shard_cost = 1
 HandOfGuldan:setAutoAoe(true)
 local ShadowBolt = Ability.add(686, false, true)
 ShadowBolt.mana_cost = 6
@@ -703,6 +740,13 @@ SummonInfernalCD.cooldown_duration = 180
 SummonInfernalCD.shard_cost = 1
 local ThalkielsConsumption = Ability.add(211714, false, true)
 ThalkielsConsumption.cooldown_duration = 45
+------ Pet Abilities
+local Felstorm = Ability.add(89753, 'pet', true)
+Felstorm.requires_pet = true
+Felstorm.triggers_gcd = false
+Felstorm.buff_duration = 6
+Felstorm.tick_interval = 1
+Felstorm.cooldown_duration = 45
 local Wrathstorm = Ability.add(115831, 'pet', true)
 Wrathstorm.requires_pet = true
 Wrathstorm.triggers_gcd = false
@@ -734,8 +778,11 @@ local PowerTrip = Ability.add(196605, true, true)
 local ShadowyInspiration = Ability.add(196269, true, true, 196606)
 ---- Summoned Pets
 local Darkglare = SummonedPet.add('Darkglare', 'Darkglare', 12)
-local Dreadstalkers = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
-WildImps = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
+local Dreadstalker = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
+local WildImp = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
+local Doomguard = SummonedPet.add('Doomguard', 'Doomguard', 25)
+local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
+local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
 -- Tier Bonuses
 -- Racials
 local ArcaneTorrent = Ability.add(136222, true, false) -- Blood Elf
@@ -756,7 +803,7 @@ function ReapSouls:usable()
 end
 
 function Implosion:usable()
-	return WildImps:up() and Ability.usable(self)
+	return WildImp:count() > 0 and Ability.usable(self)
 end
 
 function Corruption:up()
@@ -858,6 +905,25 @@ function SummonFelguard:up()
 	return UnitCreatureFamily('pet') == 'Felguard' or UnitCreatureFamily('pet') == 'Wrathguard'
 end
 
+function SummonFelguard:isWrathguard()
+	return UnitCreatureFamily('pet') == 'Wrathguard'
+end
+
+function HandOfGuldan:shardCost()
+	return min(4, max(UnitPower('player', SPELL_POWER_SOUL_SHARDS), self.shard_cost))
+end
+
+function CallDreadstalkers:shardCost()
+	local cost = self.shard_cost
+	if DemonicCalling:up() then
+		cost = 0
+	end
+	if ItemEquipped.RecurrentRitual then
+		cost = cost - 1
+	end
+	return cost
+end
+
 -- End Ability Modifications
 
 local Target = {
@@ -880,11 +946,11 @@ local function GetAbilityCasting()
 end
 
 local function GetCastManaRegen()
-	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:cost() or 0)
+	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
 end
 
 local function GetAvailableSoulShards()
-	return min(5, max(0, UnitPower('player', SPELL_POWER_SOUL_SHARDS) - (var.cast_ability and var.cast_ability.shard_cost or 0)))
+	return min(5, max(0, UnitPower('player', SPELL_POWER_SOUL_SHARDS) - (var.cast_ability and var.cast_ability:shardCost() or 0)))
 end
 
 local function UpdateVars()
@@ -1108,103 +1174,158 @@ local function DetermineAbilityAffliction()
 	return DrainSoul
 end
 
---[[
-actions=implosion,if=wild_imp_remaining_duration<=action.shadow_bolt.execute_time&(buff.demonic_synergy.remains|talent.soul_conduit.enabled|(!talent.soul_conduit.enabled&spell_targets.implosion>1)|wild_imp_count<=4)
-actions+=/variable,name=3min,value=doomguard_no_de>0|infernal_no_de>0
-actions+=/variable,name=no_de1,value=dreadstalker_no_de>0|darkglare_no_de>0|doomguard_no_de>0|infernal_no_de>0|service_no_de>0
-actions+=/variable,name=no_de2,value=(variable.3min&service_no_de>0)|(variable.3min&wild_imp_no_de>0)|(variable.3min&dreadstalker_no_de>0)|(service_no_de>0&dreadstalker_no_de>0)|(service_no_de>0&wild_imp_no_de>0)|(dreadstalker_no_de>0&wild_imp_no_de>0)|(prev_gcd.1.hand_of_guldan&variable.no_de1)
-actions+=/implosion,if=prev_gcd.1.hand_of_guldan&((wild_imp_remaining_duration<=3&buff.demonic_synergy.remains)|(wild_imp_remaining_duration<=4&spell_targets.implosion>2))
-actions+=/shadowflame,if=(debuff.shadowflame.stack>0&remains<action.shadow_bolt.cast_time+travel_time)&spell_targets.demonwrath<5
-actions+=/summon_infernal,if=(!talent.grimoire_of_supremacy.enabled&spell_targets.infernal_awakening>2)&equipped.132369
-actions+=/summon_doomguard,if=!talent.grimoire_of_supremacy.enabled&spell_targets.infernal_awakening<=2&equipped.132369
-actions+=/call_dreadstalkers,if=((!talent.summon_darkglare.enabled|talent.power_trip.enabled)&(spell_targets.implosion<3|!talent.implosion.enabled))&!(soul_shard=5&buff.demonic_calling.remains)
-actions+=/doom,cycle_targets=1,if=(!talent.hand_of_doom.enabled&target.time_to_die>duration&(!ticking|remains<duration*0.3))&!(variable.no_de1|prev_gcd.1.hand_of_guldan)
-actions+=/shadowflame,if=(charges=2&soul_shard<5)&spell_targets.demonwrath<5&!variable.no_de1
-actions+=/service_pet
-actions+=/summon_doomguard,if=!talent.grimoire_of_supremacy.enabled&spell_targets.infernal_awakening<=2&(target.time_to_die>180|target.health.pct<=20|target.time_to_die<30)
-actions+=/summon_infernal,if=!talent.grimoire_of_supremacy.enabled&spell_targets.infernal_awakening>2
-actions+=/summon_doomguard,if=talent.grimoire_of_supremacy.enabled&spell_targets.summon_infernal=1&equipped.132379&!cooldown.sindorei_spite_icd.remains
-actions+=/summon_infernal,if=talent.grimoire_of_supremacy.enabled&spell_targets.summon_infernal>1&equipped.132379&!cooldown.sindorei_spite_icd.remains
-actions+=/shadow_bolt,if=buff.shadowy_inspiration.remains&soul_shard<5&!prev_gcd.1.doom&!variable.no_de2
-actions+=/summon_darkglare,if=prev_gcd.1.hand_of_guldan|prev_gcd.1.call_dreadstalkers|talent.power_trip.enabled
-actions+=/summon_darkglare,if=cooldown.call_dreadstalkers.remains>5&soul_shard<3
-actions+=/summon_darkglare,if=cooldown.call_dreadstalkers.remains<=action.summon_darkglare.cast_time&(soul_shard>=3|soul_shard>=1&buff.demonic_calling.react)
-actions+=/call_dreadstalkers,if=talent.summon_darkglare.enabled&(spell_targets.implosion<3|!talent.implosion.enabled)&(cooldown.summon_darkglare.remains>2|prev_gcd.1.summon_darkglare|cooldown.summon_darkglare.remains<=action.call_dreadstalkers.cast_time&soul_shard>=3|cooldown.summon_darkglare.remains<=action.call_dreadstalkers.cast_time&soul_shard>=1&buff.demonic_calling.react)
-actions+=/hand_of_guldan,if=soul_shard>=4&(((!(variable.no_de1|prev_gcd.1.hand_of_guldan)&(pet_count>=13&!talent.shadowy_inspiration.enabled|pet_count>=6&talent.shadowy_inspiration.enabled))|!variable.no_de2|soul_shard=5)&talent.power_trip.enabled)
-actions+=/hand_of_guldan,if=(soul_shard>=3&prev_gcd.1.call_dreadstalkers&!artifact.thalkiels_ascendance.rank)|soul_shard>=5|(soul_shard>=4&cooldown.summon_darkglare.remains>2)
-actions+=/demonic_empowerment,if=(((talent.power_trip.enabled&(!talent.implosion.enabled|spell_targets.demonwrath<=1))|!talent.implosion.enabled|(talent.implosion.enabled&!talent.soul_conduit.enabled&spell_targets.demonwrath<=3))&(wild_imp_no_de>3|prev_gcd.1.hand_of_guldan))|(prev_gcd.1.hand_of_guldan&wild_imp_no_de=0&wild_imp_remaining_duration<=0)|(prev_gcd.1.implosion&wild_imp_no_de>0)
-actions+=/demonic_empowerment,if=variable.no_de1|prev_gcd.1.hand_of_guldan
-actions+=/use_items
-actions+=/berserking
-actions+=/blood_fury
-actions+=/soul_harvest,if=!buff.soul_harvest.remains
-actions+=/potion,name=prolonged_power,if=buff.soul_harvest.remains|target.time_to_die<=70|trinket.proc.any.react
-actions+=/shadowflame,if=charges=2&spell_targets.demonwrath<5
-actions+=/thalkiels_consumption,if=(dreadstalker_remaining_duration>execute_time|talent.implosion.enabled&spell_targets.implosion>=3)&(wild_imp_count>3&dreadstalker_count<=2|wild_imp_count>5)&wild_imp_remaining_duration>execute_time
-actions+=/life_tap,if=mana.pct<=15|(mana.pct<=65&((cooldown.call_dreadstalkers.remains<=0.75&soul_shard>=2)|((cooldown.call_dreadstalkers.remains<gcd*2)&(cooldown.summon_doomguard.remains<=0.75|cooldown.service_pet.remains<=0.75)&soul_shard>=3)))
-actions+=/demonwrath,chain=1,interrupt=1,if=spell_targets.demonwrath>=3
-actions+=/demonwrath,moving=1,chain=1,interrupt=1
-actions+=/demonbolt
-actions+=/shadow_bolt,if=buff.shadowy_inspiration.remains
-actions+=/demonic_empowerment,if=artifact.thalkiels_ascendance.rank&talent.power_trip.enabled&!talent.demonbolt.enabled&talent.shadowy_inspiration.enabled
-actions+=/shadow_bolt
-actions+=/life_tap
-]]
-
 local function DetermineAbilityDemonology()
-	if Implosion.known and Implosion:usable() and WildImps:remains() <= ShadowBolt:castTime() and (DemonicSynergy:up() or SoulConduit.known or (not SoulConduit.known and Enemies() > 1) or WildImps:count() <= 4) then
+	if TimeInCombat() == 0 then
+		if not PetIsSummoned() then
+			if GrimoireOfSupremacy.known then
+				return Enemies() > 1 and SummonInfernal or SummonDoomguard
+			end
+			return SummonFelguard
+		end
+		if DemonicEmpowerment:usable() and DemonicEmpowerment:refreshable() then
+			return DemonicEmpowerment
+		end
+		if ManaPct() < 70 then
+			return LifeTap
+		end
+		if Doomed.pot and ProlongedPower:ready() then
+			UseCooldown(ProlongedPower)
+		end
+		if SoulShards() < 5 then
+			if Demonbolt.known then
+				if Demonbolt:usable() then
+					return Demonbolt
+				end
+			elseif ShadowBolt:usable() then
+				return ShadowBolt
+			end
+		end
+	end
+
+	if Implosion.known and Implosion:usable() and WildImp:remains() <= ShadowBolt:castTime() and (DemonicSynergy:up() or SoulConduit.known or (not SoulConduit.known and Enemies() > 1) or WildImp:count() <= 4) then
 		UseCooldown(Implosion)
 	end
-	if CallDreadstalkers:usable() and ((not SummonDarkglare.known or PowerTrip.known) and (Enemies() < 3 or not Implosion.known())) and not (SoulShards() == 5 and DemonicCalling:up()) then
+	if ItemEquipped.SigilOfSuperiorSummoning and not GrimoireOfSupremacy.known then
+		if Enemies() > 2 and SummonInfernalCD:usable() then
+			UseCooldown(SummonInfernalCD)
+		elseif Enemies() <= 2 and SummonDoomguardCD:usable() then
+			UseCooldown(SummonDoomguardCD)
+		end
+	end
+	if CallDreadstalkers:usable() and ((not SummonDarkglare.known or PowerTrip.known) and (Enemies() < 3 or not Implosion.known)) and not (SoulShards() == 5 and DemonicCalling:up()) then
 		return CallDreadstalkers
 	end
-	if ManaPct() < 5 then
-		return LifeTap
-	end
-	if not HandOfDoom.known and Target.timeToDie > 18 and Doom:refreshable() then
+
+	local service_no_de = ServiceFelguard:notEmpowered()
+	local dreadstalker_no_de = Dreadstalker:notEmpowered()
+	local wild_imp_no_de = WildImp:notEmpowered()
+	local darkglare_no_de = Darkglare:notEmpowered()
+	local doomguard_no_de = Doomguard:notEmpowered()
+	local infernal_no_de = Infernal:notEmpowered()
+	local cd_no_de = doomguard_no_de > 0 or infernal_no_de > 0
+	local non_imp_no_de = dreadstalker_no_de > 0 or darkglare_no_de > 0 or cd_no_de or service_no_de > 0
+
+	if not HandOfDoom.known and Doom:usable() and Doom:refreshable() and Target.timeToDie > Doom:duration() + Doom:remains() and not (non_imp_no_de or HandOfGuldan:previous()) then
 		return Doom
 	end
-	if Shadowflame.known and Shadowflame:ready() and Shadowflame:charges() == 2 and SoulShards() < 5 and Enemies() < 5 then
+	if Shadowflame.known and Shadowflame:usable() and Shadowflame:charges() == 2 and SoulShards() < 5 and Enemies() < 5 then
 		return Shadowflame
 	end
-	if ShadowyInspiration.known and ShadowBolt:usable() and ShadowyInspiration:up() and SoulShards() < 5 then
-		return ShadowBolt
+	if GrimoireFelguard.known and GrimoireFelguard:usable() then
+		UseCooldown(GrimoireFelguard)
 	end
-	if SummonDarkglare.known and CallDreadstalkers:usable() and (Enemies() < 3 or not Implosion.known) and (SummonDarkglare:cooldown() > 2 or (SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 3) or (SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 1 and DemonicCalling:up())) then
-		return CallDreadstalkers
+	if not GrimoireOfSupremacy.known then
+		if Enemies() <= 2 and SummonDoomguardCD:usable() and (Target.timeToDie > 180 or Target.healthPercentage <= 20 or Target.timeToDie < 30) then
+			UseCooldown(SummonDoomguardCD)
+		elseif Enemies() > 2 and SummonInfernalCD:usable() then
+			UseCooldown(SummonInfernalCD)
+		end
 	end
-	if HandOfGuldan:usable() and SoulShards() == 5 then
-		return HandOfGuldan
+
+	local cond_no_de = (cd_no_de and service_no_de > 0) or (cd_no_de and wild_imp_no_de > 0) or (cd_no_de and dreadstalker_no_de > 0) or (service_no_de > 0 and dreadstalker_no_de > 0) or (service_no_de > 0 and wild_imp_no_de > 0) or (dreadstalker_no_de > 0 and wild_imp_no_de > 0) or (HandOfGuldan:previous() and non_imp_no_de)
+
+	if ShadowyInspiration.known and ShadowyInspiration:up() and SoulShards() < 5 and not (Doom:previous() or cond_no_de) then
+		if Demonbolt.known then
+			if Demonbolt:usable() then
+				return Demonbolt
+			end
+		elseif ShadowBolt:usable() then
+			return ShadowBolt
+		end
 	end
-	if HandOfGuldan:casting() and DemonicEmpowerment:usable() then
-		return DemonicEmpowerment
+	if SummonDarkglare.known then
+		if SummonDarkglare:usable() and (
+			(HandOfGuldan:previous() or CallDreadstalkers:previous() or PowerTrip.known) or
+			(CallDreadstalkers:cooldown() > 5 and SoulShards() < 3) or
+			(CallDreadstalkers:remains() <= SummonDarkglare:castTime() and (SoulShards() >= 3 or (SoulShards >= 1 and DemonicCalling:up())))
+		) then
+			UseCooldown(SummonDarkglare)
+		end
+		if CallDreadstalkers:usable() and (Enemies() < 3 or not Implosion.known) and (SummonDarkglare:cooldown() > 2 or SummonDarkglare:previous() or SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 3) or (SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 1 and DemonicCalling:up()) then
+			return CallDreadstalkers
+		end
+	end
+	if HandOfGuldan:usable() and SoulShards() >= 4 then
+		if SoulShards() == 5 then
+			return HandOfGuldan
+		end
+		if SummonDarkglare.known and SummonDarkglare:cooldown() > 2 then
+			return HandOfGuldan
+		end
+		local pet_count = (PetIsSummoned() and 1 or 0) + ServiceFelguard:count() + WildImp:count() + Dreadstalker:count() + Darkglare:count() + Doomguard:count() + Infernal:count()
+		if PowerTrip.known and ((not (non_imp_no_de or HandOfGuldan:previous()) and (pet_count >= (ShadowyInspiration.known and 6 or 13))) or not cond_no_de) then
+			return HandOfGuldan
+		end
+	end
+	if DemonicEmpowerment:usable() then
+		if non_imp_no_de or HandOfGuldan:previous() then
+			return DemonicEmpowerment
+		end
+		if (((PowerTrip.known and (not Implosion.known or Enemies() == 1)) or not Implosion.known or (Implosion.known and not SoulConduit.known and Enemies() <= 3)) and (wild_imp_no_de > 3 or HandOfGuldan:previous())) or (HandOfGuldan:previous() and wild_imp_no_de == 0 and WildImp:down()) or (Implosion:previous() and wild_imp_no_de > 0) then
+			return DemonicEmpowerment
+		end
 	end
 	if SoulHarvest.known and SoulHarvest:ready() and SoulHarvest:down() then
-		return SoulHarvest
+		UseCooldown(SoulHarvest)
 	end
-	if Shadowflame.known and Shadowflame:ready() and Shadowflame:charges() == 2 and Enemies() < 5 then
+	if Doomed.pot and ProlongedPower:ready() and (SoulHarvest:up() or Target.timeToDie <= 70 or BloodlustActive()) then
+		UseCooldown(ProlongedPower)
+	end
+	if Shadowflame.known and Shadowflame:usable() and Shadowflame:charges() == 2 and Enemies() < 5 then
 		return Shadowflame
 	end
-	if ThalkielsConsumption:ready() and (Dreadstalkers:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImps:count() > 3 and Dreadstalkers:count() <= 2 or WildImps:count() > 5) and WildImps:remains() > ThalkielsConsumption:castTime() then
+	if ThalkielsConsumption:usable() and (Dreadstalker:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImp:count() > 3 and Dreadstalker:count() <= 2 or WildImp:count() > 5) and WildImp:remains() > ThalkielsConsumption:castTime() then
 		UseCooldown(ThalkielsConsumption)
 	end
-	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and (SummonDoomguardCD:cooldown() <= 0.75) and SoulShards() >= 3))) then
+	if SummonFelguard:up() then
+		if SummonFelguard:isWrathguard() then
+			if Wrathstorm:ready() then
+				UseCooldown(Wrathstorm)
+			end
+		elseif Felstorm:ready() then
+			UseCooldown(Felstorm)
+		end
+	end
+	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3))) then
 		return LifeTap
 	end
-	if Enemies() >= 3 or PlayerIsMoving() then
+	if (Enemies() >= 3 or PlayerIsMoving()) and Demonwrath:usable() then
 		return Demonwrath
 	end
-	if Demonbolt.known and Demonbolt:usable() then
-		return Demonbolt
-	end
-	if ShadowyInspiration.known and ShadowyInspiration:up() then
-		return ShadowBolt
-	end
-	if PowerTrip.known and not Demonbolt.known and ShadowyInspiration.known then
-		return DemonicEmpowerment
-	end
-	if ShadowBolt:usable() then
-		return ShadowBolt
+	if Demonbolt.known then
+		if Demonbolt:usable() then
+			return Demonbolt
+		end
+	else
+		if ShadowyInspiration.known and ShadowBolt:usable() and ShadowyInspiration:up() then
+			return ShadowBolt
+		end
+		if PowerTrip.known and ShadowyInspiration.known and DemonicEmpowerment:usable() then
+			return DemonicEmpowerment
+		end
+		if ShadowBolt:usable() then
+			return ShadowBolt
+		end
 	end
 	if ManaPct() < 80 then
 		return LifeTap
@@ -1721,6 +1842,7 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 	ItemEquipped.SigilOfSuperiorSummoning = Equipped("Wilfred's Sigil of Superior Summoning")
 	ItemEquipped.SindoreiSpite = Equipped("Sin'dorei Spite")
 	ItemEquipped.ReapAndSow = Equipped("Reap and Sow")
+	ItemEquipped.RecurrentRitual = Equipped("Recurrent Ritual")
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
