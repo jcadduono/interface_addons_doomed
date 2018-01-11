@@ -501,122 +501,6 @@ function Ability:updateTargetsHit()
 	end
 end
 
-local SummonedPet, petsByUnitName = {}, {}
-SummonedPet.__index = SummonedPet
-
-function SummonedPet.add(name, unitName, duration)
-	local pet = {
-		name = name,
-		unit_name = unitName,
-		duration = duration,
-		active_units = {}
-	}
-	setmetatable(pet, SummonedPet)
-	petsByUnitName[unitName] = pet
-	return pet
-end
-
-function SummonedPet:remains()
-	local remains, guid, unit, unit_remains = 0
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > remains then
-			remains = unit_remains
-		end
-	end
-	return min(self.duration, max(0, remains - var.cast_remains))
-end
-
-function SummonedPet:up()
-	return self:remains() > 0
-end
-
-function SummonedPet:down()
-	return self:remains() <= 0
-end
-
-function SummonedPet:count()
-	local count, guid, unit, unit_remains = 0
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
-			count = count + 1
-		end
-	end
-	return count
-end
-
-function SummonedPet:empowered()
-	local count, guid, unit, unit_remains, empower_remains = 0
-	local casting_de = DemonicEmpowerment:casting()
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
-			if casting_de then
-				count = count + 1
-			elseif unit.empower_time then
-				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
-				if empower_remains <= 0 then
-					unit.empower_time = nil
-				elseif empower_remains > var.cast_remains then
-					count = count + 1
-				end
-			end
-		end
-	end
-	return count
-end
-
-function SummonedPet:notEmpowered()
-	if DemonicEmpowerment:casting() then
-		return 0
-	end
-	local count, guid, unit, unit_remains, empower_remains = 0
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
-			if unit.empower_time then
-				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
-				if empower_remains <= var.cast_remains then
-					if empower_remains <= 0 then
-						unit.empower_time = nil
-					end
-					count = count + 1
-				end
-			else
-				count = count + 1
-			end
-		end
-	end
-	return count
-end
-
-function SummonedPet:addUnit(guid)
-	self.active_units[guid] = {
-		spawn_time = GetTime()
-	}
-end
-
-function SummonedPet:removeUnit(guid, reason)
-	if self.active_units[guid] then
-		self.active_units[guid] = nil
-	end
-end
-
-function SummonedPet:empowerUnit(guid)
-	if self.active_units[guid] then
-		self.active_units[guid].empower_time = GetTime()
-	end
-end
-
 -- Warlock Abilities
 ---- Multiple Specializations
 local LifeTap = Ability.add(1454, false, true) -- Used for GCD calculation
@@ -776,13 +660,6 @@ local DemonicSynergy = Ability.add(171975, true, false, 171982)
 local DemonicSynergyPet = Ability.add(171975, 'pet', true, 171982)
 local PowerTrip = Ability.add(196605, true, true)
 local ShadowyInspiration = Ability.add(196269, true, true, 196606)
----- Summoned Pets
-local Darkglare = SummonedPet.add('Darkglare', 'Darkglare', 12)
-local Dreadstalker = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
-local WildImp = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
-local Doomguard = SummonedPet.add('Doomguard', 'Doomguard', 25)
-local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
-local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
 -- Tier Bonuses
 -- Racials
 local ArcaneTorrent = Ability.add(136222, true, false) -- Blood Elf
@@ -792,6 +669,130 @@ ArcaneTorrent.triggers_gcd = false
 local ProlongedPower = Ability.add(229206, true, true)
 ProlongedPower.triggers_gcd = false
 -- Trinkets
+
+local SummonedPet, petsByUnitName = {}, {}
+SummonedPet.__index = SummonedPet
+
+function SummonedPet.add(name, unitName, duration)
+	local pet = {
+		name = name,
+		unit_name = unitName,
+		duration = duration,
+		active_units = {}
+	}
+	setmetatable(pet, SummonedPet)
+	petsByUnitName[unitName] = pet
+	return pet
+end
+
+function SummonedPet:remains()
+	local remains, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > remains then
+			remains = unit_remains
+		end
+	end
+	return min(self.duration, max(0, remains - var.cast_remains))
+end
+
+function SummonedPet:up()
+	return self:remains() > 0
+end
+
+function SummonedPet:down()
+	return self:remains() <= 0
+end
+
+function SummonedPet:count()
+	local count, guid, unit, unit_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function SummonedPet:empowered()
+	local count, guid, unit, unit_remains, empower_remains = 0
+	local casting_de = DemonicEmpowerment:casting()
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains then
+			if casting_de then
+				count = count + 1
+			elseif unit.empower_time then
+				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
+				if empower_remains <= 0 then
+					unit.empower_time = nil
+				elseif empower_remains > var.cast_remains then
+					count = count + 1
+				end
+			end
+		end
+	end
+	return count
+end
+
+function SummonedPet:notEmpowered()
+	if DemonicEmpowerment:casting() then
+		return 0
+	end
+	local count, guid, unit, unit_remains, empower_remains = 0
+	for guid, unit in next, self.active_units do
+		unit_remains = unit.spawn_time + self.duration - var.time
+		if unit_remains <= 0 then
+			self.active_units[guid] = nil
+		elseif unit_remains > var.cast_remains then
+			if unit.empower_time then
+				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
+				if empower_remains <= var.cast_remains then
+					if empower_remains <= 0 then
+						unit.empower_time = nil
+					end
+					count = count + 1
+				end
+			else
+				count = count + 1
+			end
+		end
+	end
+	return count
+end
+
+function SummonedPet:addUnit(guid)
+	self.active_units[guid] = {
+		spawn_time = GetTime()
+	}
+end
+
+function SummonedPet:removeUnit(guid, reason)
+	if self.active_units[guid] then
+		self.active_units[guid] = nil
+	end
+end
+
+function SummonedPet:empowerUnit(guid)
+	if self.active_units[guid] then
+		self.active_units[guid].empower_time = GetTime()
+	end
+end
+
+-- Summoned Pets
+local Darkglare = SummonedPet.add('Darkglare', 'Darkglare', 12)
+local Dreadstalker = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
+local WildImp = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
+local Doomguard = SummonedPet.add('Doomguard', 'Doomguard', 25)
+local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
+local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
 
 -- Start Ability Modifications
 
@@ -1281,7 +1282,7 @@ local function DetermineAbilityDemonology()
 		if non_imp_no_de or HandOfGuldan:previous() then
 			return DemonicEmpowerment
 		end
-		if (((PowerTrip.known and (not Implosion.known or Enemies() == 1)) or not Implosion.known or (Implosion.known and not SoulConduit.known and Enemies() <= 3)) and (wild_imp_no_de > 3 or HandOfGuldan:previous())) or (HandOfGuldan:previous() and wild_imp_no_de == 0 and WildImp:down()) or (Implosion:previous() and wild_imp_no_de > 0) then
+		if (((PowerTrip.known and (not Implosion.known or Enemies() == 1)) or not Implosion.known or (Implosion.known and not SoulConduit.known and Enemies() <= 3)) and wild_imp_no_de > 3) or (Implosion:previous() and wild_imp_no_de > 0) then
 			return DemonicEmpowerment
 		end
 	end
@@ -1317,11 +1318,13 @@ local function DetermineAbilityDemonology()
 			return Demonbolt
 		end
 	else
-		if ShadowyInspiration.known and ShadowBolt:usable() and ShadowyInspiration:up() then
-			return ShadowBolt
-		end
-		if PowerTrip.known and ShadowyInspiration.known and DemonicEmpowerment:usable() then
-			return DemonicEmpowerment
+		if ShadowyInspiration.known then
+			if ShadowBolt:usable() and ShadowyInspiration:up() then
+				return ShadowBolt
+			end
+			if PowerTrip.known and DemonicEmpowerment:usable() then
+				return DemonicEmpowerment
+			end
 		end
 		if ShadowBolt:usable() then
 			return ShadowBolt
