@@ -90,7 +90,7 @@ local SPEC = {
 
 local events, glows = {}, {}
 
-local me, abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0, 0
+local abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0
 
 local Targets = {}
 
@@ -552,7 +552,7 @@ local ReapSouls = Ability.add(216698, true, true, 216695)
 ReapSouls.cooldown_duration = 5
 ReapSouls.buff_duration = 60
 ReapSouls.triggers_gcd = false
-local SeedOfCorruption = Ability.add(27243, false, true)
+local SeedOfCorruption = Ability.add(27243, false, true, 27285)
 SeedOfCorruption.shard_cost = 1
 SeedOfCorruption.buff_duration = 18
 SeedOfCorruption.hasted_duration = true
@@ -591,7 +591,7 @@ local SowTheSeeds = Ability.add(196226, false, true)
 local CallDreadstalkers = Ability.add(104316, true, true)
 CallDreadstalkers.cooldown_duration = 15
 CallDreadstalkers.shard_cost = 2
-local Demonwrath = Ability.add(193440, 'pet', true)
+local Demonwrath = Ability.add(193440, 'pet', true, 193439)
 Demonwrath.mana_cost = 2.5
 Demonwrath.buff_duration = 3
 Demonwrath.tick_interval = 1
@@ -610,7 +610,7 @@ DrainLife.mana_cost = 3
 DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
-local HandOfGuldan = Ability.add(105174, false, true)
+local HandOfGuldan = Ability.add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
 HandOfGuldan:setAutoAoe(true)
 local ShadowBolt = Ability.add(686, false, true)
@@ -625,18 +625,23 @@ SummonInfernalCD.shard_cost = 1
 local ThalkielsConsumption = Ability.add(211714, false, true)
 ThalkielsConsumption.cooldown_duration = 45
 ------ Pet Abilities
-local Felstorm = Ability.add(89753, 'pet', true)
+local Felstorm = Ability.add(89753, 'pet', true, 119914)
 Felstorm.requires_pet = true
 Felstorm.triggers_gcd = false
 Felstorm.buff_duration = 6
 Felstorm.tick_interval = 1
 Felstorm.cooldown_duration = 45
-local Wrathstorm = Ability.add(115831, 'pet', true)
+Felstorm:setAutoAoe(true)
+local Wrathstorm = Ability.add(115831, 'pet', true, 115832)
 Wrathstorm.requires_pet = true
 Wrathstorm.triggers_gcd = false
 Wrathstorm.buff_duration = 6
 Wrathstorm.tick_interval = 1
 Wrathstorm.cooldown_duration = 45
+Wrathstorm:setAutoAoe(true)
+local Immolation = Ability.add(20153, 'pet', true)
+Immolation.tick_interval = 1.5
+Immolation:setAutoAoe(true)
 ------ Talents Abilities
 local Demonbolt = Ability.add(157695, false, true)
 Demonbolt.mana_cost = 4.8
@@ -1282,7 +1287,7 @@ local function DetermineAbilityDemonology()
 		if non_imp_no_de or HandOfGuldan:previous() then
 			return DemonicEmpowerment
 		end
-		if (((PowerTrip.known and (not Implosion.known or Enemies() == 1)) or not Implosion.known or (Implosion.known and not SoulConduit.known and Enemies() <= 3)) and wild_imp_no_de > 3) or (Implosion:previous() and wild_imp_no_de > 0) then
+		if (((PowerTrip.known and (not Implosion.known or Enemies() == 1)) or not Implosion.known or (Implosion.known and not SoulConduit.known and Enemies() <= 3)) and wild_imp_no_de > 3) or (Implosion.known and Implosion:previous() and wild_imp_no_de > 0) then
 			return DemonicEmpowerment
 		end
 	end
@@ -1474,7 +1479,6 @@ function events:ACTIONBAR_SLOT_CHANGED()
 end
 
 function events:PLAYER_LOGIN()
-	me = UnitGUID('player')
 	CreateOverlayGlows()
 end
 
@@ -1717,7 +1721,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			AutoAoeRemoveTarget(dstGUID)
 		end
 	end
-	if srcGUID ~= me then
+	if srcGUID ~= UnitGUID('player') and srcGUID ~= UnitGUID('pet') then
 		return
 	end
 	if eventType == 'SPELL_CAST_SUCCESS' then
@@ -1735,7 +1739,13 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 		end
 		if Doomed.auto_aoe then
 			if spellId == Corruption.spellId then
-				Doomed_SetTargetMode(1)
+				if targetMode > 1 then
+					Doomed_SetTargetMode(1)
+				end
+			elseif spellId == ShadowBolt.spellId then
+				if targetMode > 2 then
+					Doomed_SetTargetMode(2)
+				end
 			end
 		end
 		return
@@ -1761,7 +1771,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			petsByUnitName[dstName]:addUnit(dstGUID)
 		elseif eventType == 'UNIT_DIED' or eventType == 'SPELL_INSTAKILL' then
 			petsByUnitName[dstName]:removeUnit(dstGUID)
-		elseif eventType == 'SPELL_AURA_APPLIED' and spellId == DemonicEmpowerment.spellId then
+		elseif (eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH') and spellId == DemonicEmpowerment.spellId then
 			petsByUnitName[dstName]:empowerUnit(dstGUID)
 		end
 	end
