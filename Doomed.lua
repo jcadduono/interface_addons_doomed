@@ -807,14 +807,14 @@ function Doom:duration()
 end
 
 function Doom:up()
-	if HandOfDoom.known and HandOfGuldan:casting() then
+	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
 		return true
 	end
 	return Ability.up(self)
 end
 
 function Doom:remains()
-	if HandOfDoom.known and HandOfGuldan:casting() then
+	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
 		return self:duration()
 	end
 	return Ability.remains(self)
@@ -836,7 +836,7 @@ function Corruption:up()
 end
 
 function Corruption:remains()
-	if SeedOfCorruption:up() then
+	if SeedOfCorruption:up() or SeedOfCorruption:previous() or var.last_gcd == SeedOfCorruption then
 		return Corruption:duration()
 	end
 	return Ability.remains(self)
