@@ -650,6 +650,7 @@ local GrimoireFelguard = Ability.add(111898, false, true)
 GrimoireFelguard.cooldown_duration = 90
 GrimoireFelguard.shard_cost = 1
 local HandOfDoom = Ability.add(196283, false, true)
+local ImpendingDoom = Ability.add(196270, false, true)
 local Implosion = Ability.add(196277, false, true)
 Implosion.mana_cost = 6
 local Shadowflame = Ability.add(205181, false, true)
@@ -800,6 +801,24 @@ local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
 local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
 
 -- Start Ability Modifications
+
+function Doom:duration()
+	return var.haste_factor * (self.buff_duration - (ImpendingDoom.known and 3 or 0))
+end
+
+function Doom:up()
+	if HandOfDoom.known and HandOfGuldan:casting() then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function Doom:remains()
+	if HandOfDoom.known and HandOfGuldan:casting() then
+		return self:duration()
+	end
+	return Ability.remains(self)
+end
 
 function ReapSouls:usable()
 	if self:stack() == 0 then
@@ -1024,7 +1043,7 @@ local function PlayerIsMoving()
 end
 
 local function PetIsSummoned()
-	return UnitExists('pet') or IsMounted()
+	return (UnitExists('pet') and not UnitIsDead('pet')) or IsMounted()
 end
 
 local function Enemies()
@@ -1081,6 +1100,17 @@ local function DetermineAbilityAffliction()
 	end
 	if Agony:remains() <= (Agony:tickInterval() + GCD()) then
 		return Agony
+	end
+	if not PetIsSummoned() then
+		if GrimoireOfSupremacy.known then
+			UseCooldown(Enemies() > 1 and SummonInfernal or SummonDoomguard)
+		end
+		if not GrimoireOfSacrifice.known or (GrimoireOfSacrifice.known and DemonicPower:down()) then
+			UseCooldown(SummonFelhunter)
+		end
+	end
+	if GrimoireOfSacrifice.known and PetIsSummoned() then
+		UseCooldown(GrimoireOfSacrifice)
 	end
 	if SowTheSeeds.known and Enemies() >= 3 and SoulShards() == 5 then
 		return SeedOfCorruption
@@ -1198,6 +1228,9 @@ local function DetermineAbilityDemonology()
 			UseCooldown(ProlongedPower)
 		end
 		if SoulShards() < 5 then
+			if Enemies() >= 5 and Demonwrath:usable() then
+				return Demonwrath
+			end
 			if Demonbolt.known then
 				if Demonbolt:usable() then
 					return Demonbolt
@@ -1205,6 +1238,14 @@ local function DetermineAbilityDemonology()
 			elseif ShadowBolt:usable() then
 				return ShadowBolt
 			end
+		end
+	end
+
+	if not PetIsSummoned() then
+		if GrimoireOfSupremacy.known then
+			UseCooldown(Enemies() > 1 and SummonInfernal or SummonDoomguard)
+		else
+			UseCooldown(SummonFelguard)
 		end
 	end
 
@@ -1218,7 +1259,7 @@ local function DetermineAbilityDemonology()
 			UseCooldown(SummonDoomguardCD)
 		end
 	end
-	if CallDreadstalkers:usable() and ((not SummonDarkglare.known or PowerTrip.known) and (Enemies() < 3 or not Implosion.known)) and not (SoulShards() == 5 and DemonicCalling:up()) then
+	if CallDreadstalkers:usable() and ((not SummonDarkglare.known or PowerTrip.known) and (Enemies() < 3 or not Implosion.known) and (Enemies() < 5 or DemonicCalling:up())) and not (SoulShards() == 5 and DemonicCalling:up()) then
 		return CallDreadstalkers
 	end
 
@@ -1231,8 +1272,13 @@ local function DetermineAbilityDemonology()
 	local cd_no_de = doomguard_no_de > 0 or infernal_no_de > 0
 	local non_imp_no_de = dreadstalker_no_de > 0 or darkglare_no_de > 0 or cd_no_de or service_no_de > 0
 
-	if not HandOfDoom.known and Doom:usable() and Doom:refreshable() and Target.timeToDie > Doom:duration() + Doom:remains() and not (non_imp_no_de or HandOfGuldan:previous()) then
-		return Doom
+	if Doom:usable() and Doom:refreshable() and Target.timeToDie > Doom:duration() + Doom:remains() then
+		if not (HandOfDoom.known or non_imp_no_de or HandOfGuldan:previous()) then
+			return Doom
+		end
+		if HandOfDoom.known and Doom:down() and Enemies() < 3 and SoulShards() < 4 then
+			return Doom
+		end
 	end
 	if Shadowflame.known and Shadowflame:usable() and Shadowflame:charges() == 2 and SoulShards() < 5 and Enemies() < 5 then
 		return Shadowflame
@@ -1273,6 +1319,9 @@ local function DetermineAbilityDemonology()
 	end
 	if HandOfGuldan:usable() and SoulShards() >= 4 then
 		if SoulShards() == 5 then
+			return HandOfGuldan
+		end
+		if (CallDreadstalkers:cooldown() > 4 or DemonicCalling:remains() > HandOfGuldan:castTime() + 2) and (HandOfGuldan:previous() or Enemies() >= 5 or (HandOfDoom.known and Doom:refreshable())) then
 			return HandOfGuldan
 		end
 		if SummonDarkglare.known and SummonDarkglare:cooldown() > 2 then
