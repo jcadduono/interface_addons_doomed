@@ -43,10 +43,6 @@ local function InitializeVariables()
 			main = 1,
 			previous = 0.7,
 			cooldown = 0.7,
---[[
-			atone = 0.4,
-			shield = 0.4,
-]]
 			interrupt = 0.4,
 			glow = 1,
 		},
@@ -67,14 +63,12 @@ local function InitializeVariables()
 		previous = true,
 		always_on = false,
 		cooldown = true,
-		aoe = false,
-		gcd = true,
+		spell_swipe = true,
 		dimmer = true,
 		miss_effect = true,
 		boss_only = false,
-		atone = true,
-		shield = true,
 		interrupt = true,
+		aoe = false,
 		auto_aoe = false,
 		pot = false
 	})
@@ -150,8 +144,8 @@ doomedPanel.border = doomedPanel:CreateTexture(nil, 'BORDER')
 doomedPanel.border:SetAllPoints(doomedPanel)
 doomedPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 doomedPanel.border:Hide()
-doomedPanel.gcd = CreateFrame('Cooldown', nil, doomedPanel, 'CooldownFrameTemplate')
-doomedPanel.gcd:SetAllPoints(doomedPanel)
+doomedPanel.swipe = CreateFrame('Cooldown', nil, doomedPanel, 'CooldownFrameTemplate')
+doomedPanel.swipe:SetAllPoints(doomedPanel)
 doomedPanel.dimmer = doomedPanel:CreateTexture(nil, 'OVERLAY')
 doomedPanel.dimmer:SetAllPoints(doomedPanel)
 doomedPanel.dimmer:SetTexture(0, 0, 0, 0.6)
@@ -211,53 +205,6 @@ doomedInterruptPanel.border:SetAllPoints(doomedInterruptPanel)
 doomedInterruptPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 doomedInterruptPanel.cast = CreateFrame('Cooldown', nil, doomedInterruptPanel, 'CooldownFrameTemplate')
 doomedInterruptPanel.cast:SetAllPoints(doomedInterruptPanel)
---[[
-local doomedAtonementPanel = CreateFrame('Frame', 'doomedAtonementPanel', UIParent)
-doomedAtonementPanel:SetPoint('TOPRIGHT', doomedPanel, 'TOPLEFT', -16, 25)
-doomedAtonementPanel:SetFrameStrata('BACKGROUND')
-doomedAtonementPanel:SetSize(64, 64)
-doomedAtonementPanel:Hide()
-doomedAtonementPanel:RegisterForDrag('LeftButton')
-doomedAtonementPanel:SetScript('OnDragStart', doomedAtonementPanel.StartMoving)
-doomedAtonementPanel:SetScript('OnDragStop', doomedAtonementPanel.StopMovingOrSizing)
-doomedAtonementPanel:SetMovable(true)
-doomedAtonementPanel.icon = doomedAtonementPanel:CreateTexture(nil, 'BACKGROUND')
-doomedAtonementPanel.icon:SetAllPoints(doomedAtonementPanel)
-doomedAtonementPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedAtonementPanel.border = doomedAtonementPanel:CreateTexture(nil, 'BORDER')
-doomedAtonementPanel.border:SetAllPoints(doomedAtonementPanel)
-doomedAtonementPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
-doomedAtonementPanel.text = doomedAtonementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-doomedAtonementPanel.text:SetFont("Fonts\\FRIZQT__.TTF", 40, "OUTLINE")
-doomedAtonementPanel.text:SetTextColor(1, 1, 1, 1)
-doomedAtonementPanel.text:SetAllPoints(doomedAtonementPanel)
-doomedAtonementPanel.text:SetJustifyH("CENTER")
-doomedAtonementPanel.text:SetJustifyV("CENTER")
-local doomedShieldPanel = CreateFrame('Frame', 'doomedShieldPanel', UIParent)
-doomedShieldPanel:SetPoint('TOPLEFT', doomedPanel, 'TOPRIGHT', 16, 25)
-doomedShieldPanel:SetFrameStrata('BACKGROUND')
-doomedShieldPanel:SetSize(64, 64)
-doomedShieldPanel:Hide()
-doomedShieldPanel:RegisterForDrag('LeftButton')
-doomedShieldPanel:SetScript('OnDragStart', doomedShieldPanel.StartMoving)
-doomedShieldPanel:SetScript('OnDragStop', doomedShieldPanel.StopMovingOrSizing)
-doomedShieldPanel:SetMovable(true)
-doomedShieldPanel.icon = doomedShieldPanel:CreateTexture(nil, 'BACKGROUND')
-doomedShieldPanel.icon:SetAllPoints(doomedShieldPanel)
-doomedShieldPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedShieldPanel.border = doomedShieldPanel:CreateTexture(nil, 'BORDER')
-doomedShieldPanel.border:SetAllPoints(doomedShieldPanel)
-doomedShieldPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
-doomedShieldPanel.cooldown = CreateFrame('Cooldown', nil, doomedShieldPanel, 'CooldownFrameTemplate')
-doomedShieldPanel.cooldown:SetAllPoints(doomedShieldPanel)
-doomedShieldPanel.cooldown:SetFrameStrata('BACKGROUND')
-doomedShieldPanel.text = doomedShieldPanel.cooldown:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-doomedShieldPanel.text:SetFont("Fonts\\FRIZQT__.TTF", 28, "OUTLINE")
-doomedShieldPanel.text:SetTextColor(1, 1, 1, 1)
-doomedShieldPanel.text:SetAllPoints(doomedShieldPanel)
-doomedShieldPanel.text:SetJustifyH("CENTER")
-doomedShieldPanel.text:SetJustifyV("CENTER")
-]]
 
 local Ability, abilities, abilityBySpellId, abilitiesAutoAoe = {}, {}, {}, {}
 Ability.__index = Ability
@@ -266,7 +213,7 @@ function Ability.add(spellId, buff, player, spellId2)
 	local name, _, icon = GetSpellInfo(spellId)
 	local ability = {
 		spellId = spellId,
-		spellId2 = spellId2 or 0,
+		spellId2 = spellId2,
 		name = name,
 		icon = icon,
 		mana_cost = 0,
@@ -296,7 +243,7 @@ function Ability:usable(seconds)
 	if self:manaCost() > var.mana then
 		return false
 	end
-	if self.shard_cost > var.soul_shards then
+	if self:shardCost() > var.soul_shards then
 		return false
 	end
 	if self.requires_charge and self:charges() == 0 then
@@ -521,18 +468,40 @@ local SoulConduit = Ability.add(215941, true, true)
 ------ Permanent Pets
 local SummonDoomguard = Ability.add(157757, false, true) -- Grimoire of Supremacy
 SummonDoomguard.shard_cost = 1
+SummonDoomguard.pet_family = 'Doomguard'
 local SummonInfernal = Ability.add(157898, false, true) -- Grimoire of Supremacy
 SummonInfernal.shard_cost = 1
+SummonInfernal.pet_family = 'Infernal'
 local SummonImp = Ability.add(688, false, true)
 SummonImp.shard_cost = 1
+SummonImp.pet_family = 'Imp'
+local SummonFelImp = Ability.add(112866, false, true, 219424)
+SummonFelImp.shard_cost = 1
+SummonFelImp.pet_family = 'Fel Imp'
 local SummonFelhunter = Ability.add(691, false, true)
 SummonFelhunter.shard_cost = 1
+SummonFelhunter.pet_family = 'Felhunter'
+local SummonObserver = Ability.add(112869, false, true, 219450)
+SummonObserver.shard_cost = 1
+SummonObserver.pet_family = 'Observer'
 local SummonVoidwalker = Ability.add(697, false, true)
 SummonVoidwalker.shard_cost = 1
+SummonVoidwalker.pet_family = 'Voidwalker'
+local SummonVoidlord = Ability.add(112867, false, true, 219445)
+SummonVoidlord.shard_cost = 1
+SummonVoidlord.pet_family = 'Voidlord'
 local SummonSuccubus = Ability.add(712, false, true)
 SummonSuccubus.shard_cost = 1
+SummonSuccubus.pet_family = 'Succubus'
+local SummonShivarra = Ability.add(112868, false, true, 219436)
+SummonShivarra.shard_cost = 1
+SummonShivarra.pet_family = 'Shivarra'
 local SummonFelguard = Ability.add(30146, false, true)
 SummonFelguard.shard_cost = 1
+SummonFelguard.pet_family = 'Felguard'
+local SummonWrathguard = Ability.add(112870, false, true, 219467)
+SummonWrathguard.shard_cost = 1
+SummonWrathguard.pet_family = 'Wrathguard'
 ---- Affliction
 local Agony = Ability.add(980, false, true)
 Agony.mana_cost = 3
@@ -653,6 +622,7 @@ local HandOfDoom = Ability.add(196283, false, true)
 local ImpendingDoom = Ability.add(196270, false, true)
 local Implosion = Ability.add(196277, false, true)
 Implosion.mana_cost = 6
+local ImprovedDreadstalkers = Ability.add(196272, false, true)
 local Shadowflame = Ability.add(205181, false, true)
 Shadowflame.requires_charge = true
 Shadowflame.cooldown_duration = 14
@@ -820,6 +790,82 @@ function Doom:remains()
 	return Ability.remains(self)
 end
 
+--[[
+local PetHealthMultiplier = {
+	Felguard = 0.5,
+	Felhunter = 0.4,
+	Imp = 0.4,
+	Voidwalker = 0.5,
+	Succubus = 0.4,
+	Doomguard = 0.4,
+	Infernal = 0.5,
+	Darkglare = 0.4,
+	Dreadstalker = 0.4,
+	WildImp = 0.15
+}
+
+local function GetSummonersProwessRank()
+	UIParent:UnregisterEvent('ARTIFACT_UPDATE')
+	SocketInventoryItem(16)
+	local power_info = C_ArtifactUI.GetPowerInfo(1171)
+	C_ArtifactUI.Clear()
+	UIParent:RegisterEvent('ARTIFACT_UPDATE')
+	return power_info and power_info.currentRank or 0
+end
+
+function DemonicEmpowerment:healthMultiplier()
+	return 1.2 + (GetSummonersProwessRank() * 0.02)
+end
+
+local function GetActivePetFamily()
+	if SummonInfernal:up() then
+		return 'Infernal'
+	end
+	if SummonDoomguard:up() then
+		return 'Doomguard'
+	end
+	if SummonImp:up() or SummonFelImp:up() then
+		return 'Imp'
+	end
+	if SummonFelhunter:up() or SummonObserver:up() then
+		return 'Felhunter'
+	end
+	if SummonVoidwalker:up() or SummonVoidlord:up() then
+		return 'Voidwalker'
+	end
+	if SummonSuccubus:up() or SummonSuccubus:up() then
+		return 'Succubus'
+	end
+	if SummonFelguard:up() or SummonWrathguard:up() then
+		return 'Felguard'
+	end
+end
+
+function ThalkielsConsumption:multiplier()
+	local mult = 0
+	local de_mult = DemonicEmpowerment:healthMultiplier()
+	local active_pet = GetActivePetFamily()
+	if active_pet and PetHealthMultiplier[active_pet] then
+		mult = mult + (DemonicEmpowerment:up() and de_mult or 1) * PetHealthMultiplier[active_pet]
+	end
+	mult = mult + (ServiceFelguard:notEmpowered() + (ServiceFelguard:empowered() * de_mult)) * PetHealthMultiplier.Felguard
+	mult = mult + (Dreadstalker:notEmpowered() + (Dreadstalker:empowered() * de_mult)) * PetHealthMultiplier.Dreadstalker
+	mult = mult + (WildImp:notEmpowered() + (WildImp:empowered() * de_mult)) * PetHealthMultiplier.WildImp
+	if SummonDarkglare.known then
+		mult = mult + (Darkglare:notEmpowered() + (Darkglare:empowered() * de_mult)) * PetHealthMultiplier.Darkglare
+	end
+	if not GrimoireOfSupremacy.known then
+		mult = mult + (Doomguard:notEmpowered() + (Doomguard:empowered() * de_mult)) * PetHealthMultiplier.Doomguard
+		mult = mult + (Infernal:notEmpowered() + (Infernal:empowered() * de_mult)) * PetHealthMultiplier.Infernal
+	end
+	return mult
+end
+
+function ThalkielsConsumption:damage()
+	return UnitHealthMax('player') * 0.08 * self:multiplier()
+end
+]]
+
 function ReapSouls:usable()
 	if self:stack() == 0 then
 		return false
@@ -902,37 +948,28 @@ UnstableAffliction3.up = UnstableAffliction1.up
 UnstableAffliction4.up = UnstableAffliction1.up
 UnstableAffliction5.up = UnstableAffliction1.up
 
-function SummonDoomguard:up()
-	return UnitCreatureFamily('pet') == 'Doomguard' or UnitCreatureFamily('pet') == 'Terrorguard'
+local function SummonPetUp(self)
+	if self:casting() then
+		return true
+	end
+	if UnitIsDead('pet') then
+		return false
+	end
+	return UnitCreatureFamily('pet') == self.pet_family
 end
 
-function SummonInfernal:up()
-	return UnitCreatureFamily('pet') == 'Infernal' or UnitCreatureFamily('pet') == 'Abyssal'
-end
-
-function SummonImp:up()
-	return UnitCreatureFamily('pet') == 'Imp' or UnitCreatureFamily('pet') == 'Fel Imp'
-end
-
-function SummonFelhunter:up()
-	return UnitCreatureFamily('pet') == 'Felhunter' or UnitCreatureFamily('pet') == 'Observer'
-end
-
-function SummonVoidwalker:up()
-	return UnitCreatureFamily('pet') == 'Voidwalker' or UnitCreatureFamily('pet') == 'Voidlord'
-end
-
-function SummonSuccubus:up()
-	return UnitCreatureFamily('pet') == 'Succubus' or UnitCreatureFamily('pet') == 'Shivarra'
-end
-
-function SummonFelguard:up()
-	return UnitCreatureFamily('pet') == 'Felguard' or UnitCreatureFamily('pet') == 'Wrathguard'
-end
-
-function SummonFelguard:isWrathguard()
-	return UnitCreatureFamily('pet') == 'Wrathguard'
-end
+SummonDoomguard.up = SummonPetUp
+SummonInfernal.up = SummonPetUp
+SummonImp.up = SummonPetUp
+SummonFelImp.up = SummonPetUp
+SummonFelhunter.up = SummonPetUp
+SummonObserver.up = SummonPetUp
+SummonVoidwalker.up = SummonPetUp
+SummonVoidlord.up = SummonPetUp
+SummonSuccubus.up = SummonPetUp
+SummonShivarra.up = SummonPetUp
+SummonFelguard.up = SummonPetUp
+SummonWrathguard.up = SummonPetUp
 
 function HandOfGuldan:shardCost()
 	return min(4, max(UnitPower('player', SPELL_POWER_SOUL_SHARDS), self.shard_cost))
@@ -949,6 +986,58 @@ function CallDreadstalkers:shardCost()
 	return cost
 end
 
+function Dreadstalker:count()
+	local count = SummonedPet.count(self)
+	if CallDreadstalkers:casting() then
+		count = count + 2
+	end
+	return count
+end
+
+function Dreadstalker:remains()
+	if CallDreadstalkers:casting() then
+		return self.duration
+	end
+	return SummonedPet.remains(self)
+end
+
+function Dreadstalker:notEmpowered()
+	local count = SummonedPet.notEmpowered(self)
+	if CallDreadstalkers:casting() then
+		count = count + 2
+	end
+	return count
+end
+
+function WildImp:count()
+	local count = SummonedPet.count(self)
+	if HandOfGuldan:casting() then
+		count = count + 4
+	end
+	if ImprovedDreadstalkers.known and CallDreadstalkers:casting() then
+		count = count + 2
+	end
+	return count
+end
+
+function WildImp:remains()
+	if HandOfGuldan:casting() or (ImprovedDreadstalkers.known and CallDreadstalkers:casting()) then
+		return self.duration
+	end
+	return SummonedPet.remains(self)
+end
+
+function WildImp:notEmpowered()
+	local count = SummonedPet.notEmpowered(self)
+	if HandOfGuldan:casting() then
+		count = count + 4
+	end
+	if ImprovedDreadstalkers.known and CallDreadstalkers:casting() then
+		count = count + 2
+	end
+	return count
+end
+
 -- End Ability Modifications
 
 local Target = {
@@ -957,18 +1046,6 @@ local Target = {
 	healthArray = {},
 	hostile = false
 }
-
-local function GetAbilityCasting()
-	if not var.cast_name then
-		return
-	end
-	local i
-	for i = 1,#abilities do
-		if abilities[i].name == var.cast_name then
-			return abilities[i]
-		end
-	end
-end
 
 local function GetCastManaRegen()
 	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
@@ -979,16 +1056,16 @@ local function GetAvailableSoulShards()
 end
 
 local function UpdateVars()
-	local _, start, duration, remains, hp
+	local _, start, duration, remains, hp, spellId
 	var.last_main = var.main
 	var.last_cd = var.cd
 	var.time = GetTime()
 	var.gcd = 1.5 - (1.5 * (UnitSpellHaste('player') / 100))
 	start, duration = GetSpellCooldown(LifeTap.spellId)
 	var.gcd_remains = start > 0 and duration - (var.time - start) or 0
-	var.cast_name, _, _, _, _, remains = UnitCastingInfo('player')
+	_, _, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
+	var.cast_ability = abilityBySpellId[spellId]
 	var.cast_remains = remains and remains / 1000 - var.time or var.gcd_remains
-	var.cast_ability = GetAbilityCasting()
 	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
 	var.regen = GetPowerRegen()
 	var.mana_regen = GetCastManaRegen()
@@ -1002,14 +1079,17 @@ local function UpdateVars()
 	Target.timeToDie = hp > 0 and Target.healthArray[#Target.healthArray] / (hp / 3) or 600
 end
 
+--[[
 local function Mana()
 	return var.mana
 end
+]]
 
 local function ManaPct()
 	return var.mana / var.mana_max * 100
 end
 
+--[[
 local function ManaDeficit()
 	return var.mana_max - var.mana
 end
@@ -1021,6 +1101,7 @@ end
 local function ManaMax()
 	return var.mana_max
 end
+]]
 
 local function SoulShards()
 	return var.soul_shards
@@ -1034,16 +1115,24 @@ local function GCD()
 	return var.gcd
 end
 
+--[[
 local function GCDRemains()
 	return var.gcd_remains
 end
+]]
 
 local function PlayerIsMoving()
 	return GetUnitSpeed('player') ~= 0
 end
 
 local function PetIsSummoned()
-	return (UnitExists('pet') and not UnitIsDead('pet')) or IsMounted()
+	return (IsMounted() or
+		SummonFelguard:up() or SummonWrathguard:up() or
+		SummonDoomguard:up() or SummonInfernal:up() or
+		SummonFelhunter:up() or SummonObserver:up() or
+		SummonImp:up() or SummonFelImp:up() or
+		SummonVoidwalker:up() or SummonVoidlord:up() or
+		SummonSuccubus:up() or SummonShivarra:up())
 end
 
 local function Enemies()
@@ -1082,7 +1171,7 @@ local function DetermineAbilityAffliction()
 				return Enemies() > 1 and SummonInfernal or SummonDoomguard
 			end
 			if not GrimoireOfSacrifice.known or (GrimoireOfSacrifice.known and DemonicPower:remains() < 300) then
-				return SummonFelhunter
+				return SummonObserver.known and SummonObserver or SummonFelhunter
 			end
 		end
 		if GrimoireOfSacrifice.known and PetIsSummoned() then
@@ -1106,7 +1195,7 @@ local function DetermineAbilityAffliction()
 			UseCooldown(Enemies() > 1 and SummonInfernal or SummonDoomguard)
 		end
 		if not GrimoireOfSacrifice.known or (GrimoireOfSacrifice.known and DemonicPower:down()) then
-			UseCooldown(SummonFelhunter)
+			UseCooldown(SummonObserver.known and SummonObserver or SummonFelhunter)
 		end
 	end
 	if GrimoireOfSacrifice.known and PetIsSummoned() then
@@ -1216,7 +1305,7 @@ local function DetermineAbilityDemonology()
 			if GrimoireOfSupremacy.known then
 				return Enemies() > 1 and SummonInfernal or SummonDoomguard
 			end
-			return SummonFelguard
+			return SummonWrathguard.known and SummonWrathguard or SummonFelguard
 		end
 		if DemonicEmpowerment:usable() and DemonicEmpowerment:refreshable() then
 			return DemonicEmpowerment
@@ -1245,7 +1334,7 @@ local function DetermineAbilityDemonology()
 		if GrimoireOfSupremacy.known then
 			UseCooldown(Enemies() > 1 and SummonInfernal or SummonDoomguard)
 		else
-			UseCooldown(SummonFelguard)
+			UseCooldown(SummonWrathguard.known and SummonWrathguard or SummonFelguard)
 		end
 	end
 
@@ -1309,11 +1398,11 @@ local function DetermineAbilityDemonology()
 		if SummonDarkglare:usable() and (
 			(HandOfGuldan:previous() or CallDreadstalkers:previous() or PowerTrip.known) or
 			(CallDreadstalkers:cooldown() > 5 and SoulShards() < 3) or
-			(CallDreadstalkers:remains() <= SummonDarkglare:castTime() and (SoulShards() >= 3 or (SoulShards >= 1 and DemonicCalling:up())))
+			(CallDreadstalkers:remains() <= SummonDarkglare:castTime() and (SoulShards() >= 3 or (SoulShards() >= 1 and DemonicCalling:up())))
 		) then
 			UseCooldown(SummonDarkglare)
 		end
-		if CallDreadstalkers:usable() and (Enemies() < 3 or not Implosion.known) and (SummonDarkglare:cooldown() > 2 or SummonDarkglare:previous() or SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 3) or (SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 1 and DemonicCalling:up()) then
+		if CallDreadstalkers:usable() and ((Enemies() < 3 or not Implosion.known) and (SummonDarkglare:cooldown() > 2 or SummonDarkglare:previous() or SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 3) or (SummonDarkglare:cooldown() <= CallDreadstalkers:castTime() and SoulShards() >= 1 and DemonicCalling:up())) then
 			return CallDreadstalkers
 		end
 	end
@@ -1321,7 +1410,7 @@ local function DetermineAbilityDemonology()
 		if SoulShards() == 5 then
 			return HandOfGuldan
 		end
-		if (CallDreadstalkers:cooldown() > 4 or DemonicCalling:remains() > HandOfGuldan:castTime() + 2) and (HandOfGuldan:previous() or Enemies() >= 5 or (HandOfDoom.known and Doom:refreshable())) then
+		if (CallDreadstalkers:cooldown() > 4 or DemonicCalling:remains() > HandOfGuldan:castTime() + 2) and (Enemies() >= 5 or HandOfGuldan:previous() or CallDreadstalkers:previous() or (SummonDarkglare.known and SummonDarkglare:previous()) or (HandOfDoom.known and Doom:refreshable())) then
 			return HandOfGuldan
 		end
 		if SummonDarkglare.known and SummonDarkglare:cooldown() > 2 then
@@ -1352,14 +1441,11 @@ local function DetermineAbilityDemonology()
 	if ThalkielsConsumption:usable() and (Dreadstalker:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImp:count() > 3 and Dreadstalker:count() <= 2 or WildImp:count() > 5) and WildImp:remains() > ThalkielsConsumption:castTime() then
 		UseCooldown(ThalkielsConsumption)
 	end
-	if SummonFelguard:up() then
-		if SummonFelguard:isWrathguard() then
-			if Wrathstorm:ready() then
-				UseCooldown(Wrathstorm)
-			end
-		elseif Felstorm:ready() then
-			UseCooldown(Felstorm)
-		end
+	if SummonFelguard:up() and Felstorm:ready() then
+		UseCooldown(Felstorm)
+	end
+	if SummonWrathguard:up() and Wrathstorm:ready() then
+		UseCooldown(Wrathstorm)
 	end
 	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3))) then
 		return LifeTap
@@ -1548,10 +1634,6 @@ local function Disappear()
 	doomedPreviousPanel:Hide()
 	doomedCooldownPanel:Hide()
 	doomedInterruptPanel:Hide()
---[[
-	doomedAtonementPanel:Hide()
-	doomedShieldPanel:Hide()
-]]
 end
 
 function Doomed_ToggleTargetMode()
@@ -1615,10 +1697,6 @@ local function UpdateDraggable()
 		doomedPreviousPanel:EnableMouse(false)
 		doomedCooldownPanel:EnableMouse(false)
 		doomedInterruptPanel:EnableMouse(false)
---[[
-		doomedAtonementPanel:EnableMouse(false)
-		doomedShieldPanel:EnableMouse(false)
-]]
 	else
 		if not Doomed.aoe then
 			doomedPanel:SetScript('OnDragStart', doomedPanel.StartMoving)
@@ -1628,10 +1706,6 @@ local function UpdateDraggable()
 		doomedPreviousPanel:EnableMouse(true)
 		doomedCooldownPanel:EnableMouse(true)
 		doomedInterruptPanel:EnableMouse(true)
---[[
-		doomedAtonementPanel:EnableMouse(true)
-		doomedShieldPanel:EnableMouse(true)
-]]
 	end
 end
 
@@ -1660,10 +1734,6 @@ local function UpdateAlpha()
 	doomedPreviousPanel:SetAlpha(Doomed.alpha)
 	doomedCooldownPanel:SetAlpha(Doomed.alpha)
 	doomedInterruptPanel:SetAlpha(Doomed.alpha)
---[[
-	doomedAtonementPanel:SetAlpha(Doomed.alpha)
-	doomedShieldPanel:SetAlpha(Doomed.alpha)
-]]
 end
 
 local function UpdateHealthArray()
@@ -1695,35 +1765,6 @@ local function UpdateCombat()
 			doomedCooldownPanel:Hide()
 		end
 	end
-	local gcdStart, gcdDuration = GetSpellCooldown(LifeTap.spellId)
-	local gcdRemains = gcdDuration - (var.time - gcdStart)
-	--[[if currentSpec == SPEC.AFFLICTION then
-		if var.atonement_count > 0 then
-			doomedAtonementPanel.text:SetText(var.atonement_count)
-			doomedAtonementPanel:Show()
-		else
-			doomedAtonementPanel.text:SetText('')
-			doomedAtonementPanel:Hide()
-		end
-		local shieldCDStart, shieldCDDuration = GetSpellCooldown(PowerWordShield.spellId)
-		local shieldRemains = shieldCDDuration - (var.time - shieldCDStart)
-		if shieldCDStart == 0 or shieldRemains <= gcdRemains then
-			doomedShieldPanel.text:SetText('')
-			doomedShieldPanel:Hide()
-		else
-			doomedShieldPanel.text:SetText(string.format("%.1f", shieldRemains))
-			doomedShieldPanel.cooldown:SetCooldown(shieldCDStart, shieldCDDuration)
-			doomedShieldPanel:Show()
-		end
-	end]]
-	if Doomed.gcd then
-		if gcdStart == 0 then
-			doomedPanel.gcd:Hide()
-		else
-			doomedPanel.gcd:SetCooldown(gcdStart, gcdDuration)
-			doomedPanel.gcd:Show()
-		end
-	end
 	if Doomed.dimmer then
 		if not var.main or IsUsableSpell(var.main.spellId) then
 			doomedPanel.dimmer:Hide()
@@ -1736,6 +1777,24 @@ local function UpdateCombat()
 	end
 	UpdateGlows()
 	abilityTimer = 0
+end
+
+function events:SPELL_UPDATE_COOLDOWN()
+	if Doomed.spell_swipe then
+		local start, duration
+		local _, _, _, _, castStart, castEnd = UnitCastingInfo('player')
+		if castStart then
+			start = castStart / 1000
+			duration = (castEnd - castStart) / 1000
+		else
+			start, duration = GetSpellCooldown(LifeTap.spellId)
+			if start <= 0 then
+				return doomedPanel.swipe:Hide()
+			end
+		end
+		doomedPanel.swipe:SetCooldown(start, duration)
+		doomedPanel.swipe:Show()
+	end
 end
 
 function events:ADDON_LOADED(name)
@@ -1755,12 +1814,6 @@ function events:ADDON_LOADED(name)
 		doomedPreviousPanel:SetScale(Doomed.scale.previous)
 		doomedCooldownPanel:SetScale(Doomed.scale.cooldown)
 		doomedInterruptPanel:SetScale(Doomed.scale.interrupt)
---[[
-		doomedAtonementPanel:SetScale(Doomed.scale.atone)
-		doomedAtonementPanel.icon:SetTexture(ShadowBolt.icon)
-		doomedShieldPanel:SetScale(Doomed.scale.shield)
-		doomedShieldPanel.icon:SetTexture(ShadowBolt.icon)
-]]
 	end
 end
 
@@ -1912,7 +1965,7 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		local i
 		for i = 1, #abilities do
 			abilities[i].name, _, abilities[i].icon = GetSpellInfo(abilities[i].spellId)
-			abilities[i].known = IsPlayerSpell(abilities[i].spellId)
+			abilities[i].known = IsPlayerSpell(abilities[i].spellId) or (abilities[i].spellId2 and IsPlayerSpell(abilities[i].spellId2))
 		end
 		currentSpec = GetSpecialization() or 0
 		Doomed_SetTargetMode(1)
@@ -2011,22 +2064,6 @@ function SlashCmdList.Doomed(msg, editbox)
 			end
 			return print('Doomed - Interrupt ability icon scale set to: |cFFFFD000' .. Doomed.scale.interrupt .. '|r times')
 		end
---[[
-		if msg[2] == 'atone' then
-			if msg[3] then
-				Doomed.scale.atone = tonumber(msg[3]) or 0.4
-				doomedAtonementPanel:SetScale(Doomed.scale.atone)
-			end
-			return print('Doomed - Atonement count icon scale set to: |cFFFFD000' .. Doomed.scale.atone .. '|r times')
-		end
-		if msg[2] == 'shield' then
-			if msg[3] then
-				Doomed.scale.shield = tonumber(msg[3]) or 0.4
-				doomedShieldPanel:SetScale(Doomed.scale.shield)
-			end
-			return print('Doomed - Power Word: Shield icon scale set to: |cFFFFD000' .. Doomed.scale.shield .. '|r times')
-		end
-]]
 		if msg[2] == 'glow' then
 			if msg[3] then
 				Doomed.scale.glow = tonumber(msg[3]) or 1
@@ -2110,14 +2147,14 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Use Doomed for cooldown management: ' .. (Doomed.cooldown and '|cFF00C000On' or '|cFFC00000Off'))
 	end
-	if msg[1] == 'gcd' then
+	if msg[1] == 'swipe' then
 		if msg[2] then
-			Doomed.gcd = msg[2] == 'on'
-			if not Doomed.gcd then
-				doomedPanel.gcd:Hide()
+			Doomed.spell_swipe = msg[2] == 'on'
+			if not Doomed.spell_swipe then
+				doomedPanel.swipe:Hide()
 			end
 		end
-		return print('Doomed - Global cooldown swipe: ' .. (Doomed.gcd and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Spell casting swipe animation: ' .. (Doomed.spell_swipe and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'dim') then
 		if msg[2] then
@@ -2174,20 +2211,6 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Show an icon for interruptable spells: ' .. (Doomed.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
 	end
---[[
-	if msg[1] == 'atone' then
-		if msg[2] then
-			Doomed.atone = msg[2] == 'on'
-		end
-		return print('Doomed - Show an icon for atonement count (discipline): ' .. (Doomed.atone and '|cFF00C000On' or '|cFFC00000Off'))
-	end
-	if msg[1] == 'shield' then
-		if msg[2] then
-			Doomed.shield = msg[2] == 'on'
-		end
-		return print('Doomed - Show an icon for Power Word: Shield cooldown (discipline): ' .. (Doomed.shield and '|cFF00C000On' or '|cFFC00000Off'))
-	end
-]]
 	if msg[1] == 'auto' then
 		if msg[2] then
 			Doomed.auto_aoe = msg[2] == 'on'
@@ -2209,12 +2232,6 @@ function SlashCmdList.Doomed(msg, editbox)
 		doomedCooldownPanel:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMRIGHT', 10, -5)
 		doomedInterruptPanel:ClearAllPoints()
 		doomedInterruptPanel:SetPoint('TOPLEFT', doomedPanel, 'TOPRIGHT', 16, 25)
---[[
-		doomedAtonementPanel:ClearAllPoints()
-		doomedAtonementPanel:SetPoint('TOPRIGHT', doomedPanel, 'TOPLEFT', -16, 25)
-		doomedShieldPanel:ClearAllPoints()
-		doomedShieldPanel:SetPoint('TOPLEFT', doomedPanel, 'TOPRIGHT', 16, 25)
-]]
 		return print('Doomed - Position has been reset to default')
 	end
 	print('Doomed (version: |cFFFFD000' .. GetAddOnMetadata('Doomed', 'Version') .. '|r) - Commands:')
@@ -2230,17 +2247,13 @@ function SlashCmdList.Doomed(msg, editbox)
 		'previous |cFF00C000on|r/|cFFC00000off|r - previous ability icon',
 		'always |cFF00C000on|r/|cFFC00000off|r - show the Doomed UI without a target',
 		'cd |cFF00C000on|r/|cFFC00000off|r - use Doomed for cooldown management',
-		'gcd |cFF00C000on|r/|cFFC00000off|r - show global cooldown swipe on main ability icon',
+		'swipe |cFF00C000on|r/|cFFC00000off|r - show spell casting swipe animation on main ability icon',
 		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough mana to use it',
 		'miss |cFF00C000on|r/|cFFC00000off|r - red border around previous ability when it fails to hit',
 		'aoe |cFF00C000on|r/|cFFC00000off|r - allow clicking main ability icon to toggle amount of targets (disables moving)',
 		'bossonly |cFF00C000on|r/|cFFC00000off|r - only use cooldowns on bosses',
 		'hidespec |cFFFFD000aff|r/|cFFFFD000demo|r/|cFFFFD000dest|r - toggle disabling Doomed for specializations',
 		'interrupt |cFF00C000on|r/|cFFC00000off|r - show an icon for interruptable spells',
---[[
-		'atone |cFF00C000on|r/|cFFC00000off|r - show an icon for atonement count (discipline)',
-		'shield |cFF00C000on|r/|cFFC00000off|r - show an icon for Power Word: Shield cooldown (discipline)',
-]]
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show Prolonged Power potions in cooldown UI',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
