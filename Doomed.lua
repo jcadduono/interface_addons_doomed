@@ -1130,6 +1130,9 @@ function AxeToss:usable(seconds)
 	if not (SummonFelguard:up() or SummonWrathguard:up()) then
 		return false
 	end
+	if Felstorm:up() or Wrathstorm:up() then
+		return false
+	end
 	if not TargetIsStunnable() then
 		return false
 	end
