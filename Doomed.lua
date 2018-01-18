@@ -44,12 +44,14 @@ local function InitializeVariables()
 			previous = 0.7,
 			cooldown = 0.7,
 			interrupt = 0.4,
+			petcd = 0.4,
 			glow = 1,
 		},
 		glow = {
 			main = true,
 			cooldown = true,
 			interrupt = false,
+			petcd = true,
 			blizzard = false,
 			color = { r = 1, g = 1, b = 1 }
 		},
@@ -206,6 +208,21 @@ doomedInterruptPanel.border:SetAllPoints(doomedInterruptPanel)
 doomedInterruptPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 doomedInterruptPanel.cast = CreateFrame('Cooldown', nil, doomedInterruptPanel, 'CooldownFrameTemplate')
 doomedInterruptPanel.cast:SetAllPoints(doomedInterruptPanel)
+local doomedPetCDPanel = CreateFrame('Frame', 'doomedPetCDPanel', UIParent)
+doomedPetCDPanel:SetPoint('TOPRIGHT', doomedPanel, 'TOPLEFT', -16, 25)
+doomedPetCDPanel:SetFrameStrata('BACKGROUND')
+doomedPetCDPanel:SetSize(64, 64)
+doomedPetCDPanel:Hide()
+doomedPetCDPanel:RegisterForDrag('LeftButton')
+doomedPetCDPanel:SetScript('OnDragStart', doomedPetCDPanel.StartMoving)
+doomedPetCDPanel:SetScript('OnDragStop', doomedPetCDPanel.StopMovingOrSizing)
+doomedPetCDPanel:SetMovable(true)
+doomedPetCDPanel.icon = doomedPetCDPanel:CreateTexture(nil, 'BACKGROUND')
+doomedPetCDPanel.icon:SetAllPoints(doomedPetCDPanel)
+doomedPetCDPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+doomedPetCDPanel.border = doomedPetCDPanel:CreateTexture(nil, 'BORDER')
+doomedPetCDPanel.border:SetAllPoints(doomedPetCDPanel)
+doomedPetCDPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 
 local Ability, abilities, abilityBySpellId, abilitiesAutoAoe = {}, {}, {}, {}
 Ability.__index = Ability
@@ -1186,6 +1203,7 @@ local function UpdateVars()
 	local _, start, duration, remains, hp, spellId
 	var.last_main = var.main
 	var.last_cd = var.cd
+	var.last_petcd = var.petcd
 	var.time = GetTime()
 	var.gcd = 1.5 - (1.5 * (UnitSpellHaste('player') / 100))
 	start, duration = GetSpellCooldown(LifeTap.spellId)
@@ -1209,6 +1227,12 @@ end
 local function UseCooldown(ability, overwrite, always)
 	if always or (Doomed.cooldown and (not Doomed.boss_only or Target.boss) and (not var.cd or overwrite)) then
 		var.cd = ability
+	end
+end
+
+local function UsePetCooldown(ability, overwrite, always)
+	if always or (not var.petcd or overwrite) then
+		var.petcd = ability
 	end
 end
 
@@ -1388,6 +1412,18 @@ local function DetermineAbilityDemonology()
 		end
 	end
 
+	if DemonicEmpowerment:up() then
+		if SummonFelguard:up() and Felstorm:ready() then
+			UsePetCooldown(Felstorm)
+		end
+		if SummonWrathguard:up() and Wrathstorm:ready() then
+			UsePetCooldown(Wrathstorm)
+		end
+		if ItemEquipped.SephuzsSecret and SephuzsSecret:ready() and AxeToss:usable() then
+			UsePetCooldown(AxeToss)
+		end
+	end
+
 	if Implosion.known and Implosion:usable() and WildImp:remains() <= ShadowBolt:castTime() and (DemonicSynergy:up() or SoulConduit.known or (not SoulConduit.known and Enemies() > 1) or WildImp:count() <= 4) then
 		UseCooldown(Implosion)
 	end
@@ -1491,15 +1527,6 @@ local function DetermineAbilityDemonology()
 	if ThalkielsConsumption:usable() and (Dreadstalker:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImp:count() > 3 and Dreadstalker:count() <= 2 or WildImp:count() > 5) and WildImp:remains() > ThalkielsConsumption:castTime() then
 		UseCooldown(ThalkielsConsumption)
 	end
-	if SummonFelguard:up() and Felstorm:ready() then
-		UseCooldown(Felstorm)
-	end
-	if SummonWrathguard:up() and Wrathstorm:ready() then
-		UseCooldown(Wrathstorm)
-	end
-	if ItemEquipped.SephuzsSecret and SephuzsSecret:ready() and AxeToss:usable() then
-		UseCooldown(AxeToss)
-	end
 	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3))) then
 		return LifeTap
 	end
@@ -1537,6 +1564,7 @@ end
 local function DetermineAbility()
 	var.cd = nil
 	var.interrupt = nil
+	var.petcd = nil
 	if currentSpec == SPEC.AFFLICTION then
 		return DetermineAbilityAffliction()
 	elseif currentSpec == SPEC.DEMONOLOGY then
@@ -1652,7 +1680,8 @@ local function UpdateGlows()
 		if icon and glow.button.icon:IsVisible() and (
 			(Doomed.glow.main and var.main and icon == var.main.icon) or
 			(Doomed.glow.cooldown and var.cd and icon == var.cd.icon) or
-			(Doomed.glow.interrupt and var.interrupt and icon == var.interrupt.icon)
+			(Doomed.glow.interrupt and var.interrupt and icon == var.interrupt.icon) or
+			(Doomed.glow.petcd and var.petcd and icon == var.petcd.icon)
 			) then
 			if not glow:IsVisible() then
 				glow.animIn:Play()
@@ -1683,12 +1712,14 @@ local function Disappear()
 	var.main = nil
 	var.cd = nil
 	var.interrupt = nil
+	var.petcd = nil
 	UpdateGlows()
 	doomedPanel:Hide()
 	doomedPanel.border:Hide()
 	doomedPreviousPanel:Hide()
 	doomedCooldownPanel:Hide()
 	doomedInterruptPanel:Hide()
+	doomedPetCDPanel:Hide()
 end
 
 function Doomed_ToggleTargetMode()
@@ -1752,6 +1783,7 @@ local function UpdateDraggable()
 		doomedPreviousPanel:EnableMouse(false)
 		doomedCooldownPanel:EnableMouse(false)
 		doomedInterruptPanel:EnableMouse(false)
+		doomedPetCDPanel:EnableMouse(false)
 	else
 		if not Doomed.aoe then
 			doomedPanel:SetScript('OnDragStart', doomedPanel.StartMoving)
@@ -1761,6 +1793,7 @@ local function UpdateDraggable()
 		doomedPreviousPanel:EnableMouse(true)
 		doomedCooldownPanel:EnableMouse(true)
 		doomedInterruptPanel:EnableMouse(true)
+		doomedPetCDPanel:EnableMouse(true)
 	end
 end
 
@@ -1789,6 +1822,7 @@ local function UpdateAlpha()
 	doomedPreviousPanel:SetAlpha(Doomed.alpha)
 	doomedCooldownPanel:SetAlpha(Doomed.alpha)
 	doomedInterruptPanel:SetAlpha(Doomed.alpha)
+	doomedPetCDPanel:SetAlpha(Doomed.alpha)
 end
 
 local function UpdateHealthArray()
@@ -1818,6 +1852,14 @@ local function UpdateCombat()
 			doomedCooldownPanel:Show()
 		else
 			doomedCooldownPanel:Hide()
+		end
+	end
+	if var.petcd ~= var.last_petcd then
+		if var.petcd then
+			doomedPetCDPanel.icon:SetTexture(var.petcd.icon)
+			doomedPetCDPanel:Show()
+		else
+			doomedPetCDPanel:Hide()
 		end
 	end
 	if Doomed.dimmer then
@@ -1869,6 +1911,7 @@ function events:ADDON_LOADED(name)
 		doomedPreviousPanel:SetScale(Doomed.scale.previous)
 		doomedCooldownPanel:SetScale(Doomed.scale.cooldown)
 		doomedInterruptPanel:SetScale(Doomed.scale.interrupt)
+		doomedPetCDPanel:SetScale(Doomed.scale.petcd)
 	end
 end
 
@@ -2126,6 +2169,13 @@ function SlashCmdList.Doomed(msg, editbox)
 			end
 			return print('Doomed - Interrupt ability icon scale set to: |cFFFFD000' .. Doomed.scale.interrupt .. '|r times')
 		end
+		if startsWith(msg[2], 'pet') then
+			if msg[3] then
+				Doomed.scale.petcd = tonumber(msg[3]) or 0.4
+				doomedPetCDPanel:SetScale(Doomed.scale.petcd)
+			end
+			return print('Doomed - Pet cooldown ability icon scale set to: |cFFFFD000' .. Doomed.scale.petcd .. '|r times')
+		end
 		if msg[2] == 'glow' then
 			if msg[3] then
 				Doomed.scale.glow = tonumber(msg[3]) or 1
@@ -2133,7 +2183,7 @@ function SlashCmdList.Doomed(msg, editbox)
 			end
 			return print('Doomed - Action button glow scale set to: |cFFFFD000' .. Doomed.scale.glow .. '|r times')
 		end
-		return print('Doomed - Default icon scale options: |cFFFFD000prev 0.7|r, |cFFFFD000main 1|r, |cFFFFD000cd 0.7|r, |cFFFFD000interrupt 0.4|r, and |cFFFFD000glow 1|r')
+		return print('Doomed - Default icon scale options: |cFFFFD000prev 0.7|r, |cFFFFD000main 1|r, |cFFFFD000cd 0.7|r, |cFFFFD000interrupt 0.4|r, |cFFFFD000pet 0.4|r, and |cFFFFD000glow 1|r')
 	end
 	if msg[1] == 'alpha' then
 		if msg[2] then
@@ -2171,6 +2221,13 @@ function SlashCmdList.Doomed(msg, editbox)
 			end
 			return print('Doomed - Glowing ability buttons (interrupt icon): ' .. (Doomed.glow.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
 		end
+		if startsWith(msg[2], 'pet') then
+			if msg[3] then
+				Doomed.glow.petcd = msg[3] == 'on'
+				UpdateGlows()
+			end
+			return print('Doomed - Glowing ability buttons (pet cooldown icon): ' .. (Doomed.glow.petcd and '|cFF00C000On' or '|cFFC00000Off'))
+		end
 		if startsWith(msg[2], 'bliz') then
 			if msg[3] then
 				Doomed.glow.blizzard = msg[3] == 'on'
@@ -2187,7 +2244,7 @@ function SlashCmdList.Doomed(msg, editbox)
 			end
 			return print('Doomed - Glow color:', '|cFFFF0000' .. Doomed.glow.color.r, '|cFF00FF00' .. Doomed.glow.color.g, '|cFF0000FF' .. Doomed.glow.color.b)
 		end
-		return print('Doomed - Possible glow options: |cFFFFD000main|r, |cFFFFD000cd|r, |cFFFFD000interrupt|r, |cFFFFD000blizzard|r, and |cFFFFD000color')
+		return print('Doomed - Possible glow options: |cFFFFD000main|r, |cFFFFD000cd|r, |cFFFFD000interrupt|r, |cFFFFD000pet|r, |cFFFFD000blizzard|r, and |cFFFFD000color')
 	end
 	if startsWith(msg[1], 'prev') then
 		if msg[2] then
@@ -2294,6 +2351,8 @@ function SlashCmdList.Doomed(msg, editbox)
 		doomedCooldownPanel:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMRIGHT', 10, -5)
 		doomedInterruptPanel:ClearAllPoints()
 		doomedInterruptPanel:SetPoint('TOPLEFT', doomedPanel, 'TOPRIGHT', 16, 25)
+		doomedPetCDPanel:ClearAllPoints()
+		doomedPetCDPanel:SetPoint('TOPRIGHT', doomedPanel, 'TOPLEFT', -16, 25)
 		return print('Doomed - Position has been reset to default')
 	end
 	print('Doomed (version: |cFFFFD000' .. GetAddOnMetadata('Doomed', 'Version') .. '|r) - Commands:')
@@ -2301,10 +2360,10 @@ function SlashCmdList.Doomed(msg, editbox)
 	for _, cmd in next, {
 		'locked |cFF00C000on|r/|cFFC00000off|r - lock the Doomed UI so that it can\'t be moved',
 		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the Doomed UI to the Blizzard combat resources frame',
-		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000glow|r - adjust the scale of the Doomed UI icons',
+		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000glow|r - adjust the scale of the Doomed UI icons',
 		'alpha |cFFFFD000[percent]|r - adjust the transparency of the Doomed UI icons',
 		'frequency |cFFFFD000[number]|r - set the calculation frequency (default is every 0.05 seconds)',
-		'glow |cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000blizzard|r |cFF00C000on|r/|cFFC00000off|r - glowing ability buttons on action bars',
+		'glow |cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000blizzard|r |cFF00C000on|r/|cFFC00000off|r - glowing ability buttons on action bars',
 		'glow color |cFFF000000.0-1.0|r |cFF00FF000.1-1.0|r |cFF0000FF0.0-1.0|r - adjust the color of the ability button glow',
 		'previous |cFF00C000on|r/|cFFC00000off|r - previous ability icon',
 		'always |cFF00C000on|r/|cFFC00000off|r - show the Doomed UI without a target',
