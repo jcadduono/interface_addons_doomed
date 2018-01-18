@@ -101,6 +101,7 @@ local ItemEquipped = {
 	SindoreiSpite = false,
 	ReapAndSow = false,
 	RecurrentRitual = false,
+	SephuzsSecret = false
 }
 
 local var = {
@@ -465,6 +466,8 @@ SoulHarvest.buff_duration = 12
 SoulHarvest.cooldown_duration = 120
 ------ Procs
 local SoulConduit = Ability.add(215941, true, true)
+local SephuzsSecret = Ability.add(208052, true, true)
+SephuzsSecret.cooldown_duration = 30
 ------ Permanent Pets
 local SummonDoomguard = Ability.add(157757, false, true) -- Grimoire of Supremacy
 SummonDoomguard.shard_cost = 1
@@ -594,6 +597,10 @@ SummonInfernalCD.shard_cost = 1
 local ThalkielsConsumption = Ability.add(211714, false, true)
 ThalkielsConsumption.cooldown_duration = 45
 ------ Pet Abilities
+local AxeToss = Ability.add(89766, 'pet', true)
+AxeToss.triggers_gcd = false
+AxeToss.requires_pet = true
+AxeToss.cooldown_duration = 30
 local Felstorm = Ability.add(89753, 'pet', true, 119914)
 Felstorm.requires_pet = true
 Felstorm.triggers_gcd = false
@@ -770,24 +777,105 @@ local Doomguard = SummonedPet.add('Doomguard', 'Doomguard', 25)
 local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
 local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
 
--- Start Ability Modifications
+-- Start Helpful Functions
 
-function Doom:duration()
-	return var.haste_factor * (self.buff_duration - (ImpendingDoom.known and 3 or 0))
+local Target = {
+	boss = false,
+	guid = 0,
+	healthArray = {},
+	hostile = false
+}
+
+local function GetCastManaRegen()
+	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
 end
 
-function Doom:up()
-	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
-		return true
-	end
-	return Ability.up(self)
+local function GetAvailableSoulShards()
+	return min(5, max(0, UnitPower('player', SPELL_POWER_SOUL_SHARDS) - (var.cast_ability and var.cast_ability:shardCost() or 0)))
 end
 
-function Doom:remains()
-	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
-		return self:duration()
+--[[
+local function Mana()
+	return var.mana
+end
+]]
+
+local function ManaPct()
+	return var.mana / var.mana_max * 100
+end
+
+--[[
+local function ManaDeficit()
+	return var.mana_max - var.mana
+end
+
+local function ManaRegen()
+	return var.mana_regen
+end
+
+local function ManaMax()
+	return var.mana_max
+end
+]]
+
+local function SoulShards()
+	return var.soul_shards
+end
+
+local function SpellHasteFactor()
+	return var.haste_factor
+end
+
+local function GCD()
+	return var.gcd
+end
+
+--[[
+local function GCDRemains()
+	return var.gcd_remains
+end
+]]
+
+local function PlayerIsMoving()
+	return GetUnitSpeed('player') ~= 0
+end
+
+local function PetIsSummoned()
+	return (IsMounted() or
+		SummonFelguard:up() or SummonWrathguard:up() or
+		SummonDoomguard:up() or SummonInfernal:up() or
+		SummonFelhunter:up() or SummonObserver:up() or
+		SummonImp:up() or SummonFelImp:up() or
+		SummonVoidwalker:up() or SummonVoidlord:up() or
+		SummonSuccubus:up() or SummonShivarra:up())
+end
+
+local function Enemies()
+	return targetModes[currentSpec][targetMode][1]
+end
+
+local function TimeInCombat()
+	return combatStartTime > 0 and var.time - combatStartTime or 0
+end
+
+local function BloodlustActive()
+	local _, i, id
+	for i = 1, 40 do
+		_, _, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
+		if id == 2825 or id == 32182 or id == 80353 or id == 90355 or id == 160452 or id == 146555 then
+			return true
+		end
 	end
-	return Ability.remains(self)
+end
+
+local function TargetIsStunnable()
+	if Target.boss then
+		return false
+	end
+	if UnitHealthMax('target') > UnitHealthMax('player') * 25 then
+		return false
+	end
+	return true
 end
 
 --[[
@@ -813,10 +901,6 @@ local function GetSummonersProwessRank()
 	return power_info and power_info.currentRank or 0
 end
 
-function DemonicEmpowerment:healthMultiplier()
-	return 1.2 + (GetSummonersProwessRank() * 0.02)
-end
-
 local function GetActivePetFamily()
 	if SummonInfernal:up() then
 		return 'Infernal'
@@ -839,6 +923,34 @@ local function GetActivePetFamily()
 	if SummonFelguard:up() or SummonWrathguard:up() then
 		return 'Felguard'
 	end
+end
+]]
+
+-- End Helpful Functions
+
+-- Start Ability Modifications
+
+function Doom:duration()
+	return var.haste_factor * (self.buff_duration - (ImpendingDoom.known and 3 or 0))
+end
+
+function Doom:up()
+	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function Doom:remains()
+	if HandOfDoom.known and (HandOfGuldan:previous() or var.last_gcd == HandOfGuldan) then
+		return self:duration()
+	end
+	return Ability.remains(self)
+end
+
+--[[
+function DemonicEmpowerment:healthMultiplier()
+	return 1.2 + (GetSummonersProwessRank() * 0.02)
 end
 
 function ThalkielsConsumption:multiplier()
@@ -986,6 +1098,36 @@ function CallDreadstalkers:shardCost()
 	return cost
 end
 
+function SephuzsSecret:cooldown()
+	if not self.cooldown_start then
+		return 0
+	end
+	if var.time >= self.cooldown_start + self.cooldown_duration then
+		self.cooldown_start = nil
+		return 0
+	end
+	return self.cooldown_duration - (var.time - self.cooldown_start)
+end
+
+function AxeToss:usable(seconds)
+	if not (SummonFelguard:up() or SummonWrathguard:up()) then
+		return false
+	end
+	if not TargetIsStunnable() then
+		return false
+	end
+	return self:ready(seconds)
+end
+
+function ProlongedPower:cooldown()
+	local startTime, duration = GetItemCooldown(142117)
+	return duration - (var.time - startTime)
+end
+
+-- End Ability Modifications
+
+-- Start Summoned Pet Modifications
+
 function Dreadstalker:count()
 	local count = SummonedPet.count(self)
 	if CallDreadstalkers:casting() then
@@ -1038,22 +1180,7 @@ function WildImp:notEmpowered()
 	return count
 end
 
--- End Ability Modifications
-
-local Target = {
-	boss = false,
-	guid = 0,
-	healthArray = {},
-	hostile = false
-}
-
-local function GetCastManaRegen()
-	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
-end
-
-local function GetAvailableSoulShards()
-	return min(5, max(0, UnitPower('player', SPELL_POWER_SOUL_SHARDS) - (var.cast_ability and var.cast_ability:shardCost() or 0)))
-end
+-- End Summoned Pet Modifications
 
 local function UpdateVars()
 	local _, start, duration, remains, hp, spellId
@@ -1079,90 +1206,13 @@ local function UpdateVars()
 	Target.timeToDie = hp > 0 and Target.healthArray[#Target.healthArray] / (hp / 3) or 600
 end
 
---[[
-local function Mana()
-	return var.mana
-end
-]]
-
-local function ManaPct()
-	return var.mana / var.mana_max * 100
-end
-
---[[
-local function ManaDeficit()
-	return var.mana_max - var.mana
-end
-
-local function ManaRegen()
-	return var.mana_regen
-end
-
-local function ManaMax()
-	return var.mana_max
-end
-]]
-
-local function SoulShards()
-	return var.soul_shards
-end
-
-local function SpellHasteFactor()
-	return var.haste_factor
-end
-
-local function GCD()
-	return var.gcd
-end
-
---[[
-local function GCDRemains()
-	return var.gcd_remains
-end
-]]
-
-local function PlayerIsMoving()
-	return GetUnitSpeed('player') ~= 0
-end
-
-local function PetIsSummoned()
-	return (IsMounted() or
-		SummonFelguard:up() or SummonWrathguard:up() or
-		SummonDoomguard:up() or SummonInfernal:up() or
-		SummonFelhunter:up() or SummonObserver:up() or
-		SummonImp:up() or SummonFelImp:up() or
-		SummonVoidwalker:up() or SummonVoidlord:up() or
-		SummonSuccubus:up() or SummonShivarra:up())
-end
-
-local function Enemies()
-	return targetModes[currentSpec][targetMode][1]
-end
-
-local function TimeInCombat()
-	return combatStartTime > 0 and var.time - combatStartTime or 0
-end
-
-function ProlongedPower:cooldown()
-	local startTime, duration = GetItemCooldown(142117)
-	return duration - (var.time - startTime)
-end
-
-local function BloodlustActive()
-	local _, i, id
-	for i = 1, 40 do
-		_, _, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
-		if id == 2825 or id == 32182 or id == 80353 or id == 90355 or id == 160452 or id == 146555 then
-			return true
-		end
-	end
-end
-
 local function UseCooldown(ability, overwrite, always)
 	if always or (Doomed.cooldown and (not Doomed.boss_only or Target.boss) and (not var.cd or overwrite)) then
 		var.cd = ability
 	end
 end
+
+-- Begin Action Priority Lists
 
 local function DetermineAbilityAffliction()
 	if TimeInCombat() == 0 then
@@ -1447,6 +1497,9 @@ local function DetermineAbilityDemonology()
 	if SummonWrathguard:up() and Wrathstorm:ready() then
 		UseCooldown(Wrathstorm)
 	end
+	if ItemEquipped.SephuzsSecret and SephuzsSecret:ready() and AxeToss:usable() then
+		UseCooldown(AxeToss)
+	end
 	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3))) then
 		return LifeTap
 	end
@@ -1478,6 +1531,8 @@ end
 local function DetermineAbilityDestruction()
 	return ShadowBolt
 end
+
+-- End Action Priority Lists
 
 local function DetermineAbility()
 	var.cd = nil
@@ -1868,6 +1923,12 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			end
 		end
 	end
+	if eventType == 'SPELL_AURA_APPLIED' then
+		if spellId == SephuzsSecret.spellId then
+			SephuzsSecret.cooldown_start = GetTime()
+			return
+		end
+	end
 	if petsByUnitName[dstName] then
 		if eventType == 'SPELL_SUMMON' then
 			petsByUnitName[dstName]:addUnit(dstGUID)
@@ -1958,6 +2019,7 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 	ItemEquipped.SindoreiSpite = Equipped("Sin'dorei Spite")
 	ItemEquipped.ReapAndSow = Equipped("Reap and Sow")
 	ItemEquipped.RecurrentRitual = Equipped("Recurrent Ritual")
+	ItemEquipped.SephuzsSecret = Equipped("Sephuz's Secret")
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
