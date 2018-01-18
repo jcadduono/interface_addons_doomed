@@ -1663,6 +1663,9 @@ local function CreateOverlayGlows()
 			GenerateGlow(_G['MultiBarBottomLeftButton' .. i])
 			GenerateGlow(_G['MultiBarBottomRightButton' .. i])
 		end
+		for i = 1, 10 do
+			GenerateGlow(_G['PetActionButton' .. i])
+		end
 		if Dominos then
 			for i = 1, 60 do
 				GenerateGlow(_G['DominosActionButton' .. i])
