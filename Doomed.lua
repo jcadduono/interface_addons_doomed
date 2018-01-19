@@ -72,6 +72,7 @@ local function InitializeVariables()
 		interrupt = true,
 		aoe = false,
 		auto_aoe = false,
+		healthstone = true,
 		pot = false
 	})
 end
@@ -224,26 +225,27 @@ doomedPetCDPanel.border = doomedPetCDPanel:CreateTexture(nil, 'ARTWORK')
 doomedPetCDPanel.border:SetAllPoints(doomedPetCDPanel)
 doomedPetCDPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 
+-- Start Abilities
+
 local Ability, abilities, abilityBySpellId, abilitiesAutoAoe = {}, {}, {}, {}
 Ability.__index = Ability
 
 function Ability.add(spellId, buff, player, spellId2)
-	local name, _, icon = GetSpellInfo(spellId)
 	local ability = {
 		spellId = spellId,
 		spellId2 = spellId2,
-		name = name,
-		icon = icon,
+		name = false,
+		icon = false,
+		requires_charge = false,
+		requires_pet = false,
+		triggers_gcd = true,
+		hasted_duration = false,
+		known = false,
 		mana_cost = 0,
 		shard_cost = 0,
 		cooldown_duration = 0,
 		buff_duration = 0,
 		tick_interval = 0,
-		requires_charge = false,
-		requires_pet = false,
-		triggers_gcd = true,
-		hasted_duration = false,
-		known = IsPlayerSpell(spellId),
 		auraTarget = buff == 'pet' and 'pet' or buff and 'player' or 'target',
 		auraFilter = (buff and 'HELPFUL' or 'HARMFUL') .. (player and '|PLAYER' or '')
 	}
@@ -300,10 +302,7 @@ function Ability:refreshable()
 	return self:down()
 end
 
-function Ability:up(excludeCasting)
-	if not excludeCasting and self.buff_duration > 0 and self:casting() then
-		return true
-	end
+function Ability:up()
 	local _, i, id, expires
 	for i = 1, 40 do
 		_, _, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
@@ -317,7 +316,7 @@ function Ability:up(excludeCasting)
 end
 
 function Ability:down(excludeCasting)
-	return not self:up(excludeCasting)
+	return not self:up()
 end
 
 function Ability:cooldown()
@@ -375,12 +374,17 @@ end
 
 function Ability:castTime()
 	local _, _, _, castTime = GetSpellInfo(self.spellId)
+	if castTime == 0 then
+		return self.triggers_gcd and var.gcd or 0
+	end
 	return castTime / 1000
 end
 
+--[[
 function Ability:castRegen()
-	return var.regen * max(1, self:castTime())
+	return var.regen * max(self.triggers_gcd and var.gcd or 0, self:castTime())
 end
+]]
 
 function Ability:tickInterval()
 	return self.tick_interval - (self.tick_interval * (UnitSpellHaste('player') / 100))
@@ -468,6 +472,8 @@ end
 
 -- Warlock Abilities
 ---- Multiple Specializations
+local CreateHealthstone = Ability.add(6201, true, true)
+CreateHealthstone.mana_cost = 5
 local LifeTap = Ability.add(1454, false, true) -- Used for GCD calculation
 LifeTap.mana_cost = -30
 local ShadowLock = Ability.add(171138, 'pet', false)
@@ -665,23 +671,26 @@ local ShadowyInspiration = Ability.add(196269, true, true, 196606)
 local ArcaneTorrent = Ability.add(136222, true, false) -- Blood Elf
 ArcaneTorrent.mana_cost = -3
 ArcaneTorrent.triggers_gcd = false
--- Potions
+-- Potion Effects
 local ProlongedPower = Ability.add(229206, true, true)
 ProlongedPower.triggers_gcd = false
--- Trinkets
+-- Trinket Effects
+
+-- End Abilities
+
+-- Start Summoned Pets
 
 local SummonedPet, petsByUnitName = {}, {}
 SummonedPet.__index = SummonedPet
 
-function SummonedPet.add(name, unitName, duration)
+function SummonedPet.add(name, duration)
 	local pet = {
 		name = name,
-		unit_name = unitName,
 		duration = duration,
 		active_units = {}
 	}
 	setmetatable(pet, SummonedPet)
-	petsByUnitName[unitName] = pet
+	petsByUnitName[name] = pet
 	return pet
 end
 
@@ -787,12 +796,60 @@ function SummonedPet:empowerUnit(guid)
 end
 
 -- Summoned Pets
-local Darkglare = SummonedPet.add('Darkglare', 'Darkglare', 12)
-local Dreadstalker = SummonedPet.add('Dreadstalkers', 'Dreadstalker', 12)
-local WildImp = SummonedPet.add('Wild Imps', 'Wild Imp', 12)
-local Doomguard = SummonedPet.add('Doomguard', 'Doomguard', 25)
-local Infernal = SummonedPet.add('Infernal', 'Infernal', 25)
-local ServiceFelguard = SummonedPet.add('Felguard', 'Felguard', 25)
+local Darkglare = SummonedPet.add('Darkglare', 12)
+local Dreadstalker = SummonedPet.add('Dreadstalker', 12)
+local WildImp = SummonedPet.add('Wild Imp', 12)
+local Doomguard = SummonedPet.add('Doomguard', 25)
+local Infernal = SummonedPet.add('Infernal', 25)
+local ServiceFelguard = SummonedPet.add('Felguard', 25)
+
+-- End Summoned Pets
+
+-- Start Inventory Items
+
+local InventoryItem = {}
+InventoryItem.__index = InventoryItem
+
+function InventoryItem.add(itemId)
+	local name, _, _, _, _, _, _, _, _, icon = GetItemInfo(itemId)
+	local item = {
+		itemId = itemId,
+		name = name,
+		icon = icon
+	}
+	setmetatable(item, InventoryItem)
+	return item
+end
+
+function InventoryItem:charges()
+	return GetItemCount(self.itemId, false, true) or 0
+end
+
+function InventoryItem:count()
+	return GetItemCount(self.itemId, false, false) or 0
+end
+
+function InventoryItem:cooldown()
+	local startTime, duration = GetItemCooldown(self.itemId)
+	return startTime == 0 and 0 or duration - (var.time - startTime)
+end
+
+function InventoryItem:ready(seconds)
+	return self:cooldown() <= (seconds or 0)
+end
+
+function InventoryItem:usable(seconds)
+	if self:charges() == 0 then
+		return false
+	end
+	return self:ready(seconds)
+end
+
+-- Inventory Items
+local PotionOfProlongedPower = InventoryItem.add(142117)
+local Healthstone = InventoryItem.add(5512)
+
+-- End Inventory Items
 
 -- Start Helpful Functions
 
@@ -1139,11 +1196,6 @@ function AxeToss:usable(seconds)
 	return self:ready(seconds)
 end
 
-function ProlongedPower:cooldown()
-	local startTime, duration = GetItemCooldown(142117)
-	return duration - (var.time - startTime)
-end
-
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
@@ -1257,8 +1309,8 @@ local function DetermineAbilityAffliction()
 		if ManaPct() < 70 or (EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable()) then
 			return LifeTap
 		end
-		if Doomed.pot and ProlongedPower:ready() then
-			UseCooldown(ProlongedPower)
+		if Doomed.pot and PotionOfProlongedPower:usable() then
+			UseCooldown(PotionOfProlongedPower)
 		end
 	end
 	if ReapSouls:usable() and (DeadwindHarvester:down() or (not (DrainSoul:channeling() and UnstableAffliction:up()) and DeadwindHarvester:remains() < 3)) and TimeInCombat() > 5 and (TormentedSouls:stack() >= min(4 + Enemies(), 9) or Target.timeToDie <= (TormentedSouls:stack() * (ReapAndSow and 6.5 or 5) + (DeadwindHarvester:remains() * (ItemEquipped.ReapAndSow and 6.5 or 5) % 12 * (ItemEquipped.ReapAndSow and 6.5 or 5)))) then
@@ -1309,8 +1361,8 @@ local function DetermineAbilityAffliction()
 	if SoulHarvest.known and SoulHarvest:ready() and UnstableAffliction:stack() > 1 and SoulHarvest:remains() <= 8 and (not DeathsEmbrace.known or Target.timeToDie >= 136 or Target.timeToDie <= 40) then
 		UseCooldown(SoulHarvest)
 	end
-	if Doomed.pot and ProlongedPower:ready() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
-		UseCooldown(ProlongedPower)
+	if Doomed.pot and PotionOfProlongedPower:usable() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
+		UseCooldown(PotionOfProlongedPower)
 	end
 	if Agony:usable() and Agony:refreshable() and Target.timeToDie >= Agony:remains() and (UnstableAffliction:down() or (SiphonLife:remains() > 10 and Corruption:remains() > 10)) then
 		return Agony
@@ -1390,8 +1442,8 @@ local function DetermineAbilityDemonology()
 		if ManaPct() < 70 then
 			return LifeTap
 		end
-		if Doomed.pot and ProlongedPower:ready() then
-			UseCooldown(ProlongedPower)
+		if Doomed.pot and PotionOfProlongedPower:usable() then
+			UseCooldown(PotionOfProlongedPower)
 		end
 		if SoulShards() < 5 then
 			if Enemies() >= 5 and Demonwrath:usable() then
@@ -1521,8 +1573,8 @@ local function DetermineAbilityDemonology()
 	if SoulHarvest.known and SoulHarvest:ready() and SoulHarvest:down() then
 		UseCooldown(SoulHarvest)
 	end
-	if Doomed.pot and ProlongedPower:ready() and (SoulHarvest:up() or Target.timeToDie <= 70 or BloodlustActive()) then
-		UseCooldown(ProlongedPower)
+	if Doomed.pot and PotionOfProlongedPower:usable() and (SoulHarvest:up() or Target.timeToDie <= 70 or BloodlustActive()) then
+		UseCooldown(PotionOfProlongedPower)
 	end
 	if Shadowflame.known and Shadowflame:usable() and Shadowflame:charges() == 2 and Enemies() < 5 then
 		return Shadowflame
@@ -1568,6 +1620,11 @@ local function DetermineAbility()
 	var.cd = nil
 	var.interrupt = nil
 	var.petcd = nil
+	if TimeInCombat() == 0 then
+		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
+			return CreateHealthstone
+		end
+	end
 	if currentSpec == SPEC.AFFLICTION then
 		return DetermineAbilityAffliction()
 	elseif currentSpec == SPEC.DEMONOLOGY then
@@ -1869,7 +1926,11 @@ local function UpdateCombat()
 		end
 	end
 	if Doomed.dimmer then
-		if not var.main or IsUsableSpell(var.main.spellId) then
+		if not var.main then
+			doomedPanel.dimmer:Hide()
+		elseif var.main.spellId and IsUsableSpell(var.main.spellId) then
+			doomedPanel.dimmer:Hide()
+		elseif var.main.itemId and IsUsableItem(var.main.itemId) then
 			doomedPanel.dimmer:Hide()
 		else
 			doomedPanel.dimmer:Show()
@@ -2348,6 +2409,12 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Show Prolonged Power potions in cooldown UI: ' .. (Doomed.pot and '|cFF00C000On' or '|cFFC00000Off'))
 	end
+	if startsWith(msg[1], 'health') then
+		if msg[2] then
+			Doomed.healthstone = msg[2] == 'on'
+		end
+		return print('Doomed - Show Create Healthstone reminder out of combat: ' .. (Doomed.healthstone and '|cFF00C000On' or '|cFFC00000Off'))
+	end
 	if msg[1] == 'reset' then
 		doomedPanel:ClearAllPoints()
 		doomedPanel:SetPoint('CENTER', 0, -169)
@@ -2383,6 +2450,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		'interrupt |cFF00C000on|r/|cFFC00000off|r - show an icon for interruptable spells',
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show Prolonged Power potions in cooldown UI',
+		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
