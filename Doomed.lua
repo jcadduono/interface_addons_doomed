@@ -2151,6 +2151,7 @@ function events:PLAYER_ENTERING_WORLD()
 	if #glows == 0 then
 		CreateOverlayGlows()
 	end
+	UpdateVars()
 end
 
 doomedPanel.button:SetScript('OnClick', function(self, button, down)
