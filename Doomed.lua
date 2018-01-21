@@ -600,6 +600,7 @@ Doom.mana_cost = 2
 Doom.buff_duration = 20
 Doom.tick_interval = 20
 Doom.hasted_duration = true
+Doom.tick_targets = {}
 local DrainLife = Ability.add(234153, false, true)
 DrainLife.mana_cost = 3
 DrainLife.buff_duration = 6
@@ -865,7 +866,14 @@ local function GetCastManaRegen()
 end
 
 local function GetAvailableSoulShards()
-	return min(5, max(0, UnitPower('player', SPELL_POWER_SOUL_SHARDS) - (var.cast_ability and var.cast_ability:shardCost() or 0)))
+	local shards = UnitPower('player', SPELL_POWER_SOUL_SHARDS)
+	if currentSpec == SPEC.DEMONOLOGY and var.cast_remains > 0 then
+		shards = min(5, shards + Doom:soulShardsGeneratedDuringCast())
+	end
+	if var.cast_ability then
+		shards = min(5, max(0, shards - var.cast_ability:shardCost()))
+	end
+	return shards
 end
 
 --[[
@@ -1020,6 +1028,87 @@ function Doom:remains()
 		return self:duration()
 	end
 	return Ability.remains(self)
+end
+
+function Doom:addTarget(guid)
+	local start = GetTime()
+	local duration = Doom:duration()
+	self.tick_targets[guid] = {
+		last_tick = start,
+		tick_duration = duration,
+		expires = start + duration
+	}
+end
+
+function Doom:tickTarget(guid)
+	local t = self.tick_targets[guid]
+	if not t then
+		return
+	end
+	if not t.refreshed then
+		self.tick_targets[guid] = nil
+		return
+	end
+	t.refreshed = nil
+	t.last_tick = GetTime()
+	t.tick_duration = self:duration()
+end
+
+function Doom:refreshTarget(guid)
+	local t = self.tick_targets[guid]
+	if not t then
+		return
+	end
+	t.refreshed = GetTime()
+	local duration = Doom:duration()
+	t.expires = t.refreshed + min(1.3 * duration, t.expires - t.refreshed + duration)
+end
+
+function Doom:removeTarget(guid)
+	if self.tick_targets[guid] then
+		self.tick_targets[guid] = nil
+	end
+end
+
+--[[
+function Doom:nextTick()
+	local earliest, next_tick, guid, t
+	for guid, t in next, self.tick_targets do
+		next_tick = min(t.expires, t.last_tick + t.tick_duration)
+		if not earliest or next_tick < earliest then
+			earliest = next_tick
+		end
+	end
+	return earliest or 0
+end
+]]
+
+function Doom:soulShardsGeneratedDuringCast()
+	if var.cast_remains == 0 then
+		return 0
+	end
+	local shards, guid, t = 0
+	for guid, t in next, self.tick_targets do
+		if min(t.expires, t.last_tick + t.tick_duration) < var.time + var.cast_remains then
+			shards = shards + 1
+		end
+	end
+	return shards
+end
+
+function Doom:soulShardsGeneratedNextCast(ability)
+	local castTime = ability:castTime()
+	if castTime == 0 then
+		return 0
+	end
+	local shards, next_tick, guid, t = 0
+	for guid, t in next, self.tick_targets do
+		next_tick = min(t.expires, t.last_tick + t.tick_duration)
+		if next_tick >= var.time + var.cast_remains and next_tick < var.time + var.cast_remains + castTime then
+			shards = shards + 1
+		end
+	end
+	return shards
 end
 
 --[[
@@ -1547,19 +1636,21 @@ local function DetermineAbilityDemonology()
 			return CallDreadstalkers
 		end
 	end
-	if HandOfGuldan:usable() and SoulShards() >= 4 then
-		if SoulShards() == 5 then
+	if HandOfGuldan:usable() then
+		if SoulShards() == 5 or SoulShards() + Doom:soulShardsGeneratedNextCast(HandOfGuldan) >= 5 then
 			return HandOfGuldan
 		end
-		if (CallDreadstalkers:cooldown() > 4 or DemonicCalling:remains() > HandOfGuldan:castTime() + 2) and (Enemies() >= 5 or HandOfGuldan:previous() or CallDreadstalkers:previous() or (SummonDarkglare.known and SummonDarkglare:previous()) or (HandOfDoom.known and Doom:refreshable())) then
-			return HandOfGuldan
-		end
-		if SummonDarkglare.known and SummonDarkglare:cooldown() > 2 then
-			return HandOfGuldan
-		end
-		local pet_count = (PetIsSummoned() and 1 or 0) + ServiceFelguard:count() + WildImp:count() + Dreadstalker:count() + Darkglare:count() + Doomguard:count() + Infernal:count()
-		if PowerTrip.known and ((not (non_imp_no_de or HandOfGuldan:previous()) and (pet_count >= (ShadowyInspiration.known and 6 or 13))) or not cond_no_de) then
-			return HandOfGuldan
+		if SoulShards() >= 4 then
+			if (CallDreadstalkers:cooldown() > 4 or DemonicCalling:remains() > HandOfGuldan:castTime() + 2) and (Enemies() >= 5 or HandOfGuldan:previous() or CallDreadstalkers:previous() or (SummonDarkglare.known and SummonDarkglare:previous()) or (HandOfDoom.known and Doom:refreshable())) then
+				return HandOfGuldan
+			end
+			if SummonDarkglare.known and SummonDarkglare:cooldown() > 2 then
+				return HandOfGuldan
+			end
+			local pet_count = (PetIsSummoned() and 1 or 0) + ServiceFelguard:count() + WildImp:count() + Dreadstalker:count() + Darkglare:count() + Doomguard:count() + Infernal:count()
+			if PowerTrip.known and ((not (non_imp_no_de or HandOfGuldan:previous()) and (pet_count >= (ShadowyInspiration.known and 6 or 13))) or not cond_no_de) then
+				return HandOfGuldan
+			end
 		end
 	end
 	if DemonicEmpowerment:usable() then
@@ -1987,6 +2078,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 		if Doomed.auto_aoe then
 			AutoAoeRemoveTarget(dstGUID)
 		end
+		Doom:removeTarget(dstGUID)
 	end
 	if srcGUID ~= UnitGUID('player') and srcGUID ~= UnitGUID('pet') then
 		return
@@ -2038,6 +2130,18 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			SephuzsSecret.cooldown_start = GetTime()
 			return
 		end
+	end
+	if currentSpec == SPEC.DEMONOLOGY and spellId == Doom.spellId then
+		if eventType == 'SPELL_AURA_APPLIED' then
+			Doom:addTarget(dstGUID)
+		elseif eventType == 'SPELL_AURA_REMOVED' then
+			Doom:removeTarget(dstGUID)
+		elseif eventType == 'SPELL_AURA_REFRESH' then
+			Doom:refreshTarget(dstGUID)
+		elseif eventType == 'SPELL_PERIODIC_DAMAGE' then
+			Doom:tickTarget(dstGUID)
+		end
+		return
 	end
 	if petsByUnitName[dstName] then
 		if eventType == 'SPELL_SUMMON' then
@@ -2118,6 +2222,12 @@ function events:PLAYER_REGEN_ENABLED()
 			Targets[guid] = nil
 		end
 		Doomed_SetTargetMode(1)
+	end
+	if currentSpec == SPEC.DEMONOLOGY then
+		local guid
+		for guid in next, Doom.tick_targets do
+			Doom.tick_targets[guid] = nil
+		end
 	end
 end
 
