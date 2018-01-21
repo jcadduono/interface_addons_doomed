@@ -1012,6 +1012,13 @@ end
 
 -- Start Ability Modifications
 
+function LifeTap:usable()
+	if (UnitHealth('player') / UnitHealthMax('player')) <= 0.10 then
+		return false
+	end
+	return Ability.usable(self)
+end
+
 function Doom:duration()
 	return var.haste_factor * (self.buff_duration - (ImpendingDoom.known and 3 or 0))
 end
@@ -1395,7 +1402,7 @@ local function DetermineAbilityAffliction()
 		if GrimoireOfSacrifice.known and PetIsSummoned() then
 			return GrimoireOfSacrifice
 		end
-		if ManaPct() < 70 or (EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable()) then
+		if LifeTap:usable() and (ManaPct() < 70 or (EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable())) then
 			return LifeTap
 		end
 		if Doomed.pot and PotionOfProlongedPower:usable() then
@@ -1428,7 +1435,7 @@ local function DetermineAbilityAffliction()
 	if Target.timeToDie < GCD() * 2 and SoulShards() < 5 then
 		return DrainSoul
 	end
-	if EmpoweredLifeTap.known and EmpoweredLifeTap:remains() <= GCD() then
+	if EmpoweredLifeTap.known and LifeTap:usable() and EmpoweredLifeTap:remains() <= GCD() then
 		return LifeTap
 	end
 	if not GrimoireOfSupremacy.known then
@@ -1462,7 +1469,7 @@ local function DetermineAbilityAffliction()
 	if Corruption:usable() and (not SowTheSeeds.known or Enemies() < 3) and Enemies() < 5 and Corruption:refreshable() and Target.timeToDie >= Corruption:remains() and (UnstableAffliction:down() or (SiphonLife:remains() > 10 and Agony:remains() > 10)) then
 		return Corruption
 	end
-	if ((EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable()) or (Target.timeToDie > 15 and ManaPct() < 10)) and not (DrainSoul:channeling() and UnstableAffliction:stack() > 1) then
+	if LifeTap:usable() and ((EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable()) or (Target.timeToDie > 15 and ManaPct() < 10)) and not (DrainSoul:channeling() and UnstableAffliction:stack() > 1) then
 		return LifeTap
 	end
 	if SeedOfCorruption:usable() and ((SowTheSeeds.known and Enemies() >= 3) or (Enemies() >= 5 and Corruption:remains() <= SeedOfCorruption:castTime())) then
@@ -1485,7 +1492,7 @@ local function DetermineAbilityAffliction()
 	if ReapSouls:usable() and DeadwindHarvester:remains() < UnstableAffliction:remains() and UnstableAffliction:stack() > 1 then
 		UseCooldown(ReapSouls, true, true)
 	end
-	if ManaPct() < 10 or (LifeTap:previous() and UnstableAffliction:down() and ManaPct() < 50) then
+	if LifeTap:usable() and (ManaPct() < 10 or (LifeTap:previous() and UnstableAffliction:down() and ManaPct() < 50)) then
 		return LifeTap
 	end
 	if not DrainSoul:channeling() and (not MaleficGrasp.known or UnstableAffliction:stack() <= 1) then
@@ -1502,7 +1509,7 @@ local function DetermineAbilityAffliction()
 	if not PlayerIsMoving() then
 		return DrainSoul
 	end
-	if ManaPct() < 80 then
+	if LifeTap:usable() and ManaPct() < 80 then
 		return LifeTap
 	end
 	if Agony:remains() < (Agony:duration() - (3 * Agony:tickInterval())) then
@@ -1528,7 +1535,7 @@ local function DetermineAbilityDemonology()
 		if DemonicEmpowerment:usable() and DemonicEmpowerment:refreshable() then
 			return DemonicEmpowerment
 		end
-		if ManaPct() < 70 then
+		if LifeTap:usable() and ManaPct() < 70 then
 			return LifeTap
 		end
 		if Doomed.pot and PotionOfProlongedPower:usable() then
@@ -1673,7 +1680,7 @@ local function DetermineAbilityDemonology()
 	if ThalkielsConsumption:usable() and (Dreadstalker:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImp:count() > 3 and Dreadstalker:count() <= 2 or WildImp:count() > 5) and WildImp:remains() > ThalkielsConsumption:castTime() then
 		UseCooldown(ThalkielsConsumption)
 	end
-	if ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3))) then
+	if LifeTap:usable() and (ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3)))) then
 		return LifeTap
 	end
 	if (Enemies() >= 3 or PlayerIsMoving()) and Demonwrath:usable() then
@@ -1696,7 +1703,7 @@ local function DetermineAbilityDemonology()
 			return ShadowBolt
 		end
 	end
-	if ManaPct() < 80 then
+	if LifeTap:usable() and ManaPct() < 80 then
 		return LifeTap
 	end
 end
