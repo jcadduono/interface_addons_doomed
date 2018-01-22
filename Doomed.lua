@@ -1077,9 +1077,13 @@ end
 function Doom:nextTick()
 	local earliest, next_tick, guid, t
 	for guid, t in next, self.tick_targets do
-		next_tick = min(t.expires, t.last_tick + t.tick_duration)
-		if not earliest or next_tick < earliest then
-			earliest = next_tick
+		if var.time > t.expires then
+			self.tick_targets[guid] = nil
+		else
+			next_tick = min(t.expires, t.last_tick + t.tick_duration)
+			if not earliest or next_tick < earliest then
+				earliest = next_tick
+			end
 		end
 	end
 	return earliest or 0
@@ -1092,7 +1096,9 @@ function Doom:soulShardsGeneratedDuringCast()
 	end
 	local shards, guid, t = 0
 	for guid, t in next, self.tick_targets do
-		if min(t.expires, t.last_tick + t.tick_duration) < var.time + var.execute_remains then
+		if var.time > t.expires then
+			self.tick_targets[guid] = nil
+		elseif min(t.expires, t.last_tick + t.tick_duration) < var.time + var.execute_remains then
 			shards = shards + 1
 		end
 	end
@@ -1106,9 +1112,13 @@ function Doom:soulShardsGeneratedNextCast(ability)
 	end
 	local shards, next_tick, guid, t = 0
 	for guid, t in next, self.tick_targets do
-		next_tick = min(t.expires, t.last_tick + t.tick_duration)
-		if next_tick >= var.time + var.execute_remains and next_tick < var.time + var.execute_remains + castTime then
-			shards = shards + 1
+		if var.time > t.expires then
+			self.tick_targets[guid] = nil
+		else
+			next_tick = min(t.expires, t.last_tick + t.tick_duration)
+			if next_tick >= var.time + var.execute_remains and next_tick < var.time + var.execute_remains + castTime then
+				shards = shards + 1
+			end
 		end
 	end
 	return shards
@@ -2078,7 +2088,7 @@ function events:ADDON_LOADED(name)
 end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName)
-	if eventType == 'UNIT_DIED' or eventType == 'SPELL_INSTAKILL' then
+	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
 		if Doomed.auto_aoe then
 			AutoAoeRemoveTarget(dstGUID)
 		end
