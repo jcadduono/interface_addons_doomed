@@ -289,7 +289,7 @@ function Ability:remains()
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
-			return max(expires - var.time - var.cast_remains, 0)
+			return max(expires - var.time - var.execute_remains, 0)
 		end
 	end
 	return 0
@@ -310,7 +310,7 @@ function Ability:up()
 			return false
 		end
 		if id == self.spellId or id == self.spellId2 then
-			return expires == 0 or expires - var.time > var.cast_remains
+			return expires == 0 or expires - var.time > var.execute_remains
 		end
 	end
 end
@@ -327,11 +327,7 @@ function Ability:cooldown()
 	if start == 0 then
 		return 0
 	end
-	local cooldown = (duration - (var.time - start)) - var.cast_remains
-	if cooldown < 0.001 then -- account for rounding errors in GCD
-		return 0
-	end
-	return cooldown
+	return max(0, duration - (var.time - start) - var.execute_remains)
 end
 
 function Ability:stack()
@@ -342,7 +338,7 @@ function Ability:stack()
 			return 0
 		end
 		if id == self.spellId or id == self.spellId2 then
-			return (expires == 0 or expires - var.time > var.cast_remains) and count or 0
+			return (expires == 0 or expires - var.time > var.execute_remains) and count or 0
 		end
 	end
 	return 0
@@ -705,7 +701,7 @@ function SummonedPet:remains()
 			remains = unit_remains
 		end
 	end
-	return min(self.duration, max(0, remains - var.cast_remains))
+	return min(self.duration, max(0, remains - var.execute_remains))
 end
 
 function SummonedPet:up()
@@ -722,7 +718,7 @@ function SummonedPet:count()
 		unit_remains = unit.spawn_time + self.duration - var.time
 		if unit_remains <= 0 then
 			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
+		elseif unit_remains > var.execute_remains then
 			count = count + 1
 		end
 	end
@@ -736,14 +732,14 @@ function SummonedPet:empowered()
 		unit_remains = unit.spawn_time + self.duration - var.time
 		if unit_remains <= 0 then
 			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
+		elseif unit_remains > var.execute_remains then
 			if casting_de then
 				count = count + 1
 			elseif unit.empower_time then
 				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
 				if empower_remains <= 0 then
 					unit.empower_time = nil
-				elseif empower_remains > var.cast_remains then
+				elseif empower_remains > var.execute_remains then
 					count = count + 1
 				end
 			end
@@ -761,10 +757,10 @@ function SummonedPet:notEmpowered()
 		unit_remains = unit.spawn_time + self.duration - var.time
 		if unit_remains <= 0 then
 			self.active_units[guid] = nil
-		elseif unit_remains > var.cast_remains then
+		elseif unit_remains > var.execute_remains then
 			if unit.empower_time then
 				empower_remains = unit.empower_time + DemonicEmpowerment.buff_duration - var.time
-				if empower_remains <= var.cast_remains then
+				if empower_remains <= var.execute_remains then
 					if empower_remains <= 0 then
 						unit.empower_time = nil
 					end
@@ -862,12 +858,12 @@ local Target = {
 }
 
 local function GetCastManaRegen()
-	return var.regen * var.cast_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
+	return var.regen * var.execute_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
 end
 
 local function GetAvailableSoulShards()
 	local shards = UnitPower('player', SPELL_POWER_SOUL_SHARDS)
-	if currentSpec == SPEC.DEMONOLOGY and var.cast_remains > 0 then
+	if currentSpec == SPEC.DEMONOLOGY and var.execute_remains > 0 then
 		shards = min(5, shards + Doom:soulShardsGeneratedDuringCast())
 	end
 	if var.cast_ability then
@@ -1091,12 +1087,12 @@ end
 ]]
 
 function Doom:soulShardsGeneratedDuringCast()
-	if var.cast_remains == 0 then
+	if var.execute_remains == 0 then
 		return 0
 	end
 	local shards, guid, t = 0
 	for guid, t in next, self.tick_targets do
-		if min(t.expires, t.last_tick + t.tick_duration) < var.time + var.cast_remains then
+		if min(t.expires, t.last_tick + t.tick_duration) < var.time + var.execute_remains then
 			shards = shards + 1
 		end
 	end
@@ -1111,7 +1107,7 @@ function Doom:soulShardsGeneratedNextCast(ability)
 	local shards, next_tick, guid, t = 0
 	for guid, t in next, self.tick_targets do
 		next_tick = min(t.expires, t.last_tick + t.tick_duration)
-		if next_tick >= var.time + var.cast_remains and next_tick < var.time + var.cast_remains + castTime then
+		if next_tick >= var.time + var.execute_remains and next_tick < var.time + var.execute_remains + castTime then
 			shards = shards + 1
 		end
 	end
@@ -1361,18 +1357,19 @@ local function UpdateVars()
 	var.gcd_remains = start > 0 and duration - (var.time - start) or 0
 	_, _, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
 	var.cast_ability = abilityBySpellId[spellId]
-	var.cast_remains = remains and remains / 1000 - var.time or var.gcd_remains
+	var.execute_remains = max(remains and (remains / 1000 - var.time) or 0, var.gcd_remains)
 	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
 	var.regen = GetPowerRegen()
 	var.mana_regen = GetCastManaRegen()
 	var.mana_max = UnitPowerMax('player', SPELL_POWER_MANA)
 	var.mana = min(var.mana_max, floor(UnitPower('player', SPELL_POWER_MANA) + var.mana_regen))
 	var.soul_shards = GetAvailableSoulShards()
-	Target.healthArray[#Target.healthArray + 1] = UnitHealth('target')
+	hp = UnitHealth('target')
+	Target.healthArray[#Target.healthArray + 1] = hp
 	table.remove(Target.healthArray, 1)
-	Target.healthPercentage = Target.guid == 0 and 100 or UnitHealth('target') / UnitHealthMax('target') * 100
+	Target.healthPercentage = Target.guid == 0 and 100 or (hp / UnitHealthMax('target') * 100)
 	hp = Target.healthArray[1] - Target.healthArray[#Target.healthArray]
-	Target.timeToDie = hp > 0 and Target.healthArray[#Target.healthArray] / (hp / 3) or 600
+	Target.timeToDie = hp > 0 and (Target.healthArray[#Target.healthArray] / (hp / 3)) or 600
 end
 
 local function UseCooldown(ability, overwrite, always)
