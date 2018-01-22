@@ -923,7 +923,7 @@ local function PlayerIsMoving()
 end
 
 local function PetIsSummoned()
-	return (IsMounted() or
+	return (IsMounted() or (UnitExists('pet') and not UnitIsDead('pet')) or
 		SummonFelguard:up() or SummonWrathguard:up() or
 		SummonDoomguard:up() or SummonInfernal:up() or
 		SummonFelhunter:up() or SummonObserver:up() or
