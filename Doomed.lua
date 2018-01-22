@@ -819,11 +819,19 @@ function InventoryItem.add(itemId)
 end
 
 function InventoryItem:charges()
-	return GetItemCount(self.itemId, false, true) or 0
+	local charges = GetItemCount(self.itemId, false, true) or 0
+	if self.created_by and (self.created_by:previous() or var.last_gcd == self.created_by) then
+		charges = max(charges, self.max_charges)
+	end
+	return charges
 end
 
 function InventoryItem:count()
-	return GetItemCount(self.itemId, false, false) or 0
+	local count = GetItemCount(self.itemId, false, false) or 0
+	if self.created_by and (self.created_by:previous() or var.last_gcd == self.created_by) then
+		count = max(count, 1)
+	end
+	return count
 end
 
 function InventoryItem:cooldown()
@@ -845,6 +853,8 @@ end
 -- Inventory Items
 local PotionOfProlongedPower = InventoryItem.add(142117)
 local Healthstone = InventoryItem.add(5512)
+Healthstone.created_by = CreateHealthstone
+Healthstone.max_charges = 3
 
 -- End Inventory Items
 
