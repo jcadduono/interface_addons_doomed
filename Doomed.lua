@@ -554,11 +554,11 @@ UnstableAffliction.shard_cost = 1
 UnstableAffliction.buff_duration = 8
 UnstableAffliction.tick_interval = 2
 UnstableAffliction.hasted_duration = true
-local UnstableAffliction1 = Ability.add(233490, false, true)
-local UnstableAffliction2 = Ability.add(233496, false, true)
-local UnstableAffliction3 = Ability.add(233497, false, true)
-local UnstableAffliction4 = Ability.add(233498, false, true)
-local UnstableAffliction5 = Ability.add(233499, false, true)
+UnstableAffliction[1] = Ability.add(233490, false, true)
+UnstableAffliction[2] = Ability.add(233496, false, true)
+UnstableAffliction[3] = Ability.add(233497, false, true)
+UnstableAffliction[4] = Ability.add(233498, false, true)
+UnstableAffliction[5] = Ability.add(233499, false, true)
 ------ Talents
 local Contagion = Ability.add(196105, false, true)
 local DeathsEmbrace = Ability.add(234876, false, true)
@@ -1188,63 +1188,69 @@ end
 
 function UnstableAffliction:stack()
 	return (
-		(UnstableAffliction1:up() and 1 or 0) +
-		(UnstableAffliction2:up() and 1 or 0) +
-		(UnstableAffliction3:up() and 1 or 0) +
-		(UnstableAffliction4:up() and 1 or 0) +
-		(UnstableAffliction5:up() and 1 or 0))
+		(UnstableAffliction[1]:up() and 1 or 0) +
+		(UnstableAffliction[2]:up() and 1 or 0) +
+		(UnstableAffliction[3]:up() and 1 or 0) +
+		(UnstableAffliction[4]:up() and 1 or 0) +
+		(UnstableAffliction[5]:up() and 1 or 0))
 end
 
 function UnstableAffliction:remains()
-	return max(UnstableAffliction1:remains(), UnstableAffliction2:remains(), UnstableAffliction3:remains(), UnstableAffliction4:remains(), UnstableAffliction5:remains())
+	return max(UnstableAffliction[1]:remains(), UnstableAffliction[2]:remains(), UnstableAffliction[3]:remains(), UnstableAffliction[4]:remains(), UnstableAffliction[5]:remains())
+end
+
+function UnstableAffliction:lowest()
+	local ua = UnstableAffliction[1]
+	local lowest = ua:remains()
+	local remains, i
+	for i = 2, 5 do
+		remains = UnstableAffliction[i]:remains()
+		if remains > 0 and remains < lowest then
+			ua = UnstableAffliction[i]
+			lowest = remains
+		end
+	end
+	return ua, lowest
+end
+
+function UnstableAffliction:lowestRemains()
+	local _, remains = UnstableAffliction:lowest()
+	return remains
 end
 
 function UnstableAffliction:next()
-	if not Ability.up(UnstableAffliction1, true) then
-		return UnstableAffliction1
+	local i
+	for i = 1, 5 do
+		if not Ability.up(UnstableAffliction[i], true) then
+			return UnstableAffliction[i]
+		end
 	end
-	if not Ability.up(UnstableAffliction2, true) then
-		return UnstableAffliction2
-	end
-	if not Ability.up(UnstableAffliction3, true) then
-		return UnstableAffliction3
-	end
-	if not Ability.up(UnstableAffliction4, true) then
-		return UnstableAffliction4
-	end
-	if not Ability.up(UnstableAffliction5, true) then
-		return UnstableAffliction5
-	end
-	return UnstableAffliction1
+	return UnstableAffliction:lowest()
 end
 
 function UnstableAffliction:up()
-	return UnstableAffliction1:up() or UnstableAffliction2:up() or UnstableAffliction3:up() or UnstableAffliction4:up() or UnstableAffliction5:up()
+	return UnstableAffliction[1]:up() or UnstableAffliction[2]:up() or UnstableAffliction[3]:up() or UnstableAffliction[4]:up() or UnstableAffliction[5]:up()
 end
 
-function UnstableAffliction1:remains()
+local function UnstableAfflictionRemains(self)
 	if UnstableAffliction:casting() and UnstableAffliction:next() == self then
 		return UnstableAffliction:duration()
 	end
 	return Ability.remains(self)
 end
 
-UnstableAffliction2.remains = UnstableAffliction1.remains
-UnstableAffliction3.remains = UnstableAffliction1.remains
-UnstableAffliction4.remains = UnstableAffliction1.remains
-UnstableAffliction5.remains = UnstableAffliction1.remains
-
-function UnstableAffliction1:up()
+local function UnstableAfflictionUp(self)
 	if UnstableAffliction:casting() and UnstableAffliction:next() == self then
 		return true
 	end
 	return Ability.up(self)
 end
 
-UnstableAffliction2.up = UnstableAffliction1.up
-UnstableAffliction3.up = UnstableAffliction1.up
-UnstableAffliction4.up = UnstableAffliction1.up
-UnstableAffliction5.up = UnstableAffliction1.up
+local i
+for i = 1, 5 do
+	UnstableAffliction[i].remains = UnstableAfflictionRemains
+	UnstableAffliction[i].up = UnstableAfflictionUp
+end
 
 local function SummonPetUp(self)
 	if self:casting() then
@@ -1492,14 +1498,17 @@ local function DetermineAbilityAffliction()
 	if SeedOfCorruption:usable() and ((SowTheSeeds.known and Enemies() >= 3) or (Enemies() >= 5 and Corruption:remains() <= SeedOfCorruption:castTime())) then
 		return SeedOfCorruption
 	end
+	if LifeTap:usable() and ManaPct() < 20 and UnstableAffliction:down() and not DrainSoul:channeling() then
+		return LifeTap
+	end
 	if UnstableAffliction:usable() then
-		if Agony:remains() > UnstableAffliction:castTime() + (6.5 * SpellHasteFactor()) and (UnstableAffliction:down() or (MaleficGrasp.known and SoulShards() >= 2 and UnstableAffliction:previous() and UnstableAffliction:stack() < SoulShards())) then
+		if min(Agony:remains(), Corruption:remains()) > UnstableAffliction:castTime() + (6.5 * SpellHasteFactor()) and (UnstableAffliction:down() or (MaleficGrasp.known and SoulShards() >= 3 and UnstableAffliction:previous() and UnstableAffliction:lowestRemains() > (UnstableAffliction:castTime() + 0.4))) then
 			return UnstableAffliction
 		end
-		if Contagion.known and UnstableAffliction:remains() < UnstableAffliction:castTime() and (not MaleficGrasp.known or UnstableAffliction:stack() <= 2) then
+		if Contagion.known and UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime()) then
 			return UnstableAffliction
 		end
-		if Target.timeToDie < 30 and (not Contagion.known or SoulShards() >= 2 or Target.timeToDie < UnstableAffliction:castTime() + UnstableAffliction:duration()) then
+		if Target.timeToDie < (UnstableAffliction:castTime() * SoulShards()) + UnstableAffliction:duration() then
 			return UnstableAffliction
 		end
 		if Enemies() > 1 and SoulShards() >= 4 then
