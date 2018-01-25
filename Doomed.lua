@@ -660,9 +660,12 @@ SummonDarkglare.shard_cost = 1
 ------ Procs
 local DemonicCalling = Ability.add(205145, true, true, 205146)
 local DemonicSynergy = Ability.add(171975, true, false, 171982)
+DemonicSynergy.buff_duration = 15
 local DemonicSynergyPet = Ability.add(171975, 'pet', true, 171982)
+DemonicSynergyPet.buff_duration = 15
 local PowerTrip = Ability.add(196605, true, true)
 local ShadowyInspiration = Ability.add(196269, true, true, 196606)
+ShadowyInspiration.buff_duration = 15
 -- Tier Bonuses
 -- Racials
 local ArcaneTorrent = Ability.add(136222, true, false) -- Blood Elf
@@ -1132,6 +1135,20 @@ function Doom:soulShardsGeneratedNextCast(ability)
 		end
 	end
 	return shards
+end
+
+function ShadowyInspiration:up()
+	if ShadowyInspiration.known and (DemonicEmpowerment:previous() or var.last_gcd == DemonicEmpowerment) then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function ShadowyInspiration:remains()
+	if ShadowyInspiration.known and (DemonicEmpowerment:previous() or var.last_gcd == DemonicEmpowerment) then
+		return self:duration()
+	end
+	return Ability.remains(self)
 end
 
 --[[
@@ -1706,7 +1723,7 @@ local function DetermineAbilityDemonology()
 	if ThalkielsConsumption:usable() and (Dreadstalker:remains() > ThalkielsConsumption:castTime() or (Implosion.known and Enemies() >= 3)) and (WildImp:count() > 3 and Dreadstalker:count() <= 2 or WildImp:count() > 5) and WildImp:remains() > ThalkielsConsumption:castTime() then
 		UseCooldown(ThalkielsConsumption)
 	end
-	if LifeTap:usable() and (ManaPct() <= 15 or (ManaPct() <= 65 and ((CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3)))) then
+	if LifeTap:usable() and (ManaPct() <= 15 or (ManaPct() <= 65 and (PlayerIsMoving() or (CallDreadstalkers:cooldown() <= 0.75 and SoulShards() >= 2) or ((CallDreadstalkers:cooldown() < GCD() * 2) and SummonDoomguardCD:cooldown() <= 0.75 and SoulShards() >= 3)))) then
 		return LifeTap
 	end
 	if (Enemies() >= 3 or PlayerIsMoving()) and Demonwrath:usable() then
