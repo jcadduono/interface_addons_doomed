@@ -1366,6 +1366,9 @@ function WildImp:count()
 	if ImprovedDreadstalkers.known and CallDreadstalkers:casting() then
 		count = count + 2
 	end
+	if ImpendingDoom.known then
+		count = count + Doom:soulShardsGeneratedDuringCast()
+	end
 	return count
 end
 
@@ -1383,6 +1386,9 @@ function WildImp:notEmpowered()
 	end
 	if ImprovedDreadstalkers.known and CallDreadstalkers:casting() then
 		count = count + 2
+	end
+	if ImpendingDoom.known then
+		count = count + Doom:soulShardsGeneratedDuringCast()
 	end
 	return count
 end
