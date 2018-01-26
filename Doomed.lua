@@ -1396,7 +1396,7 @@ end
 -- End Summoned Pet Modifications
 
 local function UpdateVars()
-	local _, start, duration, remains, hp, spellId
+	local _, start, duration, remains, hp, hp_lost, spellId
 	var.last_main = var.main
 	var.last_cd = var.cd
 	var.last_petcd = var.petcd
@@ -1414,11 +1414,12 @@ local function UpdateVars()
 	var.mana = min(var.mana_max, floor(UnitPower('player', SPELL_POWER_MANA) + var.mana_regen))
 	var.soul_shards = GetAvailableSoulShards()
 	hp = UnitHealth('target')
-	Target.healthArray[#Target.healthArray + 1] = hp
 	table.remove(Target.healthArray, 1)
+	Target.healthArray[#Target.healthArray + 1] = hp
+	Target.timeToDieMax = hp / UnitHealthMax('player') * 10
 	Target.healthPercentage = Target.guid == 0 and 100 or (hp / UnitHealthMax('target') * 100)
-	hp = Target.healthArray[1] - Target.healthArray[#Target.healthArray]
-	Target.timeToDie = hp > 0 and (Target.healthArray[#Target.healthArray] / (hp / 3)) or 600
+	hp_lost = Target.healthArray[1] - hp
+	Target.timeToDie = hp_lost > 0 and min(Target.timeToDieMax, hp / (hp_lost / 3)) or Target.timeToDieMax
 end
 
 local function UseCooldown(ability, overwrite, always)
