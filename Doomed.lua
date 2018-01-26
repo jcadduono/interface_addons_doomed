@@ -315,7 +315,7 @@ function Ability:up()
 	end
 end
 
-function Ability:down(excludeCasting)
+function Ability:down()
 	return not self:up()
 end
 
@@ -1218,10 +1218,10 @@ end
 
 function UnstableAffliction:lowest()
 	local ua = UnstableAffliction[1]
-	local lowest = ua:remains()
+	local lowest = Ability.remains(ua)
 	local remains, i
 	for i = 2, 5 do
-		remains = UnstableAffliction[i]:remains()
+		remains = Ability.remains(ua)
 		if remains > 0 and remains < lowest then
 			ua = UnstableAffliction[i]
 			lowest = remains
@@ -1238,7 +1238,7 @@ end
 function UnstableAffliction:next()
 	local i
 	for i = 1, 5 do
-		if not Ability.up(UnstableAffliction[i], true) then
+		if not Ability.up(UnstableAffliction[i]) then
 			return UnstableAffliction[i]
 		end
 	end
