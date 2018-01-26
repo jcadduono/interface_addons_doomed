@@ -1526,7 +1526,7 @@ local function DetermineAbilityAffliction()
 		return LifeTap
 	end
 	if UnstableAffliction:usable() then
-		if min(Agony:remains(), Corruption:remains()) > UnstableAffliction:castTime() + (6.5 * SpellHasteFactor()) and (UnstableAffliction:down() or (MaleficGrasp.known and SoulShards() >= 3 and UnstableAffliction:previous() and UnstableAffliction:lowestRemains() > (UnstableAffliction:castTime() + 0.4))) then
+		if min(Agony:remains(), Corruption:remains()) > UnstableAffliction:castTime() + (6.5 * SpellHasteFactor()) and UnstableAffliction:stack() < 5 and (UnstableAffliction:down() or (MaleficGrasp.known and SoulShards() >= 3 and UnstableAffliction:previous() and UnstableAffliction:lowestRemains() > (UnstableAffliction:castTime() + 0.4))) then
 			return UnstableAffliction
 		end
 		if Contagion.known and UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime()) then
