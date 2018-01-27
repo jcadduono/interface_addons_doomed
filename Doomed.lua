@@ -1492,11 +1492,13 @@ local function DetermineAbilityAffliction()
 			UseCooldown(SummonInfernalCD)
 		end
 	end
-	if SiphonLife.known and SiphonLife:remains() <= (SiphonLife:tickInterval() + GCD()) and Target.timeToDie > (SiphonLife:tickInterval() * 3) then
-		return SiphonLife
-	end
-	if (not SowTheSeeds.known or Enemies() < 3) and Enemies() < 5 and Corruption:remains() <= (Corruption:tickInterval() + GCD()) and Target.timeToDie > (Corruption:tickInterval() * 3) then
-		return Corruption
+	if Enemies() < 5 then
+		if SiphonLife.known and SiphonLife:remains() <= (SiphonLife:tickInterval() + GCD()) and Target.timeToDie > (SiphonLife:tickInterval() * 3) then
+			return SiphonLife
+		end
+		if (not SowTheSeeds.known or Enemies() < 3) and Corruption:remains() <= (Corruption:tickInterval() + GCD()) and Target.timeToDie > (Corruption:tickInterval() * 3) then
+			return Corruption
+		end
 	end
 	if PhantomSingularity.known and PhantomSingularity:ready() then
 		UseCooldown(PhantomSingularity)
@@ -1507,14 +1509,19 @@ local function DetermineAbilityAffliction()
 	if Doomed.pot and PotionOfProlongedPower:usable() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
 		UseCooldown(PotionOfProlongedPower)
 	end
-	if Agony:usable() and Agony:refreshable() and Target.timeToDie >= Agony:remains() and (UnstableAffliction:down() or (SiphonLife:remains() > 10 and Corruption:remains() > 10)) then
+	if LifeTap:usable() and ManaPct() < 20 and UnstableAffliction:down() and not DrainSoul:channeling() and Target.timeToDie > 15 then
+		return LifeTap
+	end
+	if Agony:usable() and Agony:refreshable() and Target.timeToDie >= Agony:remains() and UnstableAffliction:down() then
 		return Agony
 	end
-	if SiphonLife.known and SiphonLife:refreshable() and Target.timeToDie >= SiphonLife:remains() and (UnstableAffliction:down() or (Agony:remains() > 10 and Corruption:remains() > 10)) then
-		return SiphonLife
-	end
-	if Corruption:usable() and (not SowTheSeeds.known or Enemies() < 3) and Enemies() < 5 and Corruption:refreshable() and Target.timeToDie >= Corruption:remains() and (UnstableAffliction:down() or (SiphonLife:remains() > 10 and Agony:remains() > 10)) then
-		return Corruption
+	if Enemies() < 5 and UnstableAffliction:down() then
+		if SiphonLife.known and SiphonLife:refreshable() and Target.timeToDie >= SiphonLife:remains() then
+			return SiphonLife
+		end
+		if Corruption:usable() and (not SowTheSeeds.known or Enemies() < 3) and Corruption:refreshable() and Target.timeToDie >= Corruption:remains() then
+			return Corruption
+		end
 	end
 	if LifeTap:usable() and ((EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable()) or (Target.timeToDie > 15 and ManaPct() < 10)) and not (DrainSoul:channeling() and UnstableAffliction:stack() > 1) then
 		return LifeTap
@@ -1522,14 +1529,14 @@ local function DetermineAbilityAffliction()
 	if SeedOfCorruption:usable() and ((SowTheSeeds.known and Enemies() >= 3) or (Enemies() >= 5 and Corruption:remains() <= SeedOfCorruption:castTime())) then
 		return SeedOfCorruption
 	end
-	if LifeTap:usable() and ManaPct() < 20 and UnstableAffliction:down() and not DrainSoul:channeling() then
-		return LifeTap
-	end
 	if UnstableAffliction:usable() then
-		if min(Agony:remains(), Corruption:remains()) > UnstableAffliction:castTime() + (6.5 * SpellHasteFactor()) and UnstableAffliction:stack() < 5 and (UnstableAffliction:down() or (MaleficGrasp.known and SoulShards() >= 3 and UnstableAffliction:previous() and UnstableAffliction:lowestRemains() > (UnstableAffliction:castTime() + 0.4))) then
-			return UnstableAffliction
+		if UnstableAffliction:stack() < 5 then
+			local ua_drain = UnstableAffliction:castTime() + (6.5 * SpellHasteFactor())
+			if min(Agony:remains(), Corruption:remains(), SiphonLife.known and SiphonLife:remains() or 15) > ua_drain and (UnstableAffliction:down() or (UnstableAffliction:previous() and (SoulShards() >= 3 or SoulHarvest:remains() > ua_drain))) then
+				return UnstableAffliction
+			end
 		end
-		if Contagion.known and UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime()) then
+		if Contagion.known and (UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime())) then
 			return UnstableAffliction
 		end
 		if Target.timeToDie < (UnstableAffliction:castTime() * SoulShards()) + UnstableAffliction:duration() then
