@@ -1476,7 +1476,7 @@ local function DetermineAbilityAffliction()
 	if SowTheSeeds.known and Enemies() >= 3 and SoulShards() == 5 then
 		return SeedOfCorruption
 	end
-	if SoulShards() == 5 then
+	if SoulShards() == 5 and Target.timeToDie > (UnstableAffliction:castTime() + UnstableAffliction:tickInterval()) then
 		return UnstableAffliction
 	end
 	if Target.timeToDie < GCD() * 2 and SoulShards() < 5 then
@@ -1529,10 +1529,16 @@ local function DetermineAbilityAffliction()
 	if SeedOfCorruption:usable() and ((SowTheSeeds.known and Enemies() >= 3) or (Enemies() >= 5 and Corruption:remains() <= SeedOfCorruption:castTime())) then
 		return SeedOfCorruption
 	end
-	if UnstableAffliction:usable() then
+	if UnstableAffliction:usable() and Target.timeToDie > UnstableAffliction:castTime() + UnstableAffliction:tickInterval() then
 		if UnstableAffliction:stack() < 5 then
 			local ua_drain = UnstableAffliction:castTime() + (6.5 * SpellHasteFactor())
 			if min(Agony:remains(), Corruption:remains(), SiphonLife.known and SiphonLife:remains() or 15) > ua_drain and (UnstableAffliction:down() or (UnstableAffliction:previous() and (SoulShards() >= 3 or SoulHarvest:remains() > ua_drain))) then
+				return UnstableAffliction
+			end
+			if Target.timeToDie < (UnstableAffliction:castTime() * (SoulShards() + 1)) + UnstableAffliction:duration() then
+				return UnstableAffliction
+			end
+			if Enemies() > 1 and SoulShards() >= 4 then
 				return UnstableAffliction
 			end
 		end
@@ -1540,12 +1546,6 @@ local function DetermineAbilityAffliction()
 			return UnstableAffliction
 		end
 		if Contagion.known and (UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime())) then
-			return UnstableAffliction
-		end
-		if Target.timeToDie < (UnstableAffliction:castTime() * SoulShards()) + UnstableAffliction:duration() then
-			return UnstableAffliction
-		end
-		if Enemies() > 1 and SoulShards() >= 4 then
 			return UnstableAffliction
 		end
 	end
