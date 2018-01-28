@@ -1459,7 +1459,7 @@ local function DetermineAbilityAffliction()
 	if ReapSouls:usable() and (DeadwindHarvester:down() or (not (DrainSoul:channeling() and UnstableAffliction:up()) and DeadwindHarvester:remains() < 3)) and TimeInCombat() > 5 and (TormentedSouls:stack() >= min(4 + Enemies(), 9) or Target.timeToDie <= (TormentedSouls:stack() * (ReapAndSow and 6.5 or 5) + (DeadwindHarvester:remains() * (ItemEquipped.ReapAndSow and 6.5 or 5) % 12 * (ItemEquipped.ReapAndSow and 6.5 or 5)))) then
 		UseCooldown(ReapSouls, true, true)
 	end
-	if Agony:remains() <= (Agony:tickInterval() + GCD()) then
+	if Agony:remains() <= (Agony:tickInterval() + GCD()) and Target.timeToDie > (Agony:remains() + Agony:tickInterval()) then
 		return Agony
 	end
 	if not PetIsSummoned() then
