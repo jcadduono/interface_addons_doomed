@@ -1536,6 +1536,9 @@ local function DetermineAbilityAffliction()
 				return UnstableAffliction
 			end
 		end
+		if SoulConduit.known and UnstableAffliction:casting() and SoulShards() >= 4 then
+			return UnstableAffliction
+		end
 		if Contagion.known and (UnstableAffliction:down() or (not MaleficGrasp.known and UnstableAffliction:remains() < UnstableAffliction:castTime())) then
 			return UnstableAffliction
 		end
