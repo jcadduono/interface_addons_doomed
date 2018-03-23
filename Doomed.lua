@@ -1808,7 +1808,7 @@ local function UpdateInterrupt()
 		doomedInterruptPanel:Hide()
 		return
 	end
-	var.interrupt = DetermineInterrupt()
+	var.interrupt = APL.Interrupt()
 	if var.interrupt then
 		doomedInterruptPanel.icon:SetTexture(var.interrupt.icon)
 		doomedInterruptPanel.icon:Show()
