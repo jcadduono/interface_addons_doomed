@@ -89,7 +89,16 @@ local events, glows = {}, {}
 
 local abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0
 
+-- list of targets detected in AoE proximity
 local Targets = {}
+
+-- current target information
+local Target = {
+	boss = false,
+	guid = 0,
+	healthArray = {},
+	hostile = false
+}
 
 -- tier set equipped pieces count
 local Tier = {
@@ -378,7 +387,7 @@ end
 
 --[[
 function Ability:castRegen()
-	return var.regen * max(self.triggers_gcd and var.gcd or 0, self:castTime())
+	return var.mana_regen * max(self.triggers_gcd and var.gcd or 0, self:castTime())
 end
 ]]
 
@@ -468,9 +477,9 @@ end
 
 -- Warlock Abilities
 ---- Multiple Specializations
-local CreateHealthstone = Ability.add(6201, true, true)
+local CreateHealthstone = Ability.add(6201, true, true) -- Used for GCD calculation
 CreateHealthstone.mana_cost = 5
-local LifeTap = Ability.add(1454, false, true) -- Used for GCD calculation
+local LifeTap = Ability.add(1454, false, true)
 LifeTap.mana_cost = -30
 local ShadowLock = Ability.add(171138, 'pet', false)
 ShadowLock.cooldown_duration = 24
@@ -863,15 +872,8 @@ Healthstone.max_charges = 3
 
 -- Start Helpful Functions
 
-local Target = {
-	boss = false,
-	guid = 0,
-	healthArray = {},
-	hostile = false
-}
-
-local function GetCastManaRegen()
-	return var.regen * var.execute_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
+local function GetExecuteManaRegen()
+	return var.mana_regen * var.execute_remains - (var.cast_ability and var.cast_ability:manaCost() or 0)
 end
 
 local function GetAvailableSoulShards()
@@ -1400,18 +1402,21 @@ local function UpdateVars()
 	var.last_main = var.main
 	var.last_cd = var.cd
 	var.last_petcd = var.petcd
+	var.main =  nil
+	var.cd = nil
+	var.petcd = nil
 	var.time = GetTime()
 	var.gcd = 1.5 - (1.5 * (UnitSpellHaste('player') / 100))
-	start, duration = GetSpellCooldown(LifeTap.spellId)
+	start, duration = GetSpellCooldown(CreateHealthstone.spellId)
 	var.gcd_remains = start > 0 and duration - (var.time - start) or 0
 	_, _, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
 	var.cast_ability = abilityBySpellId[spellId]
 	var.execute_remains = max(remains and (remains / 1000 - var.time) or 0, var.gcd_remains)
 	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
-	var.regen = GetPowerRegen()
-	var.mana_regen = GetCastManaRegen()
+	var.mana_regen = GetPowerRegen()
+	var.execute_mana_regen = GetExecuteManaRegen()
 	var.mana_max = UnitPowerMax('player', SPELL_POWER_MANA)
-	var.mana = min(var.mana_max, floor(UnitPower('player', SPELL_POWER_MANA) + var.mana_regen))
+	var.mana = min(var.mana_max, floor(UnitPower('player', SPELL_POWER_MANA) + var.execute_mana_regen))
 	var.soul_shards = GetAvailableSoulShards()
 	hp = UnitHealth('target')
 	table.remove(Target.healthArray, 1)
@@ -1436,8 +1441,15 @@ end
 
 -- Begin Action Priority Lists
 
-local function DetermineAbilityAffliction()
+local APL = {
+	[SPEC.NONE] = function() end
+}
+
+APL[SPEC.AFFLICTION] = function()
 	if TimeInCombat() == 0 then
+		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
+			return CreateHealthstone
+		end
 		if not PetIsSummoned() then
 			if GrimoireOfSupremacy.known then
 				return Enemies() > 1 and SummonInfernal or SummonDoomguard
@@ -1584,8 +1596,11 @@ local function DetermineAbilityAffliction()
 	return DrainSoul
 end
 
-local function DetermineAbilityDemonology()
+APL[SPEC.DEMONOLOGY] = function()
 	if TimeInCombat() == 0 then
+		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
+			return CreateHealthstone
+		end
 		if not PetIsSummoned() then
 			if GrimoireOfSupremacy.known then
 				return Enemies() > 1 and SummonInfernal or SummonDoomguard
@@ -1768,32 +1783,11 @@ local function DetermineAbilityDemonology()
 	end
 end
 
-local function DetermineAbilityDestruction()
+APL[SPEC.DESTRUCTION] = function()
 	return ShadowBolt
 end
 
--- End Action Priority Lists
-
-local function DetermineAbility()
-	var.cd = nil
-	var.interrupt = nil
-	var.petcd = nil
-	if TimeInCombat() == 0 then
-		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
-			return CreateHealthstone
-		end
-	end
-	if currentSpec == SPEC.AFFLICTION then
-		return DetermineAbilityAffliction()
-	elseif currentSpec == SPEC.DEMONOLOGY then
-		return DetermineAbilityDemonology()
-	elseif currentSpec == SPEC.DESTRUCTION then
-		return DetermineAbilityDestruction()
-	end
-	doomedPreviousPanel:Hide()
-end
-
-local function DetermineInterrupt()
+APL.Interrupt = function()
 	if SummonDoomguard:up() and ShadowLock:ready() then
 		return ShadowLock
 	end
@@ -1804,6 +1798,8 @@ local function DetermineInterrupt()
 		return ArcaneTorrent
 	end
 end
+
+-- End Action Priority Lists
 
 local function UpdateInterrupt()
 	local _, _, _, _, start, ends, _, _, notInterruptible = UnitCastingInfo('target')
@@ -1930,17 +1926,18 @@ local function ShouldHide()
 end
 
 local function Disappear()
-	var.main, var.last_main = nil
-	var.cd, var.last_cd = nil
-	var.interrupt = nil
-	var.petcd, var.last_petcd = nil
-	UpdateGlows()
 	doomedPanel:Hide()
+	doomedPanel.icon:Hide()
 	doomedPanel.border:Hide()
 	doomedPreviousPanel:Hide()
 	doomedCooldownPanel:Hide()
 	doomedInterruptPanel:Hide()
 	doomedPetCDPanel:Hide()
+	var.main, var.last_main = nil
+	var.cd, var.last_cd = nil
+	var.interrupt = nil
+	var.petcd, var.last_petcd = nil
+	UpdateGlows()
 end
 
 function Doomed_ToggleTargetMode()
@@ -2057,7 +2054,7 @@ end
 local function UpdateCombat()
 	abilityTimer = 0
 	UpdateVars()
-	var.main = DetermineAbility()
+	var.main = APL[currentSpec]()
 	if var.main ~= var.last_main then
 		if var.main then
 			doomedPanel.icon:SetTexture(var.main.icon)
@@ -2109,7 +2106,7 @@ function events:SPELL_UPDATE_COOLDOWN()
 			start = castStart / 1000
 			duration = (castEnd - castStart) / 1000
 		else
-			start, duration = GetSpellCooldown(LifeTap.spellId)
+			start, duration = GetSpellCooldown(CreateHealthstone.spellId)
 			if start <= 0 then
 				return doomedPanel.swipe:Hide()
 			end
