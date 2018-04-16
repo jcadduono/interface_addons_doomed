@@ -1935,7 +1935,6 @@ local function Disappear()
 	doomedPanel:Hide()
 	doomedPanel.icon:Hide()
 	doomedPanel.border:Hide()
-	doomedPreviousPanel:Hide()
 	doomedCooldownPanel:Hide()
 	doomedInterruptPanel:Hide()
 	doomedPetCDPanel:Hide()
@@ -2181,6 +2180,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 				var.last_gcd = var.last_ability
 			end
 			if Opt.previous and doomedPanel:IsVisible() then
+				doomedPreviousPanel.ability = var.last_ability
 				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 				doomedPreviousPanel.icon:SetTexture(var.last_ability.icon)
 				doomedPreviousPanel:Show()
@@ -2200,8 +2200,10 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 		return
 	end
 	if eventType == 'SPELL_MISSED' then
-		if Opt.previous and doomedPanel:IsVisible() and Opt.miss_effect and var.last_ability and spellId == var.last_ability.spellId then
-			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
+		if Opt.previous and Opt.miss_effect and doomedPanel:IsVisible() and doomedPreviousPanel.ability then
+			if spellId == doomedPreviousPanel.ability.spellId or spellId == doomedPreviousPanel.ability.spellId2 then
+				msmdPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
+			end
 		end
 		return
 	end
@@ -2310,6 +2312,10 @@ function events:PLAYER_REGEN_ENABLED()
 			Targets[guid] = nil
 		end
 		Doomed_SetTargetMode(1)
+	end
+	if var.last_ability then
+		var.last_ability = nil
+		doomedPreviousPanel:Hide()
 	end
 	if currentSpec == SPEC.DEMONOLOGY then
 		local guid
