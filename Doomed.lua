@@ -13,6 +13,7 @@ end
 -- end useful functions
 
 Doomed = {}
+local Opt
 
 SLASH_Doomed1, SLASH_Doomed2 = '/doomed', '/doom'
 BINDING_HEADER_DOOMED = 'Doomed'
@@ -1428,7 +1429,7 @@ local function UpdateVars()
 end
 
 local function UseCooldown(ability, overwrite, always)
-	if always or (Doomed.cooldown and (not Doomed.boss_only or Target.boss) and (not var.cd or overwrite)) then
+	if always or (Opt.cooldown and (not Opt.boss_only or Target.boss) and (not var.cd or overwrite)) then
 		var.cd = ability
 	end
 end
@@ -1447,7 +1448,7 @@ local APL = {
 
 APL[SPEC.AFFLICTION] = function()
 	if TimeInCombat() == 0 then
-		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
+		if Opt.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
 			return CreateHealthstone
 		end
 		if not PetIsSummoned() then
@@ -1464,7 +1465,7 @@ APL[SPEC.AFFLICTION] = function()
 		if LifeTap:usable() and (ManaPct() < 70 or (EmpoweredLifeTap.known and EmpoweredLifeTap:refreshable())) then
 			return LifeTap
 		end
-		if Doomed.pot and PotionOfProlongedPower:usable() then
+		if Opt.pot and PotionOfProlongedPower:usable() then
 			UseCooldown(PotionOfProlongedPower)
 		end
 	end
@@ -1518,7 +1519,7 @@ APL[SPEC.AFFLICTION] = function()
 	if SoulHarvest.known and SoulHarvest:ready() and UnstableAffliction:stack() > 1 and SoulHarvest:remains() <= 8 and (not DeathsEmbrace.known or Target.timeToDie >= 136 or Target.timeToDie <= 40) then
 		UseCooldown(SoulHarvest)
 	end
-	if Doomed.pot and PotionOfProlongedPower:usable() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
+	if Opt.pot and PotionOfProlongedPower:usable() and (Target.timeToDie <= 70 or ((not SoulHarvest.known or SoulHarvest:remains() > 12) and UnstableAffliction:stack() >= 2)) then
 		UseCooldown(PotionOfProlongedPower)
 	end
 	if LifeTap:usable() and ManaPct() < 20 and UnstableAffliction:down() and not DrainSoul:channeling() and Target.timeToDie > 15 then
@@ -1598,7 +1599,7 @@ end
 
 APL[SPEC.DEMONOLOGY] = function()
 	if TimeInCombat() == 0 then
-		if Doomed.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
+		if Opt.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
 			return CreateHealthstone
 		end
 		if not PetIsSummoned() then
@@ -1613,7 +1614,7 @@ APL[SPEC.DEMONOLOGY] = function()
 		if LifeTap:usable() and ManaPct() < 70 then
 			return LifeTap
 		end
-		if Doomed.pot and PotionOfProlongedPower:usable() then
+		if Opt.pot and PotionOfProlongedPower:usable() then
 			UseCooldown(PotionOfProlongedPower)
 		end
 		if SoulShards() < 5 then
@@ -1746,7 +1747,7 @@ APL[SPEC.DEMONOLOGY] = function()
 	if SoulHarvest.known and SoulHarvest:ready() and SoulHarvest:down() then
 		UseCooldown(SoulHarvest)
 	end
-	if Doomed.pot and PotionOfProlongedPower:usable() and (SoulHarvest:up() or Target.timeToDie <= 70 or BloodlustActive()) then
+	if Opt.pot and PotionOfProlongedPower:usable() and (SoulHarvest:up() or Target.timeToDie <= 70 or BloodlustActive()) then
 		UseCooldown(PotionOfProlongedPower)
 	end
 	if Shadowflame.known and Shadowflame:usable() and Shadowflame:charges() == 2 and Enemies() < 5 then
@@ -1822,7 +1823,7 @@ local function UpdateInterrupt()
 end
 
 local function DenyOverlayGlow(actionButton)
-	if not Doomed.glow.blizzard then
+	if not Opt.glow.blizzard then
 		actionButton.overlay:Hide()
 	end
 end
@@ -1831,15 +1832,15 @@ hooksecurefunc('ActionButton_ShowOverlayGlow', DenyOverlayGlow) -- Disable Blizz
 
 local function UpdateGlowColorAndScale()
 	local w, h, glow, i
-	local r = Doomed.glow.color.r
-	local g = Doomed.glow.color.g
-	local b = Doomed.glow.color.b
+	local r = Opt.glow.color.r
+	local g = Opt.glow.color.g
+	local b = Opt.glow.color.b
 	for i = 1, #glows do
 		glow = glows[i]
 		w, h = glow.button:GetSize()
 		glow:SetSize(w * 1.4, h * 1.4)
-		glow:SetPoint('TOPLEFT', glow.button, 'TOPLEFT', -w * 0.2 * Doomed.scale.glow, h * 0.2 * Doomed.scale.glow)
-		glow:SetPoint('BOTTOMRIGHT', glow.button, 'BOTTOMRIGHT', w * 0.2 * Doomed.scale.glow, -h * 0.2 * Doomed.scale.glow)
+		glow:SetPoint('TOPLEFT', glow.button, 'TOPLEFT', -w * 0.2 * Opt.scale.glow, h * 0.2 * Opt.scale.glow)
+		glow:SetPoint('BOTTOMRIGHT', glow.button, 'BOTTOMRIGHT', w * 0.2 * Opt.scale.glow, -h * 0.2 * Opt.scale.glow)
 		glow.spark:SetVertexColor(r, g, b)
 		glow.innerGlow:SetVertexColor(r, g, b)
 		glow.innerGlowOver:SetVertexColor(r, g, b)
@@ -1904,10 +1905,10 @@ local function UpdateGlows()
 		glow = glows[i]
 		icon = glow.button.icon:GetTexture()
 		if icon and glow.button.icon:IsVisible() and (
-			(Doomed.glow.main and var.main and icon == var.main.icon) or
-			(Doomed.glow.cooldown and var.cd and icon == var.cd.icon) or
-			(Doomed.glow.interrupt and var.interrupt and icon == var.interrupt.icon) or
-			(Doomed.glow.petcd and var.petcd and icon == var.petcd.icon)
+			(Opt.glow.main and var.main and icon == var.main.icon) or
+			(Opt.glow.cooldown and var.cd and icon == var.cd.icon) or
+			(Opt.glow.interrupt and var.interrupt and icon == var.interrupt.icon) or
+			(Opt.glow.petcd and var.petcd and icon == var.petcd.icon)
 			) then
 			if not glow:IsVisible() then
 				glow.animIn:Play()
@@ -1925,9 +1926,9 @@ end
 
 local function ShouldHide()
 	return (currentSpec == SPEC.NONE or
-		   (currentSpec == SPEC.AFFLICTION and Doomed.hide.affliction) or
-		   (currentSpec == SPEC.DEMONOLOGY and Doomed.hide.demonology) or
-		   (currentSpec == SPEC.DESTRUCTION and Doomed.hide.destruction))
+		   (currentSpec == SPEC.AFFLICTION and Opt.hide.affliction) or
+		   (currentSpec == SPEC.DEMONOLOGY and Opt.hide.demonology) or
+		   (currentSpec == SPEC.DESTRUCTION and Opt.hide.destruction))
 end
 
 local function Disappear()
@@ -1993,13 +1994,13 @@ function EquippedTier(name)
 end
 
 local function UpdateDraggable()
-	doomedPanel:EnableMouse(Doomed.aoe or not Doomed.locked)
-	if Doomed.aoe then
+	doomedPanel:EnableMouse(Opt.aoe or not Opt.locked)
+	if Opt.aoe then
 		doomedPanel.button:Show()
 	else
 		doomedPanel.button:Hide()
 	end
-	if Doomed.locked then
+	if Opt.locked then
 		doomedPanel:SetScript('OnDragStart', nil)
 		doomedPanel:SetScript('OnDragStop', nil)
 		doomedPanel:RegisterForDrag(nil)
@@ -2008,7 +2009,7 @@ local function UpdateDraggable()
 		doomedInterruptPanel:EnableMouse(false)
 		doomedPetCDPanel:EnableMouse(false)
 	else
-		if not Doomed.aoe then
+		if not Opt.aoe then
 			doomedPanel:SetScript('OnDragStart', doomedPanel.StartMoving)
 			doomedPanel:SetScript('OnDragStop', doomedPanel.StopMovingOrSizing)
 			doomedPanel:RegisterForDrag('LeftButton')
@@ -2034,15 +2035,15 @@ local ResourceFramePoints = {
 }
 
 local function OnResourceFrameHide()
-	if Doomed.snap then
+	if Opt.snap then
 		doomedPanel:ClearAllPoints()
 	end
 end
 
 local function OnResourceFrameShow()
-	if Doomed.snap then
+	if Opt.snap then
 		doomedPanel:ClearAllPoints()
-		local p = ResourceFramePoints[resourceAnchor.name][Doomed.snap]
+		local p = ResourceFramePoints[resourceAnchor.name][Opt.snap]
 		doomedPanel:SetPoint(p[1], resourceAnchor.frame, p[2], p[3], p[4])
 	end
 end
@@ -2060,17 +2061,17 @@ local function HookResourceFrame()
 end
 
 local function UpdateAlpha()
-	doomedPanel:SetAlpha(Doomed.alpha)
-	doomedPreviousPanel:SetAlpha(Doomed.alpha)
-	doomedCooldownPanel:SetAlpha(Doomed.alpha)
-	doomedInterruptPanel:SetAlpha(Doomed.alpha)
-	doomedPetCDPanel:SetAlpha(Doomed.alpha)
+	doomedPanel:SetAlpha(Opt.alpha)
+	doomedPreviousPanel:SetAlpha(Opt.alpha)
+	doomedCooldownPanel:SetAlpha(Opt.alpha)
+	doomedInterruptPanel:SetAlpha(Opt.alpha)
+	doomedPetCDPanel:SetAlpha(Opt.alpha)
 end
 
 local function UpdateHealthArray()
 	Target.healthArray = {}
 	local i
-	for i = 1, floor(3 / Doomed.frequency) do
+	for i = 1, floor(3 / Opt.frequency) do
 		Target.healthArray[i] = 0
 	end
 end
@@ -2105,7 +2106,7 @@ local function UpdateCombat()
 			doomedPetCDPanel:Hide()
 		end
 	end
-	if Doomed.dimmer then
+	if Opt.dimmer then
 		if not var.main then
 			doomedPanel.dimmer:Hide()
 		elseif var.main.spellId and IsUsableSpell(var.main.spellId) then
@@ -2116,14 +2117,14 @@ local function UpdateCombat()
 			doomedPanel.dimmer:Show()
 		end
 	end
-	if Doomed.interrupt then
+	if Opt.interrupt then
 		UpdateInterrupt()
 	end
 	UpdateGlows()
 end
 
 function events:SPELL_UPDATE_COOLDOWN()
-	if Doomed.spell_swipe then
+	if Opt.spell_swipe then
 		local start, duration
 		local _, _, _, _, castStart, castEnd = UnitCastingInfo('player')
 		if castStart then
@@ -2142,7 +2143,8 @@ end
 
 function events:ADDON_LOADED(name)
 	if name == 'Doomed' then
-		if not Doomed.frequency then
+		Opt = Doomed
+		if not Opt.frequency then
 			print('It looks like this is your first time running Doomed, why don\'t you take some time to familiarize yourself with the commands?')
 			print('Type |cFFFFD000/doom|r for a list of commands.')
 		end
@@ -2153,17 +2155,17 @@ function events:ADDON_LOADED(name)
 		UpdateHealthArray()
 		UpdateDraggable()
 		UpdateAlpha()
-		doomedPanel:SetScale(Doomed.scale.main)
-		doomedPreviousPanel:SetScale(Doomed.scale.previous)
-		doomedCooldownPanel:SetScale(Doomed.scale.cooldown)
-		doomedInterruptPanel:SetScale(Doomed.scale.interrupt)
-		doomedPetCDPanel:SetScale(Doomed.scale.petcd)
+		doomedPanel:SetScale(Opt.scale.main)
+		doomedPreviousPanel:SetScale(Opt.scale.previous)
+		doomedCooldownPanel:SetScale(Opt.scale.cooldown)
+		doomedInterruptPanel:SetScale(Opt.scale.interrupt)
+		doomedPetCDPanel:SetScale(Opt.scale.petcd)
 	end
 end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName)
 	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
-		if Doomed.auto_aoe then
+		if Opt.auto_aoe then
 			AutoAoeRemoveTarget(dstGUID)
 		end
 		Doom:removeTarget(dstGUID)
@@ -2178,13 +2180,13 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 			if var.last_ability.triggers_gcd then
 				var.last_gcd = var.last_ability
 			end
-			if Doomed.previous and doomedPanel:IsVisible() then
+			if Opt.previous and doomedPanel:IsVisible() then
 				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 				doomedPreviousPanel.icon:SetTexture(var.last_ability.icon)
 				doomedPreviousPanel:Show()
 			end
 		end
-		if Doomed.auto_aoe then
+		if Opt.auto_aoe then
 			if spellId == Corruption.spellId then
 				if targetMode > 1 then
 					Doomed_SetTargetMode(1)
@@ -2198,13 +2200,13 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 		return
 	end
 	if eventType == 'SPELL_MISSED' then
-		if Doomed.previous and doomedPanel:IsVisible() and Doomed.miss_effect and var.last_ability and spellId == var.last_ability.spellId then
+		if Opt.previous and doomedPanel:IsVisible() and Opt.miss_effect and var.last_ability and spellId == var.last_ability.spellId then
 			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
 		end
 		return
 	end
 	if eventType == 'SPELL_DAMAGE' then
-		if Doomed.auto_aoe then
+		if Opt.auto_aoe then
 			local i
 			for i = 1, #abilitiesAutoAoe do
 				if spellId == abilitiesAutoAoe[i].spellId or spellId == abilitiesAutoAoe[i].spellId2 then
@@ -2256,7 +2258,7 @@ local function UpdateTargetInfo()
 		for i = 1, #Target.healthArray do
 			Target.healthArray[i] = 0
 		end
-		if Doomed.always_on then
+		if Opt.always_on then
 			UpdateCombat()
 			doomedPanel:Show()
 			return true
@@ -2273,7 +2275,7 @@ local function UpdateTargetInfo()
 	Target.level = UnitLevel('target')
 	Target.boss = Target.level == -1 or (Target.level >= UnitLevel('player') + 2 and not UnitInRaid('player'))
 	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
-	if Target.hostile or Doomed.always_on then
+	if Target.hostile or Opt.always_on then
 		UpdateCombat()
 		doomedPanel:Show()
 		return true
@@ -2302,7 +2304,7 @@ end
 
 function events:PLAYER_REGEN_ENABLED()
 	combatStartTime = 0
-	if Doomed.auto_aoe then
+	if Opt.auto_aoe then
 		local guid
 		for guid in next, Targets do
 			Targets[guid] = nil
@@ -2365,8 +2367,8 @@ end)
 
 doomedPanel:SetScript('OnUpdate', function(self, elapsed)
 	abilityTimer = abilityTimer + elapsed
-	if abilityTimer >= Doomed.frequency then
-		if Doomed.auto_aoe then
+	if abilityTimer >= Opt.frequency then
+		if Opt.auto_aoe then
 			local i
 			for i = 1, #abilitiesAutoAoe do
 				abilitiesAutoAoe[i]:updateTargetsHit()
@@ -2386,232 +2388,232 @@ function SlashCmdList.Doomed(msg, editbox)
 	msg = { strsplit(' ', strlower(msg)) }
 	if startsWith(msg[1], 'lock') then
 		if msg[2] then
-			Doomed.locked = msg[2] == 'on'
+			Opt.locked = msg[2] == 'on'
 			UpdateDraggable()
 		end
-		return print('Doomed - Locked: ' .. (Doomed.locked and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Locked: ' .. (Opt.locked and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'snap') then
 		if msg[2] then
 			if msg[2] == 'above' or msg[2] == 'over' then
-				Doomed.snap = 'above'
+				Opt.snap = 'above'
 			elseif msg[2] == 'below' or msg[2] == 'under' then
-				Doomed.snap = 'below'
+				Opt.snap = 'below'
 			else
-				Doomed.snap = false
+				Opt.snap = false
 				doomedPanel:ClearAllPoints()
 			end
 			OnResourceFrameShow()
 		end
-		return print('Doomed - Snap to Blizzard combat resources frame: ' .. (Doomed.snap and ('|cFF00C000' .. Doomed.snap) or '|cFFC00000Off'))
+		return print('Doomed - Snap to Blizzard combat resources frame: ' .. (Opt.snap and ('|cFF00C000' .. Opt.snap) or '|cFFC00000Off'))
 	end
 	if msg[1] == 'scale' then
 		if startsWith(msg[2], 'prev') then
 			if msg[3] then
-				Doomed.scale.previous = tonumber(msg[3]) or 0.7
-				doomedPreviousPanel:SetScale(Doomed.scale.previous)
+				Opt.scale.previous = tonumber(msg[3]) or 0.7
+				doomedPreviousPanel:SetScale(Opt.scale.previous)
 			end
-			return print('Doomed - Previous ability icon scale set to: |cFFFFD000' .. Doomed.scale.previous .. '|r times')
+			return print('Doomed - Previous ability icon scale set to: |cFFFFD000' .. Opt.scale.previous .. '|r times')
 		end
 		if msg[2] == 'main' then
 			if msg[3] then
-				Doomed.scale.main = tonumber(msg[3]) or 1
-				doomedPanel:SetScale(Doomed.scale.main)
+				Opt.scale.main = tonumber(msg[3]) or 1
+				doomedPanel:SetScale(Opt.scale.main)
 			end
-			return print('Doomed - Main ability icon scale set to: |cFFFFD000' .. Doomed.scale.main .. '|r times')
+			return print('Doomed - Main ability icon scale set to: |cFFFFD000' .. Opt.scale.main .. '|r times')
 		end
 		if msg[2] == 'cd' then
 			if msg[3] then
-				Doomed.scale.cooldown = tonumber(msg[3]) or 0.7
-				doomedCooldownPanel:SetScale(Doomed.scale.cooldown)
+				Opt.scale.cooldown = tonumber(msg[3]) or 0.7
+				doomedCooldownPanel:SetScale(Opt.scale.cooldown)
 			end
-			return print('Doomed - Cooldown ability icon scale set to: |cFFFFD000' .. Doomed.scale.cooldown .. '|r times')
+			return print('Doomed - Cooldown ability icon scale set to: |cFFFFD000' .. Opt.scale.cooldown .. '|r times')
 		end
 		if startsWith(msg[2], 'int') then
 			if msg[3] then
-				Doomed.scale.interrupt = tonumber(msg[3]) or 0.4
-				doomedInterruptPanel:SetScale(Doomed.scale.interrupt)
+				Opt.scale.interrupt = tonumber(msg[3]) or 0.4
+				doomedInterruptPanel:SetScale(Opt.scale.interrupt)
 			end
-			return print('Doomed - Interrupt ability icon scale set to: |cFFFFD000' .. Doomed.scale.interrupt .. '|r times')
+			return print('Doomed - Interrupt ability icon scale set to: |cFFFFD000' .. Opt.scale.interrupt .. '|r times')
 		end
 		if startsWith(msg[2], 'pet') then
 			if msg[3] then
-				Doomed.scale.petcd = tonumber(msg[3]) or 0.4
-				doomedPetCDPanel:SetScale(Doomed.scale.petcd)
+				Opt.scale.petcd = tonumber(msg[3]) or 0.4
+				doomedPetCDPanel:SetScale(Opt.scale.petcd)
 			end
-			return print('Doomed - Pet cooldown ability icon scale set to: |cFFFFD000' .. Doomed.scale.petcd .. '|r times')
+			return print('Doomed - Pet cooldown ability icon scale set to: |cFFFFD000' .. Opt.scale.petcd .. '|r times')
 		end
 		if msg[2] == 'glow' then
 			if msg[3] then
-				Doomed.scale.glow = tonumber(msg[3]) or 1
+				Opt.scale.glow = tonumber(msg[3]) or 1
 				UpdateGlowColorAndScale()
 			end
-			return print('Doomed - Action button glow scale set to: |cFFFFD000' .. Doomed.scale.glow .. '|r times')
+			return print('Doomed - Action button glow scale set to: |cFFFFD000' .. Opt.scale.glow .. '|r times')
 		end
 		return print('Doomed - Default icon scale options: |cFFFFD000prev 0.7|r, |cFFFFD000main 1|r, |cFFFFD000cd 0.7|r, |cFFFFD000interrupt 0.4|r, |cFFFFD000pet 0.4|r, and |cFFFFD000glow 1|r')
 	end
 	if msg[1] == 'alpha' then
 		if msg[2] then
-			Doomed.alpha = max(min((tonumber(msg[2]) or 100), 100), 0) / 100
+			Opt.alpha = max(min((tonumber(msg[2]) or 100), 100), 0) / 100
 			UpdateAlpha()
 		end
-		return print('Doomed - Icon transparency set to: |cFFFFD000' .. Doomed.alpha * 100 .. '%|r')
+		return print('Doomed - Icon transparency set to: |cFFFFD000' .. Opt.alpha * 100 .. '%|r')
 	end
 	if startsWith(msg[1], 'freq') then
 		if msg[2] then
-			Doomed.frequency = tonumber(msg[2]) or 0.05
+			Opt.frequency = tonumber(msg[2]) or 0.05
 			UpdateHealthArray()
 		end
-		return print('Doomed - Calculation frequency: Every |cFFFFD000' .. Doomed.frequency .. '|r seconds')
+		return print('Doomed - Calculation frequency: Every |cFFFFD000' .. Opt.frequency .. '|r seconds')
 	end
 	if startsWith(msg[1], 'glow') then
 		if msg[2] == 'main' then
 			if msg[3] then
-				Doomed.glow.main = msg[3] == 'on'
+				Opt.glow.main = msg[3] == 'on'
 				UpdateGlows()
 			end
-			return print('Doomed - Glowing ability buttons (main icon): ' .. (Doomed.glow.main and '|cFF00C000On' or '|cFFC00000Off'))
+			return print('Doomed - Glowing ability buttons (main icon): ' .. (Opt.glow.main and '|cFF00C000On' or '|cFFC00000Off'))
 		end
 		if msg[2] == 'cd' then
 			if msg[3] then
-				Doomed.glow.cooldown = msg[3] == 'on'
+				Opt.glow.cooldown = msg[3] == 'on'
 				UpdateGlows()
 			end
-			return print('Doomed - Glowing ability buttons (cooldown icon): ' .. (Doomed.glow.cooldown and '|cFF00C000On' or '|cFFC00000Off'))
+			return print('Doomed - Glowing ability buttons (cooldown icon): ' .. (Opt.glow.cooldown and '|cFF00C000On' or '|cFFC00000Off'))
 		end
 		if startsWith(msg[2], 'int') then
 			if msg[3] then
-				Doomed.glow.interrupt = msg[3] == 'on'
+				Opt.glow.interrupt = msg[3] == 'on'
 				UpdateGlows()
 			end
-			return print('Doomed - Glowing ability buttons (interrupt icon): ' .. (Doomed.glow.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
+			return print('Doomed - Glowing ability buttons (interrupt icon): ' .. (Opt.glow.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
 		end
 		if startsWith(msg[2], 'pet') then
 			if msg[3] then
-				Doomed.glow.petcd = msg[3] == 'on'
+				Opt.glow.petcd = msg[3] == 'on'
 				UpdateGlows()
 			end
-			return print('Doomed - Glowing ability buttons (pet cooldown icon): ' .. (Doomed.glow.petcd and '|cFF00C000On' or '|cFFC00000Off'))
+			return print('Doomed - Glowing ability buttons (pet cooldown icon): ' .. (Opt.glow.petcd and '|cFF00C000On' or '|cFFC00000Off'))
 		end
 		if startsWith(msg[2], 'bliz') then
 			if msg[3] then
-				Doomed.glow.blizzard = msg[3] == 'on'
+				Opt.glow.blizzard = msg[3] == 'on'
 				UpdateGlows()
 			end
-			return print('Doomed - Blizzard default proc glow: ' .. (Doomed.glow.blizzard and '|cFF00C000On' or '|cFFC00000Off'))
+			return print('Doomed - Blizzard default proc glow: ' .. (Opt.glow.blizzard and '|cFF00C000On' or '|cFFC00000Off'))
 		end
 		if msg[2] == 'color' then
 			if msg[5] then
-				Doomed.glow.color.r = max(min(tonumber(msg[3]) or 0, 1), 0)
-				Doomed.glow.color.g = max(min(tonumber(msg[4]) or 0, 1), 0)
-				Doomed.glow.color.b = max(min(tonumber(msg[5]) or 0, 1), 0)
+				Opt.glow.color.r = max(min(tonumber(msg[3]) or 0, 1), 0)
+				Opt.glow.color.g = max(min(tonumber(msg[4]) or 0, 1), 0)
+				Opt.glow.color.b = max(min(tonumber(msg[5]) or 0, 1), 0)
 				UpdateGlowColorAndScale()
 			end
-			return print('Doomed - Glow color:', '|cFFFF0000' .. Doomed.glow.color.r, '|cFF00FF00' .. Doomed.glow.color.g, '|cFF0000FF' .. Doomed.glow.color.b)
+			return print('Doomed - Glow color:', '|cFFFF0000' .. Opt.glow.color.r, '|cFF00FF00' .. Opt.glow.color.g, '|cFF0000FF' .. Opt.glow.color.b)
 		end
 		return print('Doomed - Possible glow options: |cFFFFD000main|r, |cFFFFD000cd|r, |cFFFFD000interrupt|r, |cFFFFD000pet|r, |cFFFFD000blizzard|r, and |cFFFFD000color')
 	end
 	if startsWith(msg[1], 'prev') then
 		if msg[2] then
-			Doomed.previous = msg[2] == 'on'
+			Opt.previous = msg[2] == 'on'
 			UpdateTargetInfo()
 		end
-		return print('Doomed - Previous ability icon: ' .. (Doomed.previous and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Previous ability icon: ' .. (Opt.previous and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'always' then
 		if msg[2] then
-			Doomed.always_on = msg[2] == 'on'
+			Opt.always_on = msg[2] == 'on'
 			UpdateTargetInfo()
 		end
-		return print('Doomed - Show the Doomed UI without a target: ' .. (Doomed.always_on and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Show the Doomed UI without a target: ' .. (Opt.always_on and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'cd' then
 		if msg[2] then
-			Doomed.cooldown = msg[2] == 'on'
+			Opt.cooldown = msg[2] == 'on'
 		end
-		return print('Doomed - Use Doomed for cooldown management: ' .. (Doomed.cooldown and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Use Doomed for cooldown management: ' .. (Opt.cooldown and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'swipe' then
 		if msg[2] then
-			Doomed.spell_swipe = msg[2] == 'on'
-			if not Doomed.spell_swipe then
+			Opt.spell_swipe = msg[2] == 'on'
+			if not Opt.spell_swipe then
 				doomedPanel.swipe:Hide()
 			end
 		end
-		return print('Doomed - Spell casting swipe animation: ' .. (Doomed.spell_swipe and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Spell casting swipe animation: ' .. (Opt.spell_swipe and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'dim') then
 		if msg[2] then
-			Doomed.dimmer = msg[2] == 'on'
-			if not Doomed.dimmer then
+			Opt.dimmer = msg[2] == 'on'
+			if not Opt.dimmer then
 				doomedPanel.dimmer:Hide()
 			end
 		end
-		return print('Doomed - Dim main ability icon when you don\'t have enough mana to use it: ' .. (Doomed.dimmer and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Dim main ability icon when you don\'t have enough mana to use it: ' .. (Opt.dimmer and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'miss' then
 		if msg[2] then
-			Doomed.miss_effect = msg[2] == 'on'
+			Opt.miss_effect = msg[2] == 'on'
 		end
-		return print('Doomed - Red border around previous ability when it fails to hit: ' .. (Doomed.miss_effect and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Red border around previous ability when it fails to hit: ' .. (Opt.miss_effect and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'aoe' then
 		if msg[2] then
-			Doomed.aoe = msg[2] == 'on'
+			Opt.aoe = msg[2] == 'on'
 			Doomed_SetTargetMode(1)
 			UpdateDraggable()
 		end
-		return print('Doomed - Allow clicking main ability icon to toggle amount of targets (disables moving): ' .. (Doomed.aoe and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Allow clicking main ability icon to toggle amount of targets (disables moving): ' .. (Opt.aoe and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'bossonly' then
 		if msg[2] then
-			Doomed.boss_only = msg[2] == 'on'
+			Opt.boss_only = msg[2] == 'on'
 		end
-		return print('Doomed - Only use cooldowns on bosses: ' .. (Doomed.boss_only and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Only use cooldowns on bosses: ' .. (Opt.boss_only and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'hidespec' or startsWith(msg[1], 'spec') then
 		if msg[2] then
 			if startsWith(msg[2], 'aff') then
-				Doomed.hide.affliction = not Doomed.hide.affliction
+				Opt.hide.affliction = not Opt.hide.affliction
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Doomed - Affliction specialization: |cFFFFD000' .. (Doomed.hide.affliction and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Doomed - Affliction specialization: |cFFFFD000' .. (Opt.hide.affliction and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 			if startsWith(msg[2], 'demo') then
-				Doomed.hide.demonology = not Doomed.hide.demonology
+				Opt.hide.demonology = not Opt.hide.demonology
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Doomed - Demonology specialization: |cFFFFD000' .. (Doomed.hide.demonology and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Doomed - Demonology specialization: |cFFFFD000' .. (Opt.hide.demonology and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 			if startsWith(msg[2], 'dest') then
-				Doomed.hide.destruction = not Doomed.hide.destruction
+				Opt.hide.destruction = not Opt.hide.destruction
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Doomed - Destruction specialization: |cFFFFD000' .. (Doomed.hide.destruction and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Doomed - Destruction specialization: |cFFFFD000' .. (Opt.hide.destruction and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 		end
 		return print('Doomed - Possible hidespec options: |cFFFFD000aff|r/|cFFFFD000demo|r/|cFFFFD000dest|r - toggle disabling Doomed for specializations')
 	end
 	if startsWith(msg[1], 'int') then
 		if msg[2] then
-			Doomed.interrupt = msg[2] == 'on'
+			Opt.interrupt = msg[2] == 'on'
 		end
-		return print('Doomed - Show an icon for interruptable spells: ' .. (Doomed.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Show an icon for interruptable spells: ' .. (Opt.interrupt and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'auto' then
 		if msg[2] then
-			Doomed.auto_aoe = msg[2] == 'on'
+			Opt.auto_aoe = msg[2] == 'on'
 		end
-		return print('Doomed - Automatically change target mode on AoE spells: ' .. (Doomed.auto_aoe and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Automatically change target mode on AoE spells: ' .. (Opt.auto_aoe and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'pot') then
 		if msg[2] then
-			Doomed.pot = msg[2] == 'on'
+			Opt.pot = msg[2] == 'on'
 		end
-		return print('Doomed - Show Prolonged Power potions in cooldown UI: ' .. (Doomed.pot and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Show Prolonged Power potions in cooldown UI: ' .. (Opt.pot and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'health') then
 		if msg[2] then
-			Doomed.healthstone = msg[2] == 'on'
+			Opt.healthstone = msg[2] == 'on'
 		end
-		return print('Doomed - Show Create Healthstone reminder out of combat: ' .. (Doomed.healthstone and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Show Create Healthstone reminder out of combat: ' .. (Opt.healthstone and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if msg[1] == 'reset' then
 		doomedPanel:ClearAllPoints()
