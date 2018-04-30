@@ -2204,7 +2204,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED(timeStamp, eventType, hideCaster, sr
 	if eventType == 'SPELL_MISSED' then
 		if Opt.previous and Opt.miss_effect and doomedPanel:IsVisible() and doomedPreviousPanel.ability then
 			if spellId == doomedPreviousPanel.ability.spellId or spellId == doomedPreviousPanel.ability.spellId2 then
-				msmdPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
+				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
 			end
 		end
 		return
