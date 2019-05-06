@@ -2,19 +2,19 @@
 	<Binding name="Toggle Targets +" header="DOOMED" category="ADDONS">
 		Doomed_ToggleTargetMode()
 	</Binding>
-	<Binding name="Toggle Targets -" header="DOOMED" category="ADDONS">
+	<Binding name="Toggle Targets -" category="ADDONS">
 		Doomed_ToggleTargetModeReverse()
 	</Binding>
-	<Binding name="Set Targets to 1" header="DOOMED" category="ADDONS">
+	<Binding name="Set Targets to 1" category="ADDONS">
 		Doomed_SetTargetMode(1)
 	</Binding>
-	<Binding name="Set Targets to 2+" header="DOOMED" category="ADDONS">
+	<Binding name="Set Targets to 2+" category="ADDONS">
 		Doomed_SetTargetMode(2)
 	</Binding>
-	<Binding name="Set Targets to 3+" header="DOOMED" category="ADDONS">
+	<Binding name="Set Targets to 3+" category="ADDONS">
 		Doomed_SetTargetMode(3)
 	</Binding>
-	<Binding name="Set Targets to 5+" header="DOOMED" category="ADDONS">
+	<Binding name="Set Targets to 5+" category="ADDONS">
 		Doomed_SetTargetMode(4)
 	</Binding>
 </Bindings>
