@@ -619,11 +619,18 @@ function Ability:azeriteRank()
 	return Azerite.traits[self.spellId] or 0
 end
 
-function Ability:autoAoe(removeUnaffected)
+function Ability:autoAoe(removeUnaffected, trigger)
 	self.auto_aoe = {
 		remove = removeUnaffected,
 		targets = {}
 	}
+	if trigger == 'periodic' then
+		self.auto_aoe.trigger = 'SPELL_PERIODIC_DAMAGE'
+	elseif trigger == 'apply' then
+		self.auto_aoe.trigger = 'SPELL_AURA_APPLIED'
+	else
+		self.auto_aoe.trigger = 'SPELL_DAMAGE'
+	end
 end
 
 function Ability:recordTargetHit(guid)
@@ -717,8 +724,6 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 DrainLife.hasted_ticks = true
-local ShadowLock = Ability.add(171138, 'pet', false)
-ShadowLock.cooldown_duration = 24
 local SpellLock = Ability.add(119910, 'pet', false)
 SpellLock.cooldown_duration = 24
 ------ Talents
@@ -776,6 +781,7 @@ SeedOfCorruption.buff_duration = 12
 SeedOfCorruption:setVelocity(30)
 SeedOfCorruption.hasted_duration = true
 SeedOfCorruption:autoAoe(true)
+SeedOfCorruption:trackAuras()
 local ShadowBolt = Ability.add(232670, false, true)
 ShadowBolt.mana_cost = 2
 ShadowBolt:setVelocity(25)
@@ -827,7 +833,7 @@ PhantomSingularity.cooldown_duration = 45
 PhantomSingularity.tick_interval = 2
 PhantomSingularity.hasted_duration = true
 PhantomSingularity.hasted_ticks = true
-PhantomSingularity:autoAoe()
+PhantomSingularity:autoAoe(false, 'periodic')
 local ShadowEmbrace = Ability.add(32388, false, true, 32390)
 ShadowEmbrace.buff_duration = 10
 local Shadowfury = Ability.add(30283, false, true)
@@ -1586,7 +1592,7 @@ actions.db_refresh+=/corruption,line_cd=15,if=(dot.corruption.remains%dot.corrup
 		return Agony
 	end
 	if Corruption:usable() and corruption_rd < 0.8 and corruption_rd <= agony_rd and corruption_rd <= siphon_rd then
-		return Agony
+		return Corruption
 	end
 end
 
@@ -1598,7 +1604,10 @@ actions.dots+=/agony,target_if=min:remains,if=!talent.creeping_death.enabled&act
 actions.dots+=/siphon_life,target_if=min:remains,if=(active_dot.siphon_life<8-talent.creeping_death.enabled-spell_targets.sow_the_seeds_aoe)&target.time_to_die>10&refreshable&(!remains&spell_targets.seed_of_corruption_aoe=1|cooldown.summon_darkglare.remains>soul_shard*action.unstable_affliction.execute_time)
 actions.dots+=/corruption,cycle_targets=1,if=spell_targets.seed_of_corruption_aoe<3+raid_event.invulnerable.up+talent.writhe_in_agony.enabled&(remains<=gcd|cooldown.summon_darkglare.remains>10&refreshable)&target.time_to_die>10
 ]]
-	if Agony:usable() and (Agony:ticking() > (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:remains() <= GCD() or SummonDarkglare:cooldown() > 10 and (Agony:remains() < 5 or not PandemicInvocation.known and Agony:refreshable()))) then
+	if Enemies() >= 3 and SeedOfCorruption:usable() and Corruption:remains() < (SeedOfCorruption:castTime() + (Corruption:duration() * 0.3)) and not (SeedOfCorruption:up() or SeedOfCorruption:ticking() > 0) then
+		return SeedOfCorruption
+	end
+	if Agony:usable() and (Agony:ticking() < (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:remains() <= GCD() or SummonDarkglare:cooldown() > 10 and (Agony:remains() < 5 or not PandemicInvocation.known and Agony:refreshable()))) then
 		return Agony
 	end
 	if SiphonLife:usable() and (SiphonLife:ticking() < (8 - (CreepingDeath.known and 1 or 0) - Enemies())) and Target.timeToDie > 10 and SiphonLife:refreshable() and (SiphonLife:down() and Enemies() == 1 or SummonDarkglare:cooldown() > (SoulShards() * UnstableAffliction:castTime())) then
@@ -1629,7 +1638,6 @@ actions.fillers+=/shadow_bolt,cycle_targets=1,if=talent.shadow_embrace.enabled&v
 actions.fillers+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=talent.shadow_embrace.enabled&variable.maintain_se
 actions.fillers+=/shadow_bolt
 ]]
-
 	local apl
 	if Deathbolt.known and Deathbolt:cooldown() <= (GCD() * 4) and Enemies() < 3 and SummonDarkglare:cooldown() >= (30 + GCD() + Deathbolt:cooldown()) then
 		if UnstableAffliction:usable() and not UnstableAffliction:previous() and Deathbolt:cooldown() <= UnstableAffliction:castTime() then
@@ -1769,9 +1777,6 @@ APL[SPEC.DESTRUCTION].main = function(self)
 end
 
 APL.Interrupt = function(self)
-	if SummonDoomguard:up() and ShadowLock:ready() then
-		return ShadowLock
-	end
 	if SummonFelhunter:up() and SpellLock:ready() then
 		return SpellLock
 	end
@@ -2281,6 +2286,9 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		end
 		return
 	end
+	if dstGUID == var.player or dstGUID == var.pet then
+		return
+	end
 	if castedAbility.aura_targets then
 		if eventType == 'SPELL_AURA_APPLIED' then
 			castedAbility:applyAura(timeStamp, dstGUID)
@@ -2290,20 +2298,20 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			castedAbility:removeAura(dstGUID)
 		end
 	end
-	if dstGUID ~= var.player and (eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH') then
+	if Opt.auto_aoe then
+		if eventType == 'SPELL_MISSED' and (missType == 'EVADE' or missType == 'IMMUNE') then
+			autoAoe:remove(dstGUID)
+		elseif castedAbility.auto_aoe and eventType == castedAbility.auto_aoe.trigger then
+			castedAbility:recordTargetHit(dstGUID)
+		end
+	end
+	if eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
 		if castedAbility.travel_start and castedAbility.travel_start[dstGUID] then
 			castedAbility.travel_start[dstGUID] = nil
 		end
 		if castedAbility.range_est_start then
 			Target.estimated_range = floor(castedAbility.velocity * (var.time - castedAbility.range_est_start))
 			castedAbility.range_est_start = nil
-		end
-		if Opt.auto_aoe then
-			if missType == 'EVADE' or missType == 'IMMUNE' then
-				autoAoe:remove(dstGUID)
-			elseif castedAbility.auto_aoe then
-				castedAbility:recordTargetHit(dstGUID)
-			end
 		end
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and doomedPanel:IsVisible() and castedAbility == doomedPreviousPanel.ability then
 			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
