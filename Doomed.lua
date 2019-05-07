@@ -1576,16 +1576,16 @@ actions.db_refresh=siphon_life,line_cd=15,if=(dot.siphon_life.remains%dot.siphon
 actions.db_refresh+=/agony,line_cd=15,if=(dot.agony.remains%dot.agony.duration)<=(dot.corruption.remains%dot.corruption.duration)&(dot.agony.remains%dot.agony.duration)<=(dot.siphon_life.remains%dot.siphon_life.duration)&dot.agony.remains<dot.agony.duration*1.3
 actions.db_refresh+=/corruption,line_cd=15,if=(dot.corruption.remains%dot.corruption.duration)<=(dot.agony.remains%dot.agony.duration)&(dot.corruption.remains%dot.corruption.duration)<=(dot.siphon_life.remains%dot.siphon_life.duration)&dot.corruption.remains<dot.corruption.duration*1.3
 ]]
-	local siphon_rd = SiphonLife:remains() / SiphonLife:duration()
+	local siphon_rd = SiphonLife.known and (SiphonLife:remains() / SiphonLife:duration()) or 1.3
 	local agony_rd = Agony:remains() / Agony:duration()
 	local corruption_rd = Corruption:remains() / Corruption:duration()
-	if SiphonLife:usable() and siphon_rd <= agony_rd and siphon_rd <= corruption_rd and SiphonLife:remains() < (SiphonLife:duration() * 1.3) then
+	if SiphonLife:usable() and siphon_rd < 0.8 and siphon_rd <= agony_rd and siphon_rd <= corruption_rd then
 		return SiphonLife
 	end
-	if Agony:usable() and agony_rd <= corruption_rd and agony_rd <= siphon_rd and Agony:remains() < (Agony:duration() * 1.3) then
+	if Agony:usable() and agony_rd < 0.8 and agony_rd <= corruption_rd and agony_rd <= siphon_rd then
 		return Agony
 	end
-	if Corruption:usable() and corruption_rd <= agony_rd and corruption_rd <= siphon_rd and Corruption:remains() < (Corruption:duration() * 1.3) then
+	if Corruption:usable() and corruption_rd < 0.8 and corruption_rd <= agony_rd and corruption_rd <= siphon_rd then
 		return Agony
 	end
 end
@@ -1629,21 +1629,16 @@ actions.fillers+=/shadow_bolt,cycle_targets=1,if=talent.shadow_embrace.enabled&v
 actions.fillers+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=talent.shadow_embrace.enabled&variable.maintain_se
 actions.fillers+=/shadow_bolt
 ]]
-	if UnstableAffliction:usable() and Deathbolt:cooldown() <= (GCD() * 2) and Enemies() == 1 and SummonDarkglare:cooldown() > 20 then
-		return UnstableAffliction
-	end
+
 	local apl
-	if Deathbolt.known and Enemies() == 1 then
-		if (Agony:remains() < (Agony:duration() * 0.75) or Corruption:remains() < (Corruption:duration() * 0.75) or (SiphonLife.known and SiphonLife:remains() < (SiphonLife:duration() * 0.75))) and Deathbolt:cooldown() <= (GCD() * 4) and SummonDarkglare:cooldown() > 20 then
-			apl = self:db_refresh()
-			if apl then return apl end
+	if Deathbolt.known and Deathbolt:cooldown() <= (GCD() * 4) and Enemies() < 3 and SummonDarkglare:cooldown() >= (30 + GCD() + Deathbolt:cooldown()) then
+		if UnstableAffliction:usable() and not UnstableAffliction:previous() and Deathbolt:cooldown() <= UnstableAffliction:castTime() then
+			return UnstableAffliction
 		end
-		if SummonDarkglare:cooldown() <= (SoulShards() * GCD() + GCD() * 3) and (Agony:remains() < Agony:duration() or Corruption:remains() < Corruption:duration() or (SiphonLife.known and SiphonLife:remains() < SiphonLife:duration())) then
-			apl = self:db_refresh()
-			if apl then return apl end
-		end
+		apl = self:db_refresh()
+		if apl then return apl end
 	end
-	if Deathbolt:usable() and (SummonDarkglare:cooldown() >= (30 + GCD()) or SummonDarkglare:cooldown() > 140) then
+	if Deathbolt:usable() and SummonDarkglare:cooldown() >= (30 + GCD()) then
 		return Deathbolt
 	end
 	if PlayerIsMoving() then
