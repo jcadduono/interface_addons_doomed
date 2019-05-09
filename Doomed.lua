@@ -136,10 +136,13 @@ local Azerite = {}
 
 local var = {
 	gcd = 1.5,
+	time = 0,
 	time_diff = 0,
 	mana = 0,
 	mana_max = 0,
 	mana_regen = 0,
+	soul_shards = 0,
+	soul_shards_max = 0,
 }
 
 local doomedPanel = CreateFrame('Frame', 'doomedPanel', UIParent)
@@ -280,7 +283,7 @@ local autoAoe = {
 	targets = {},
 	blacklist = {},
 	ignored_units = {
-		['120651'] = true, -- Explosives (Mythic+ affix)
+		[120651] = true, -- Explosives (Mythic+ affix)
 	},
 }
 
@@ -288,8 +291,8 @@ function autoAoe:add(guid, update)
 	if self.blacklist[guid] then
 		return
 	end
-	local _, _, _, _, _, unitId = strsplit('-', guid)
-	if unitId and self.ignored_units[unitId] then
+	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
+	if unitId and self.ignored_units[tonumber(unitId)] then
 		self.blacklist[guid] = var.time + 10
 		return
 	end
@@ -502,7 +505,7 @@ function Ability:ticking()
 	if self.aura_targets then
 		local count, guid, aura = 0
 		for guid, aura in next, self.aura_targets do
-			if aura.expires - (var.time - var.time_diff) > var.execute_remains then
+			if aura.expires - var.time > var.execute_remains then
 				count = count + 1
 			end
 		end
@@ -660,11 +663,10 @@ end
 local trackAuras = {}
 
 function trackAuras:purge()
-	local now = var.time - var.time_diff
 	local _, ability, guid, expires
 	for _, ability in next, abilities.trackAuras do
 		for guid, aura in next, ability.aura_targets do
-			if aura.expires <= now then
+			if aura.expires <= var.time then
 				ability:removeAura(guid)
 			end
 		end
@@ -682,28 +684,28 @@ function Ability:trackAuras()
 	self.aura_targets = {}
 end
 
-function Ability:applyAura(timeStamp, guid)
+function Ability:applyAura(guid)
 	if autoAoe.blacklist[guid] then
 		return
 	end
 	local aura = {
-		expires = timeStamp + self:duration()
+		expires = var.time + self:duration()
 	}
 	self.aura_targets[guid] = aura
 end
 
-function Ability:refreshAura(timeStamp, guid)
+function Ability:refreshAura(guid)
 	if autoAoe.blacklist[guid] then
 		return
 	end
 	local aura = self.aura_targets[guid]
 	if not aura then
-		self:applyAura(timeStamp, guid)
+		self:applyAura(guid)
 		return
 	end
-	local remains = aura.expires - timeStamp
+	local remains = aura.expires - var.time
 	local duration = self:duration()
-	aura.expires = timeStamp + min(duration * 1.3, remains + duration)
+	aura.expires = var.time + min(duration * 1.3, remains + duration)
 end
 
 function Ability:removeAura(guid)
@@ -856,62 +858,69 @@ local WritheInAgony = Ability.add(196102, false, true)
 ---- Demonology
 ------ Base Abilities
 local CallDreadstalkers = Ability.add(104316, true, true)
-CallDreadstalkers.cooldown_duration = 15
+CallDreadstalkers.buff_duration = 12
+CallDreadstalkers.cooldown_duration = 20
 CallDreadstalkers.shard_cost = 2
-local Demonbolt = Ability.add(157695, false, true)
-Demonbolt.mana_cost = 4.8
-Demonbolt.shard_cost = -1
-local Demonwrath = Ability.add(193440, 'pet', true, 193439)
-Demonwrath.mana_cost = 2.5
-Demonwrath.buff_duration = 3
-Demonwrath.tick_interval = 1
-Demonwrath.hasted_duration = true
-Demonwrath:autoAoe(true)
+local Demonbolt = Ability.add(264178, false, true)
+Demonbolt.mana_cost = 2
+Demonbolt.shard_cost = -2
 local HandOfGuldan = Ability.add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
 HandOfGuldan:autoAoe(true)
+local Implosion = Ability.add(196277, false, true, 196278)
+Implosion.mana_cost = 2
+Implosion:autoAoe()
 local ShadowBoltDemo = Ability.add(686, false, true)
-ShadowBoltDemo.mana_cost = 6
+ShadowBoltDemo.mana_cost = 2
 ShadowBoltDemo.shard_cost = -1
+local SummonDemonicTyrant = Ability.add(265187, true, true)
+SummonDemonicTyrant.buff_duration = 15
+SummonDemonicTyrant.cooldown_duration = 90
+SummonDemonicTyrant.mana_cost = 2
 ------ Pet Abilities
 local AxeToss = Ability.add(89766, 'pet', true)
-AxeToss.triggers_gcd = false
-AxeToss.requires_pet = true
 AxeToss.cooldown_duration = 30
-local Felstorm = Ability.add(89753, 'pet', true, 119914)
+AxeToss.requires_pet = true
+AxeToss.triggers_gcd = false
+local Felstorm = Ability.add(89751, 'pet', true)
+Felstorm.buff_duration = 5
+Felstorm.cooldown_duration = 30
+Felstorm.tick_interval = 1
+Felstorm.hasted_duration = true
+Felstorm.hasted_ticks = true
 Felstorm.requires_pet = true
 Felstorm.triggers_gcd = false
-Felstorm.buff_duration = 6
-Felstorm.tick_interval = 1
-Felstorm.cooldown_duration = 45
-Felstorm:autoAoe(true)
-local Implosion = Ability.add(196277, false, true)
-Implosion.mana_cost = 6
-local Wrathstorm = Ability.add(115831, 'pet', true, 115832)
-Wrathstorm.requires_pet = true
-Wrathstorm.triggers_gcd = false
-Wrathstorm.buff_duration = 6
-Wrathstorm.tick_interval = 1
-Wrathstorm.cooldown_duration = 45
-Wrathstorm:autoAoe(true)
-local Immolation = Ability.add(20153, 'pet', true)
-Immolation.tick_interval = 1.5
-Immolation:autoAoe(true)
+Felstorm:autoAoe()
 ------ Talents Abilities
+local BilescourgeBombers = Ability.add(267211, false, true, 267213)
+BilescourgeBombers.buff_duration = 6
+BilescourgeBombers.cooldown_duration = 30
+BilescourgeBombers.shard_cost = 2
+BilescourgeBombers:autoAoe(true)
+local DemonicCalling = Ability.add(205145, true, true, 205146)
+DemonicCalling.buff_duration = 20
 local Doom = Ability.add(603, false, true)
 Doom.mana_cost = 2
-Doom.buff_duration = 20
-Doom.tick_interval = 20
+Doom.buff_duration = 30
+Doom.tick_interval = 30
 Doom.hasted_duration = true
 local GrimoireFelguard = Ability.add(111898, false, true)
-GrimoireFelguard.cooldown_duration = 90
+GrimoireFelguard.cooldown_duration = 120
 GrimoireFelguard.shard_cost = 1
+local SoulStrike = Ability.add(264057, false, true)
+SoulStrike.cooldown_duration = 10
+SoulStrike.shard_cost = -1
+local SummonVilefiend = Ability.add(264119, false, true)
+SummonVilefiend.buff_duration = 15
+SummonVilefiend.cooldown_duration = 45
+SummonVilefiend.shard_cost = 1
+local FromTheShadows = Ability.add(267170, false, true, 270569)
+FromTheShadows.buff_duration = 12
 ------ Procs
-local DemonicCalling = Ability.add(205145, true, true, 205146)
-local DemonicSynergy = Ability.add(171975, true, false, 171982)
-DemonicSynergy.buff_duration = 15
-local DemonicSynergyPet = Ability.add(171975, 'pet', true, 171982)
-DemonicSynergyPet.buff_duration = 15
+local DemonicCore = Ability.add(267102, true, true, 264173)
+DemonicCore.buff_duration = 20
+local DemonicPower = Ability.add(265273, true, true)
+DemonicPower.buff_duration = 15
 -- Azerite Traits
 local CascadingCalamity = Ability.add(275372, true, true, 275378)
 CascadingCalamity.buff_duration = 15
@@ -925,31 +934,61 @@ local PandemicInvocation = Ability.add(289364, true, true)
 
 -- Start Summoned Pets
 
-local SummonedPet, petsByUnitName = {}, {}
+local SummonedPet = {}
 SummonedPet.__index = SummonedPet
+local summonedPets = {
+	all = {}
+}
 
-function SummonedPet.add(name, duration)
+function summonedPets:find(guid)
+	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
+	return unitId and self.byUnitId[tonumber(unitId)]
+end
+
+function summonedPets:purge()
+	local _, pet, guid, expires
+	for _, pet in next, self.byUnitId do
+		for guid, expires in next, pet.active_units do
+			if expires <= var.time then
+				pet.active_units[guid] = nil
+			end
+		end
+	end
+end
+
+function summonedPets:extend(seconds)
+	local _, pet, guid, expires
+	for _, pet in next, self.byUnitId do
+		for guid, expires in next, pet.active_units do
+			if expires <= var.time then
+				pet.active_units[guid] = nil
+			else
+				pet.active_units[guid] = expires + seconds
+			end
+		end
+	end
+end
+
+function SummonedPet.add(unitId, duration)
 	local pet = {
-		name = name,
+		unitId = unitId,
 		duration = duration,
-		active_units = {}
+		active_units = {},
+		known = false,
 	}
 	setmetatable(pet, SummonedPet)
-	petsByUnitName[name] = pet
+	summonedPets.all[#summonedPets.all + 1] = pet
 	return pet
 end
 
 function SummonedPet:remains()
-	local remains, guid, unit, unit_remains = 0
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > remains then
-			remains = unit_remains
+	local expires_max, guid, expires = 0
+	for guid, expires in next, self.active_units do
+		if expires > expires_max then
+			expires_max = expires
 		end
 	end
-	return min(self.duration, max(0, remains - var.execute_remains))
+	return min(max(expires_max - var.time - var.execute_remains, 0), self.duration)
 end
 
 function SummonedPet:up()
@@ -957,16 +996,13 @@ function SummonedPet:up()
 end
 
 function SummonedPet:down()
-	return self:remains() <= 0
+	return not self:up()
 end
 
 function SummonedPet:count()
-	local count, guid, unit, unit_remains = 0
-	for guid, unit in next, self.active_units do
-		unit_remains = unit.spawn_time + self.duration - var.time
-		if unit_remains <= 0 then
-			self.active_units[guid] = nil
-		elseif unit_remains > var.execute_remains then
+	local count, guid, expires = 0
+	for guid, expires in next, self.active_units do
+		if expires - var.time > var.execute_remains then
 			count = count + 1
 		end
 	end
@@ -974,24 +1010,29 @@ function SummonedPet:count()
 end
 
 function SummonedPet:addUnit(guid)
-	self.active_units[guid] = {
-		spawn_time = GetTime()
-	}
+	self.active_units[guid] = var.time + self.duration
 end
 
-function SummonedPet:removeUnit(guid, reason)
+function SummonedPet:removeUnit(guid)
 	if self.active_units[guid] then
 		self.active_units[guid] = nil
 	end
 end
 
+function SummonedPet:clear()
+	local guid
+	for guid in next, self.active_units do
+		self.active_units[guid] = nil
+	end
+end
+
 -- Summoned Pets
-local Darkglare = SummonedPet.add('Darkglare', 12)
-local Dreadstalker = SummonedPet.add('Dreadstalker', 12)
-local WildImp = SummonedPet.add('Wild Imp', 12)
-local Doomguard = SummonedPet.add('Doomguard', 25)
-local Infernal = SummonedPet.add('Infernal', 25)
-local ServiceFelguard = SummonedPet.add('Felguard', 25)
+local Darkglare = SummonedPet.add(103673, 20)
+local DemonicTyrant = SummonedPet.add(135002, 15)
+local Dreadstalker = SummonedPet.add(98035, 12)
+local Felguard = SummonedPet.add(17252, 15)
+local Vilefiend = SummonedPet.add(135816, 15)
+local WildImp = SummonedPet.add(55659, 12)
 
 -- End Summoned Pets
 
@@ -1323,18 +1364,14 @@ SummonFelguard.up = SummonPetUp
 SummonWrathguard.up = SummonPetUp
 
 function HandOfGuldan:shardCost()
-	return min(4, max(UnitPower('player', 7), self.shard_cost))
+	return min(max(var.soul_shards, self.shard_cost), 3)
 end
 
 function CallDreadstalkers:shardCost()
-	local cost = self.shard_cost
 	if DemonicCalling:up() then
-		cost = 0
+		return 0
 	end
-	if ItemEquipped.RecurrentRitual then
-		cost = cost - 1
-	end
-	return cost
+	return self.shard_cost
 end
 
 function AxeToss:usable()
@@ -1347,7 +1384,7 @@ function AxeToss:usable()
 	if not TargetIsStunnable() then
 		return false
 	end
-	return self:ready(seconds)
+	return self:ready()
 end
 
 -- End Ability Modifications
@@ -1369,7 +1406,6 @@ function Dreadstalker:remains()
 	return SummonedPet.remains(self)
 end
 
-
 function WildImp:count()
 	local count = SummonedPet.count(self)
 	if HandOfGuldan:casting() then
@@ -1385,7 +1421,7 @@ function WildImp:count()
 end
 
 function WildImp:remains()
-	if HandOfGuldan:casting() or (ImprovedDreadstalkers.known and CallDreadstalkers:casting()) then
+	if HandOfGuldan:casting() then
 		return self.duration
 	end
 	return SummonedPet.remains(self)
@@ -2077,7 +2113,7 @@ end
 local function UpdateCombat()
 	timer.combat = 0
 	local _, start, duration, remains, spellId
-	var.time = GetTime()
+	var.time = GetTime() - var.time_diff
 	var.last_main = var.main
 	var.last_cd = var.cd
 	var.last_extra = var.extra
@@ -2105,6 +2141,7 @@ local function UpdateCombat()
 	var.pet = UnitGUID('pet')
 	var.pet_active = GetPetActive()
 
+	summonedPets:purge()
 	trackAuras:purge()
 	if Opt.auto_aoe then
 		local ability
@@ -2215,11 +2252,17 @@ end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED()
 	local timeStamp, eventType, _, srcGUID, _, _, _, dstGUID, _, _, _, spellId, spellName, _, missType = CombatLogGetCurrentEventInfo()
-	var.time = GetTime()
+	var.time = timeStamp
+	var.time_diff = GetTime() - var.time
+
 	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
 		trackAuras:remove(dstGUID)
 		if Opt.auto_aoe then
 			autoAoe:remove(dstGUID)
+		end
+		local pet = summonedPets:find(dstGUID)
+		if pet then
+			pet:removeUnit(dstGUID)
 		end
 		return
 	end
@@ -2230,11 +2273,16 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			autoAoe:add(dstGUID, true)
 		end
 	end
-	if petsByUnitName[dstName] then
-		if eventType == 'SPELL_SUMMON' then
-			petsByUnitName[dstName]:addUnit(dstGUID)
-		elseif eventType == 'UNIT_DIED' or eventType == 'SPELL_INSTAKILL' then
-			petsByUnitName[dstName]:removeUnit(dstGUID)
+	if srcGUID ~= var.player and srcGUID ~= var.pet then
+		return
+	end
+	if eventType == 'SPELL_SUMMON' then
+		local pet = summonedPets:find(dstGUID)
+		if pet then
+			if pet == DemonicTyrant then
+				summonedPets:extend(15)
+			end
+			pet:addUnit(dstGUID)
 		end
 	end
 	if srcGUID ~= var.player or not (
@@ -2254,17 +2302,16 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 	local castedAbility = abilities.bySpellId[spellId]
 	if not castedAbility then
-		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
+		print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
 		return
 	end
 --[[ DEBUG ]
 	print(format('EVENT %s TRACK CHECK FOR %s ID %d', eventType, spellName, spellId))
 	if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' or eventType == 'SPELL_PERIODIC_DAMAGE' or eventType == 'SPELL_DAMAGE' then
-		print(format('%s: %s - time: %.2f - time since last: %.2f', eventType, spellName, timeStamp, timeStamp - (castedAbility.last_trigger or timeStamp)))
-		castedAbility.last_trigger = timeStamp
+		print(format('%s: %s - time: %.2f - time since last: %.2f', eventType, spellName, var.time, var.time - (castedAbility.last_trigger or var.time)))
+		castedAbility.last_trigger = var.time
 	end
 --[ DEBUG ]]
-	var.time_diff = var.time - timeStamp
 	UpdateCombatWithin(0.05)
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		var.last_ability = castedAbility
@@ -2277,6 +2324,9 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			if not castedAbility.range_est_start then
 				castedAbility.range_est_start = var.time
 			end
+		end
+		if castedAbility == Implosion then
+			WildImp:clear()
 		end
 		if Opt.previous and doomedPanel:IsVisible() then
 			doomedPreviousPanel.ability = castedAbility
@@ -2291,9 +2341,9 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 	if castedAbility.aura_targets then
 		if eventType == 'SPELL_AURA_APPLIED' then
-			castedAbility:applyAura(timeStamp, dstGUID)
+			castedAbility:applyAura(dstGUID)
 		elseif eventType == 'SPELL_AURA_REFRESH' then
-			castedAbility:refreshAura(timeStamp, dstGUID)
+			castedAbility:refreshAura(dstGUID)
 		elseif eventType == 'SPELL_AURA_REMOVED' then
 			castedAbility:removeAura(dstGUID)
 		end
@@ -2393,7 +2443,7 @@ function events:UNIT_FLAGS(unitID)
 end
 
 function events:PLAYER_REGEN_DISABLED()
-	combatStartTime = GetTime()
+	combatStartTime = GetTime() - var.time_diff
 end
 
 function events:PLAYER_REGEN_ENABLED()
@@ -2423,11 +2473,14 @@ end
 
 local function UpdateAbilityData()
 	var.mana_max = UnitPowerMax('player', 0)
-	local _, ability
+	var.soul_shards_max = UnitPowerMax('player', 7)
+	local _, ability, pet
+
 	for _, ability in next, abilities.all do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = (IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) or Azerite.traits[ability.spellId]) and true or false
 	end
+
 	if UnstableAffliction.known then
 		UnstableAffliction[1].known = true
 		UnstableAffliction[2].known = true
@@ -2435,6 +2488,14 @@ local function UpdateAbilityData()
 		UnstableAffliction[4].known = true
 		UnstableAffliction[5].known = true
 	end
+	DemonicPower.known = SummonDemonicTyrant.known
+	Darkglare.known = SummonDarkglare.known
+	DemonicTyrant.known = SummonDemonicTyrant.known
+	Dreadstalker.known = CallDreadstalkers.known
+	Felguard.known = GrimoireFelguard.known
+	Vilefiend.known = SummonVilefiend.known
+	WildImp.known = HandOfGuldan.known
+
 	abilities.bySpellId = {}
 	abilities.velocity = {}
 	abilities.autoAoe = {}
@@ -2454,6 +2515,13 @@ local function UpdateAbilityData()
 			if ability.aura_targets then
 				abilities.trackAuras[#abilities.trackAuras + 1] = ability
 			end
+		end
+	end
+
+	summonedPets.byUnitId = {}
+	for _, pet in next, summonedPets.all do
+		if pet.known then
+			summonedPets.byUnitId[pet.unitId] = pet
 		end
 	end
 end
