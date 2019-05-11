@@ -712,8 +712,9 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 DrainLife.hasted_ticks = true
-local SpellLock = Ability.add(119910, 'pet', false)
+local SpellLock = Ability.add(119910, false, true)
 SpellLock.cooldown_duration = 24
+SpellLock.player_triggered = true
 ------ Talents
 local GrimoireOfSacrifice = Ability.add(108503, true, true, 196099)
 GrimoireOfSacrifice.buff_duration = 3600
@@ -870,11 +871,12 @@ SummonDemonicTyrant.cooldown_duration = 90
 SummonDemonicTyrant.mana_cost = 2
 SummonDemonicTyrant.summon_count = 1
 ------ Pet Abilities
-local AxeToss = Ability.add(89766, 'pet', true)
+local AxeToss = Ability.add(89766, false, true, 119914)
 AxeToss.cooldown_duration = 30
 AxeToss.requires_pet = true
 AxeToss.triggers_gcd = false
-local Felstorm = Ability.add(89751, 'pet', true)
+AxeToss.player_triggered = true
+local Felstorm = Ability.add(89751, 'pet', true, 89753)
 Felstorm.buff_duration = 5
 Felstorm.cooldown_duration = 30
 Felstorm.tick_interval = 1
@@ -885,7 +887,7 @@ Felstorm.triggers_gcd = false
 Felstorm:autoAoe()
 local FelFirebolt = Ability.add(104318, false, false)
 FelFirebolt.triggers_gcd = false
-local LegionStrike = Ability.add(30213, 'pet', true)
+local LegionStrike = Ability.add(30213, false, true)
 LegionStrike.requires_pet = true
 LegionStrike:autoAoe()
 ------ Talents Abilities
@@ -919,7 +921,7 @@ NetherPortal.cooldown_duration = 180
 NetherPortal.shard_cost = 1
 local PowerSiphon = Ability.add(264130, false, true)
 PowerSiphon.cooldown_duration = 30
-local SoulStrike = Ability.add(264057, false, true)
+local SoulStrike = Ability.add(264057, false, true, 267964)
 SoulStrike.cooldown_duration = 10
 SoulStrike.shard_cost = -1
 SoulStrike.requires_pet = true
@@ -2648,14 +2650,22 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		APL[Player.spec]:combat_event(eventType, srcGUID, dstGUID, spellId, ability)
 	end
 
-	if srcGUID ~= Player.guid or not (
+	if (srcGUID ~= Player.guid and srcGUID ~= Player.pet) then
+		return
+	end
+
+	if not ability then
+		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
+		return
+	end
+
+	if not (
 	   eventType == 'SPELL_CAST_START' or
 	   eventType == 'SPELL_CAST_SUCCESS' or
 	   eventType == 'SPELL_CAST_FAILED' or
 	   eventType == 'SPELL_AURA_REMOVED' or
 	   eventType == 'SPELL_DAMAGE' or
 	   eventType == 'SPELL_PERIODIC_DAMAGE' or
-	   eventType == 'SPELL_HEAL' or
 	   eventType == 'SPELL_MISSED' or
 	   eventType == 'SPELL_AURA_APPLIED' or
 	   eventType == 'SPELL_AURA_REFRESH' or
@@ -2664,19 +2674,8 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		return
 	end
 
-	if not ability then
-		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
-		return
-	end
---[[ DEBUG ]
-	print(format('EVENT %s TRACK CHECK FOR %s ID %d', eventType, spellName, spellId))
-	if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' or eventType == 'SPELL_PERIODIC_DAMAGE' or eventType == 'SPELL_DAMAGE' then
-		print(format('%s: %s - time: %.2f - time since last: %.2f', eventType, spellName, Player.time, Player.time - (ability.last_trigger or Player.time)))
-		ability.last_trigger = Player.time
-	end
---[ DEBUG ]]
 	UpdateCombatWithin(0.05)
-	if eventType == 'SPELL_CAST_SUCCESS' then
+	if (srcGUID == Player.guid or ability.player_triggered) and eventType == 'SPELL_CAST_SUCCESS' then
 		Player.last_ability = ability
 		if ability.triggers_gcd then
 			Player.previous_gcd[10] = nil
@@ -2697,7 +2696,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		return
 	end
 	if dstGUID == Player.guid or dstGUID == Player.pet then
-		return
+		return -- ignore buffs beyond here
 	end
 	if ability.aura_targets then
 		if eventType == 'SPELL_AURA_APPLIED' then
@@ -2877,6 +2876,7 @@ local function UpdateAbilityData()
 	SummonSuccubus.known = SummonSuccubus.known and not SummonShivarra.known
 	SummonFelguard.known = SummonFelguard.known and not SummonWrathguard.known
 	AxeToss.known = SummonFelguard.known or SummonWrathguard.known
+	Felstorm.known = SummonFelguard.known or SummonWrathguard.known
 	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
 	SpellLock.known = SummonFelhunter.known or SummonObserver.known
 	FelFirebolt.known = Pet.WildImp.known
