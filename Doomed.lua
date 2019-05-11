@@ -129,7 +129,8 @@ local ItemEquipped = {
 -- Azerite trait API access
 local Azerite = {}
 
-local var = {
+-- current player information
+local Player = {
 	gcd = 1.5,
 	time = 0,
 	time_diff = 0,
@@ -263,7 +264,7 @@ local function SetTargetMode(mode)
 		return
 	end
 	targetMode = min(mode, #targetModes[currentSpec])
-	var.enemy_count = targetModes[currentSpec][targetMode][1]
+	Player.enemy_count = targetModes[currentSpec][targetMode][1]
 	doomedPanel.targets:SetText(targetModes[currentSpec][targetMode][2])
 end
 Doomed_SetTargetMode = SetTargetMode
@@ -294,11 +295,11 @@ function autoAoe:add(guid, update)
 	end
 	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
 	if unitId and self.ignored_units[tonumber(unitId)] then
-		self.blacklist[guid] = var.time + 10
+		self.blacklist[guid] = Player.time + 10
 		return
 	end
 	local new = not self.targets[guid]
-	self.targets[guid] = var.time
+	self.targets[guid] = Player.time
 	if update and new then
 		self:update()
 	end
@@ -306,7 +307,7 @@ end
 
 function autoAoe:remove(guid)
 	-- blacklist enemies for 2 seconds when they die to prevent out of order events from re-adding them
-	self.blacklist[guid] = var.time + 2
+	self.blacklist[guid] = Player.time + 2
 	if self.targets[guid] then
 		self.targets[guid] = nil
 		self:update()
@@ -329,11 +330,11 @@ function autoAoe:update()
 		SetTargetMode(1)
 		return
 	end
-	var.enemy_count = count
+	Player.enemy_count = count
 	for i = #targetModes[currentSpec], 1, -1 do
 		if count >= targetModes[currentSpec][i][1] then
 			SetTargetMode(i)
-			var.enemy_count = count
+			Player.enemy_count = count
 			return
 		end
 	end
@@ -342,14 +343,14 @@ end
 function autoAoe:purge()
 	local update, guid, t
 	for guid, t in next, self.targets do
-		if var.time - t > Opt.auto_aoe_ttl then
+		if Player.time - t > Opt.auto_aoe_ttl then
 			self.targets[guid] = nil
 			update = true
 		end
 	end
 	-- remove expired blacklisted enemies
 	for guid, t in next, self.blacklist do
-		if var.time > t then
+		if Player.time > t then
 			self.blacklist[guid] = nil
 		end
 	end
@@ -417,13 +418,13 @@ function Ability:usable()
 	if not self.known then
 		return false
 	end
-	if self:cost() > var.mana then
+	if self:cost() > Player.mana then
 		return false
 	end
-	if self:shardCost() > var.soul_shards then
+	if self:shardCost() > Player.soul_shards then
 		return false
 	end
-	if self.requires_pet and not var.pet_active then
+	if self.requires_pet and not Player.pet_active then
 		return false
 	end
 	if self.requires_charge and self:charges() == 0 then
@@ -446,7 +447,7 @@ function Ability:remains()
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
-			return max(expires - var.ctime - var.execute_remains, 0)
+			return max(expires - Player.ctime - Player.execute_remains, 0)
 		end
 	end
 	return 0
@@ -479,7 +480,7 @@ end
 
 function Ability:traveling()
 	if self.travel_start and self.travel_start[Target.guid] then
-		if var.time - self.travel_start[Target.guid] < self.max_range / self.velocity then
+		if Player.time - self.travel_start[Target.guid] < self.max_range / self.velocity then
 			return true
 		end
 		self.travel_start[Target.guid] = nil
@@ -494,7 +495,7 @@ function Ability:ticking()
 	if self.aura_targets then
 		local count, guid, aura = 0
 		for guid, aura in next, self.aura_targets do
-			if aura.expires - var.time > var.execute_remains then
+			if aura.expires - Player.time > Player.execute_remains then
 				count = count + 1
 			end
 		end
@@ -504,7 +505,7 @@ function Ability:ticking()
 end
 
 function Ability:cooldownDuration()
-	return self.hasted_cooldown and (var.haste_factor * self.cooldown_duration) or self.cooldown_duration
+	return self.hasted_cooldown and (Player.haste_factor * self.cooldown_duration) or self.cooldown_duration
 end
 
 function Ability:cooldown()
@@ -515,7 +516,7 @@ function Ability:cooldown()
 	if start == 0 then
 		return 0
 	end
-	return max(0, duration - (var.ctime - start) - var.execute_remains)
+	return max(0, duration - (Player.ctime - start) - Player.execute_remains)
 end
 
 function Ability:stack()
@@ -526,14 +527,14 @@ function Ability:stack()
 			return 0
 		end
 		if self:match(id) then
-			return (expires == 0 or expires - var.ctime > var.execute_remains) and count or 0
+			return (expires == 0 or expires - Player.ctime > Player.execute_remains) and count or 0
 		end
 	end
 	return 0
 end
 
 function Ability:cost()
-	return self.mana_cost > 0 and (self.mana_cost / 100 * var.mana_max) or 0
+	return self.mana_cost > 0 and (self.mana_cost / 100 * Player.mana_max) or 0
 end
 
 function Ability:shardCost()
@@ -549,7 +550,7 @@ function Ability:chargesFractional()
 	if charges >= max_charges then
 		return charges
 	end
-	return charges + ((max(0, var.ctime - recharge_start + var.execute_remains)) / recharge_time)
+	return charges + ((max(0, Player.ctime - recharge_start + Player.execute_remains)) / recharge_time)
 end
 
 function Ability:fullRechargeTime()
@@ -557,7 +558,7 @@ function Ability:fullRechargeTime()
 	if charges >= max_charges then
 		return 0
 	end
-	return (max_charges - charges - 1) * recharge_time + (recharge_time - (var.ctime - recharge_start) - var.execute_remains)
+	return (max_charges - charges - 1) * recharge_time + (recharge_time - (Player.ctime - recharge_start) - Player.execute_remains)
 end
 
 function Ability:maxCharges()
@@ -566,11 +567,11 @@ function Ability:maxCharges()
 end
 
 function Ability:duration()
-	return self.hasted_duration and (var.haste_factor * self.buff_duration) or self.buff_duration
+	return self.hasted_duration and (Player.haste_factor * self.buff_duration) or self.buff_duration
 end
 
 function Ability:casting()
-	return var.ability_casting == self
+	return Player.ability_casting == self
 end
 
 function Ability:channeling()
@@ -580,21 +581,21 @@ end
 function Ability:castTime()
 	local _, _, _, castTime = GetSpellInfo(self.spellId)
 	if castTime == 0 then
-		return self.triggers_gcd and var.gcd or 0
+		return self.triggers_gcd and Player.gcd or 0
 	end
 	return castTime / 1000
 end
 
 function Ability:castRegen()
-	return var.mana_regen * self:castTime() - self:cost()
+	return Player.mana_regen * self:castTime() - self:cost()
 end
 
 function Ability:tickTime()
-	return self.hasted_ticks and (var.haste_factor * self.tick_interval) or self.tick_interval
+	return self.hasted_ticks and (Player.haste_factor * self.tick_interval) or self.tick_interval
 end
 
 function Ability:wontCapMana(reduction)
-	return (var.mana + self:castRegen()) < (var.mana_max - (reduction or 5))
+	return (Player.mana + self:castRegen()) < (Player.mana_max - (reduction or 5))
 end
 
 function Ability:previous(n)
@@ -604,7 +605,7 @@ function Ability:previous(n)
 	if self:casting() or self:channeling() then
 		return true
 	end
-	return PreviousGCD[1] == self or var.last_ability == self
+	return PreviousGCD[1] == self or Player.last_ability == self
 end
 
 function Ability:azeriteRank()
@@ -626,14 +627,14 @@ function Ability:autoAoe(removeUnaffected, trigger)
 end
 
 function Ability:recordTargetHit(guid)
-	self.auto_aoe.targets[guid] = var.time
+	self.auto_aoe.targets[guid] = Player.time
 	if not self.auto_aoe.start_time then
 		self.auto_aoe.start_time = self.auto_aoe.targets[guid]
 	end
 end
 
 function Ability:updateTargetsHit()
-	if self.auto_aoe.start_time and var.time - self.auto_aoe.start_time >= 0.3 then
+	if self.auto_aoe.start_time and Player.time - self.auto_aoe.start_time >= 0.3 then
 		self.auto_aoe.start_time = nil
 		if self.auto_aoe.remove then
 			autoAoe:clear()
@@ -655,7 +656,7 @@ function trackAuras:purge()
 	local _, ability, guid, expires
 	for _, ability in next, abilities.trackAuras do
 		for guid, aura in next, ability.aura_targets do
-			if aura.expires <= var.time then
+			if aura.expires <= Player.time then
 				ability:removeAura(guid)
 			end
 		end
@@ -678,7 +679,7 @@ function Ability:applyAura(guid)
 		return
 	end
 	local aura = {
-		expires = var.time + self:duration()
+		expires = Player.time + self:duration()
 	}
 	self.aura_targets[guid] = aura
 end
@@ -692,9 +693,9 @@ function Ability:refreshAura(guid)
 		self:applyAura(guid)
 		return
 	end
-	local remains = aura.expires - var.time
+	local remains = aura.expires - Player.time
 	local duration = self:duration()
-	aura.expires = var.time + min(duration * 1.3, remains + duration)
+	aura.expires = Player.time + min(duration * 1.3, remains + duration)
 end
 
 function Ability:removeAura(guid)
@@ -966,7 +967,7 @@ function summonedPets:purge()
 	local _, pet, guid, unit
 	for _, pet in next, self.known do
 		for guid, unit in next, pet.active_units do
-			if unit.expires <= var.time then
+			if unit.expires <= Player.time then
 				pet.active_units[guid] = nil
 			end
 		end
@@ -986,7 +987,7 @@ function summonedPets:extend(seconds)
 	local _, pet, guid, unit
 	for _, pet in next, self.known do
 		for guid, unit in next, pet.active_units do
-			if unit.expires > var.time then
+			if unit.expires > Player.time then
 				unit.expires = unit.expires + seconds
 			end
 		end
@@ -994,11 +995,11 @@ function summonedPets:extend(seconds)
 end
 
 function summonedPets:empowered()
-	return var.time < (self.empowered_ends or 0)
+	return Player.time < (self.empowered_ends or 0)
 end
 
 function summonedPets:empoweredRemains()
-	return max((self.empowered_ends or 0) - var.time, 0)
+	return max((self.empowered_ends or 0) - Player.time, 0)
 end
 
 function SummonedPet.add(unitId, duration, unitId2)
@@ -1024,7 +1025,7 @@ function SummonedPet:remains()
 			expires_max = unit.expires
 		end
 	end
-	return max(expires_max - var.time - var.execute_remains, 0)
+	return max(expires_max - Player.time - Player.execute_remains, 0)
 end
 
 function SummonedPet:up()
@@ -1041,7 +1042,7 @@ function SummonedPet:count()
 		count = count + self.summon_spell.summon_count
 	end
 	for guid, unit in next, self.active_units do
-		if unit.expires - var.time > var.execute_remains then
+		if unit.expires - Player.time > Player.execute_remains then
 			count = count + 1
 		end
 	end
@@ -1051,7 +1052,7 @@ end
 function SummonedPet:addUnit(guid)
 	local unit = {
 		guid = guid,
-		expires = var.time + self.duration,
+		expires = Player.time + self.duration,
 	}
 	self.active_units[guid] = unit
 	return unit
@@ -1123,7 +1124,7 @@ end
 
 function InventoryItem:cooldown()
 	local startTime, duration = GetItemCooldown(self.itemId)
-	return startTime == 0 and 0 or duration - (var.time - startTime)
+	return startTime == 0 and 0 or duration - (Player.time - startTime)
 end
 
 function InventoryItem:ready(seconds)
@@ -1191,58 +1192,58 @@ end
 -- Start Helpful Functions
 
 local function Health()
-	return var.health
+	return Player.health
 end
 
 local function HealthMax()
-	return var.health_max
+	return Player.health_max
 end
 
 local function HealthPct()
-	return var.health / var.health_max * 100
+	return Player.health / Player.health_max * 100
 end
 
 local function Mana()
-	return var.mana
+	return Player.mana
 end
 
 local function ManaDeficit()
-	return var.mana_max - var.mana
+	return Player.mana_max - Player.mana
 end
 
 local function ManaRegen()
-	return var.mana_regen
+	return Player.mana_regen
 end
 
 local function ManaMax()
-	return var.mana_max
+	return Player.mana_max
 end
 
 local function ManaTimeToMax()
-	local deficit = var.mana_max - var.mana
+	local deficit = Player.mana_max - Player.mana
 	if deficit <= 0 then
 		return 0
 	end
-	return deficit / var.mana_regen
+	return deficit / Player.mana_regen
 end
 
 local function SoulShards()
-	return var.soul_shards
+	return Player.soul_shards
 end
 
 local function GCD()
-	return var.gcd
+	return Player.gcd
 end
 
 local function Enemies()
-	return var.enemy_count
+	return Player.enemy_count
 end
 
 local function TimeInCombat()
 	if combatStartTime > 0 then
-		return var.time - combatStartTime
+		return Player.time - combatStartTime
 	end
-	if var.ability_casting then
+	if Player.ability_casting then
 		return 0.1
 	end
 	return 0
@@ -1280,21 +1281,21 @@ local function TargetIsStunnable()
 	if Target.boss then
 		return false
 	end
-	if var.instance == 'raid' then
+	if Player.instance == 'raid' then
 		return false
 	end
-	if Target.healthMax > var.health_max * 10 then
+	if Target.healthMax > Player.health_max * 10 then
 		return false
 	end
 	return true
 end
 
 local function InArenaOrBattleground()
-	return var.instance == 'arena' or var.instance == 'pvp'
+	return Player.instance == 'arena' or Player.instance == 'pvp'
 end
 
 local function SpellHasteFactor()
-	return var.haste_factor
+	return Player.haste_factor
 end
 
 function GetPetActive()
@@ -1306,7 +1307,7 @@ function GetPetActive()
 end
 
 local function PetIsSummoned()
-	return var.pet_active
+	return Player.pet_active
 end
 
 -- End Helpful Functions
@@ -1314,11 +1315,11 @@ end
 -- Start Ability Modifications
 
 function Implosion:usable()
-	return var.imp_count > 0 and Ability.usable(self)
+	return Player.imp_count > 0 and Ability.usable(self)
 end
 
 function PowerSiphon:usable()
-	return var.imp_count > 0 and Ability.usable(self)
+	return Player.imp_count > 0 and Ability.usable(self)
 end
 
 function Corruption:remains()
@@ -1403,7 +1404,7 @@ SummonFelguard.up = SummonPetUp
 SummonWrathguard.up = SummonPetUp
 
 function HandOfGuldan:shardCost()
-	return min(max(var.soul_shards, 1), 3)
+	return min(max(Player.soul_shards, 1), 3)
 end
 
 function CallDreadstalkers:shardCost()
@@ -1457,11 +1458,11 @@ function Pet.WildImp:unitRemains(unit)
 			remains = summonedPets:empoweredRemains()
 		else
 			energy = energy - 20
-			remains = unit.cast_end - var.time
+			remains = unit.cast_end - Player.time
 		end
 		remains = remains + (energy / 20 * FelFirebolt:castTime())
 	else
-		remains = unit.expires - var.time
+		remains = unit.expires - Player.time
 	end
 	return max(remains, 0)
 end
@@ -1469,7 +1470,7 @@ end
 function Pet.WildImp:impsIn(seconds)
 	local count, guid, unit = 0
 	for guid, unit in next, self.active_units do
-		if self:unitRemains(unit) > (var.execute_time + seconds) then
+		if self:unitRemains(unit) > (Player.execute_time + seconds) then
 			count = count + 1
 		end
 	end
@@ -1477,7 +1478,7 @@ function Pet.WildImp:impsIn(seconds)
 end
 
 function Pet.WildImp:castStart(unit)
-	unit.cast_end = var.time + FelFirebolt:castTime()
+	unit.cast_end = Player.time + FelFirebolt:castTime()
 end
 
 function Pet.WildImp:castSuccess(unit)
@@ -1492,7 +1493,7 @@ function Pet.WildImp:castSuccess(unit)
 end
 
 function Pet.WildImp:sacrifice()
-	local expires_min, guid, unit, sacrifice = var.time + 60
+	local expires_min, guid, unit, sacrifice = Player.time + 60
 	for guid, unit in next, self.active_units do
 		if unit.expires < expires_min then
 			expires_min = unit.expires
@@ -1514,14 +1515,14 @@ end
 -- End Summoned Pet Modifications
 
 local function UseCooldown(ability, overwrite, always)
-	if always or (Opt.cooldown and (not Opt.boss_only or Target.boss) and (not var.cd or overwrite)) then
-		var.cd = ability
+	if always or (Opt.cooldown and (not Opt.boss_only or Target.boss) and (not Player.cd or overwrite)) then
+		Player.cd = ability
 	end
 end
 
 local function UseExtra(ability, overwrite, always)
-	if always or (not var.extra or overwrite) then
-		var.extra = ability
+	if always or (not Player.extra or overwrite) then
+		Player.extra = ability
 	end
 end
 
@@ -1618,13 +1619,13 @@ actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
 ]]
 	local apl
-	var.use_seed = (SowTheSeeds.known and Enemies() >= 3) or (SiphonLife.known and Enemies() >= 5) or Enemies() >= 8
+	Player.use_seed = (SowTheSeeds.known and Enemies() >= 3) or (SiphonLife.known and Enemies() >= 5) or Enemies() >= 8
 	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= GCD())) then
-		var.padding = GCD()
+		Player.padding = GCD()
 	else
-		var.padding = ShadowBolt:castTime() * (CascadingCalamity.known and 1 or 0)
+		Player.padding = ShadowBolt:castTime() * (CascadingCalamity.known and 1 or 0)
 	end
-	var.maintain_se = (Enemies() <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Enemies() > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
+	Player.maintain_se = (Enemies() <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Enemies() > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
 	apl = self:cooldowns()
 	if apl then return apl end
 	if DrainSoul:usable() and Target.timeToDie <= GCD() and SoulShards() < 5 then
@@ -1645,7 +1646,7 @@ actions+=/call_action_list,name=fillers
 	if UnstableAffliction:usable() and Target.timeToDie <= 8 then
 		return UnstableAffliction
 	end
-	if ShadowEmbrace.known and var.maintain_se and ShadowEmbrace:up() then
+	if ShadowEmbrace.known and Player.maintain_se and ShadowEmbrace:up() then
 		if DrainSoul:usable() and ShadowEmbrace:remains() <= (GCD() * 2) then
 			return DrainSoul
 		end
@@ -1660,7 +1661,7 @@ actions+=/call_action_list,name=fillers
 		UseCooldown(VileTaint)
 	end
 	if SoulShards() == 5 then
-		if var.use_seed then
+		if Player.use_seed then
 			if SeedOfCorruption:usable() then
 				return SeedOfCorruption
 			end
@@ -1811,7 +1812,7 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 		local apl = self:fillers()
 		if apl then return apl end
 	end
-	if var.use_seed then
+	if Player.use_seed then
 		if SeedOfCorruption:usable() then
 			return SeedOfCorruption
 		end
@@ -1819,10 +1820,10 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 		if not SummonDarkglare:previous() and (Deathbolt.known and Deathbolt:cooldown() <= ua_ct and not CascadingCalamity.known or (SoulShards() >= 5 and Enemies() < 2 or SoulShards() >= 2 and Enemies() >= 2) and Target.timeToDie > (4 + ua_ct) and Enemies()  == 1 or Target.timeToDie <= (8 + ua_ct * SoulShards())) then
 			return UnstableAffliction
 		end
-		if UnstableAffliction:remains() <= (ua_ct + var.padding) then
+		if UnstableAffliction:remains() <= (ua_ct + Player.padding) then
 			return UnstableAffliction
 		end
-		if (not Deathbolt.known or SoulShards() > 1) and (not VileTaint.known or SoulShards() > 1) and UnstableAffliction:remains() <= (ua_ct + var.padding) and not CascadingCalamity.known then
+		if (not Deathbolt.known or SoulShards() > 1) and (not VileTaint.known or SoulShards() > 1) and UnstableAffliction:remains() <= (ua_ct + Player.padding) and not CascadingCalamity.known then
 			return UnstableAffliction
 		end
 	end
@@ -1902,7 +1903,7 @@ actions+=/call_action_list,name=build_a_shard
 		apl = self:dcon_opener()
 		if apl then return apl end
 	end
-	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and SoulShards() > 2 and ExplosivePotential:down() and var.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and SoulShards() > 2 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 		return HandOfGuldan
 	end
 	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:stack() == 4 then
@@ -1911,7 +1912,7 @@ actions+=/call_action_list,name=build_a_shard
 	if Demonbolt:usable() and SoulShards() <= 4 and DemonicCore:up() and DemonicCore:remains() < (GCD() * DemonicCore:stack()) then
 		return Demonbolt
 	end
-	if ExplosivePotential.known and var.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
+	if ExplosivePotential.known and Player.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
 		return Implosion
 	end
 	if Doom:usable() and Enemies() == 1 and Target.timeToDie > 30 and Doom:down() then
@@ -1920,7 +1921,7 @@ actions+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() and ExplosivePotential.known and NetherPortal.known and TimeInCombat() < 10 and Enemies() == 1 and Pet.Dreadstalker:up() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if DemonicStrength:usable() and (Enemies() == 1 or DemonicPower:up() or var.imp_count < 6) then
+	if DemonicStrength:usable() and (Enemies() == 1 or DemonicPower:up() or Player.imp_count < 6) then
 		UseCooldown(DemonicStrength)
 	end
 	if NetherPortal.known and Enemies() < 3 then
@@ -1957,7 +1958,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if SummonDemonicTyrant:usable() and SoulShards() < 3 and (not DemonicConsumption.known or Target.timeToDie < 20 or Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6) then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if PowerSiphon:usable() and Enemies() == 1 and var.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
+	if PowerSiphon:usable() and Enemies() == 1 and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
 		UseCooldown(PowerSiphon)
 	end
 	if Doom:usable() and Doom:refreshable() and Target.timeToDie > (Doom:remains() + 30) then
@@ -2026,7 +2027,7 @@ actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demoni
 actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
 actions.implosion+=/call_action_list,name=build_a_shard
 ]]
-	if Implosion:usable() and ((var.imp_count >= 6 and (SoulShards() < 3 or CallDreadstalkers:previous(1) or var.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or Target.timeToDie < 3 or (not DemonicCalling.known and var.imp_count > 2 and CallDreadstalkers:previous(2))) then
+	if Implosion:usable() and ((Player.imp_count >= 6 and (SoulShards() < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or Target.timeToDie < 3 or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
 		return Implosion
 	end
 	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not ItemEquipped.WilfredsSigilOfSuperiorSummoning then
@@ -2038,10 +2039,10 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if SummonDemonicTyrant:usable() then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if HandOfGuldan:usable() and (SoulShards() >= 5 or (SoulShards() >= 3 and (((HandOfGuldan:previous(2) or var.imp_count >= 3) and var.imp_count < 9) or SummonDemonicTyrant:ready(GCD() * 2) or DemonicPower:remains() > (GCD() * 2)))) then
+	if HandOfGuldan:usable() and (SoulShards() >= 5 or (SoulShards() >= 3 and (((HandOfGuldan:previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:ready(GCD() * 2) or DemonicPower:remains() > (GCD() * 2)))) then
 		return HandOfGuldan
 	end
-	if Demonbolt:usable() and HandOfGuldan:previous(1) and between(SoulShards(), 1, 3) and (var.imp_count <= 3 or HandOfGuldan:previous(3)) and DemonicCore:up() then
+	if Demonbolt:usable() and HandOfGuldan:previous(1) and between(SoulShards(), 1, 3) and (Player.imp_count <= 3 or HandOfGuldan:previous(3)) and DemonicCore:up() then
 		return Demonbolt
 	end
 	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or (Enemies() <= 2 and not SummonDemonicTyrant:ready(40))) then
@@ -2122,7 +2123,7 @@ actions.nether_portal_building+=/call_action_list,name=build_a_shard
 		if HandOfGuldan:usable() and not CallDreadstalkers:ready(18) then
 			return HandOfGuldan
 		end
-		if PowerSiphon:usable() and var.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
+		if PowerSiphon:usable() and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
 			UseCooldown(PowerSiphon)
 		end
 		if HandOfGuldan:usable() and SoulShards() >= 5 then
@@ -2183,13 +2184,13 @@ local function UpdateInterrupt()
 		_, _, _, start, ends, _, notInterruptible = UnitChannelInfo('target')
 	end
 	if not start or notInterruptible then
-		var.interrupt = nil
+		Player.interrupt = nil
 		doomedInterruptPanel:Hide()
 		return
 	end
-	var.interrupt = APL.Interrupt()
-	if var.interrupt then
-		doomedInterruptPanel.icon:SetTexture(var.interrupt.icon)
+	Player.interrupt = APL.Interrupt()
+	if Player.interrupt then
+		doomedInterruptPanel.icon:SetTexture(Player.interrupt.icon)
 		doomedInterruptPanel.icon:Show()
 		doomedInterruptPanel.border:Show()
 	else
@@ -2283,10 +2284,10 @@ local function UpdateGlows()
 		glow = glows[i]
 		icon = glow.button.icon:GetTexture()
 		if icon and glow.button.icon:IsVisible() and (
-			(Opt.glow.main and var.main and icon == var.main.icon) or
-			(Opt.glow.cooldown and var.cd and icon == var.cd.icon) or
-			(Opt.glow.interrupt and var.interrupt and icon == var.interrupt.icon) or
-			(Opt.glow.extra and var.extra and icon == var.extra.icon)
+			(Opt.glow.main and Player.main and icon == Player.main.icon) or
+			(Opt.glow.cooldown and Player.cd and icon == Player.cd.icon) or
+			(Opt.glow.interrupt and Player.interrupt and icon == Player.interrupt.icon) or
+			(Opt.glow.extra and Player.extra and icon == Player.extra.icon)
 			) then
 			if not glow:IsVisible() then
 				glow.animIn:Play()
@@ -2316,10 +2317,10 @@ local function Disappear()
 	doomedCooldownPanel:Hide()
 	doomedInterruptPanel:Hide()
 	doomedExtraPanel:Hide()
-	var.main, var.last_main = nil
-	var.cd, var.last_cd = nil
-	var.interrupt = nil
-	var.extra, var.last_extra = nil
+	Player.main, Player.last_main = nil
+	Player.cd, Player.last_cd = nil
+	Player.interrupt = nil
+	Player.extra, Player.last_extra = nil
 	UpdateGlows()
 end
 
@@ -2460,12 +2461,12 @@ local function UpdateDisplay()
 	timer.display = 0
 	local dim, text = false, false
 	if Opt.dimmer then
-		dim = not ((not var.main) or
-		           (var.main.spellId and IsUsableSpell(var.main.spellId)) or
-		           (var.main.itemId and IsUsableItem(var.main.itemId)))
+		dim = not ((not Player.main) or
+		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
+		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if currentSpec == SPEC.DEMONOLOGY and var.pet_count > 0 then
-		doomedPanel.text:SetText(var.pet_count)
+	if currentSpec == SPEC.DEMONOLOGY and Player.pet_count > 0 then
+		doomedPanel.text:SetText(Player.pet_count)
 		text = true
 	end
 	doomedPanel.dimmer:SetShown(dim)
@@ -2475,34 +2476,34 @@ end
 local function UpdateCombat()
 	timer.combat = 0
 	local _, start, duration, remains, spellId
-	var.ctime = GetTime()
-	var.time = var.ctime - var.time_diff
-	var.last_main = var.main
-	var.last_cd = var.cd
-	var.last_extra = var.extra
-	var.main =  nil
-	var.cd = nil
-	var.extra = nil
+	Player.ctime = GetTime()
+	Player.time = Player.ctime - Player.time_diff
+	Player.last_main = Player.main
+	Player.last_cd = Player.cd
+	Player.last_extra = Player.extra
+	Player.main =  nil
+	Player.cd = nil
+	Player.extra = nil
 	start, duration = GetSpellCooldown(61304)
-	var.gcd_remains = start > 0 and duration - (var.ctime - start) or 0
+	Player.gcd_remains = start > 0 and duration - (Player.ctime - start) or 0
 	_, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
-	var.ability_casting = abilities.bySpellId[spellId]
-	var.execute_remains = max(remains and (remains / 1000 - var.ctime) or 0, var.gcd_remains)
-	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
-	var.gcd = 1.5 * var.haste_factor
-	var.health = UnitHealth('player')
-	var.health_max = UnitHealthMax('player')
-	var.mana_regen = GetPowerRegen()
-	var.mana = UnitPower('player', 0) + (var.mana_regen * var.execute_remains)
-	var.soul_shards = UnitPower('player', 7)
-	if var.ability_casting then
-		var.mana = var.mana - var.ability_casting:cost()
-		var.soul_shards = var.soul_shards - var.ability_casting:shardCost()
+	Player.ability_casting = abilities.bySpellId[spellId]
+	Player.execute_remains = max(remains and (remains / 1000 - Player.ctime) or 0, Player.gcd_remains)
+	Player.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
+	Player.gcd = 1.5 * Player.haste_factor
+	Player.health = UnitHealth('player')
+	Player.health_max = UnitHealthMax('player')
+	Player.mana_regen = GetPowerRegen()
+	Player.mana = UnitPower('player', 0) + (Player.mana_regen * Player.execute_remains)
+	Player.soul_shards = UnitPower('player', 7)
+	if Player.ability_casting then
+		Player.mana = Player.mana - Player.ability_casting:cost()
+		Player.soul_shards = Player.soul_shards - Player.ability_casting:shardCost()
 	end
-	var.mana = min(max(var.mana, 0), var.mana_max)
-	var.soul_shards = min(max(var.soul_shards, 0), var.soul_shards_max)
-	var.pet = UnitGUID('pet')
-	var.pet_active = GetPetActive()
+	Player.mana = min(max(Player.mana, 0), Player.mana_max)
+	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
+	Player.pet = UnitGUID('pet')
+	Player.pet_active = GetPetActive()
 
 	summonedPets:purge()
 	trackAuras:purge()
@@ -2515,14 +2516,14 @@ local function UpdateCombat()
 	end
 
 	if currentSpec == SPEC.DEMONOLOGY then
-		var.pet_count = summonedPets:count()
-		var.imp_count = Pet.WildImp:count()
+		Player.pet_count = summonedPets:count()
+		Player.imp_count = Pet.WildImp:count()
 	end
 
-	var.main = APL[currentSpec]:main()
-	if var.main ~= var.last_main then
-		if var.main then
-			doomedPanel.icon:SetTexture(var.main.icon)
+	Player.main = APL[currentSpec]:main()
+	if Player.main ~= Player.last_main then
+		if Player.main then
+			doomedPanel.icon:SetTexture(Player.main.icon)
 			doomedPanel.icon:Show()
 			doomedPanel.border:Show()
 		else
@@ -2530,17 +2531,17 @@ local function UpdateCombat()
 			doomedPanel.border:Hide()
 		end
 	end
-	if var.cd ~= var.last_cd then
-		if var.cd then
-			doomedCooldownPanel.icon:SetTexture(var.cd.icon)
+	if Player.cd ~= Player.last_cd then
+		if Player.cd then
+			doomedCooldownPanel.icon:SetTexture(Player.cd.icon)
 			doomedCooldownPanel:Show()
 		else
 			doomedCooldownPanel:Hide()
 		end
 	end
-	if var.extra ~= var.last_extra then
-		if var.extra then
-			doomedExtraPanel.icon:SetTexture(var.extra.icon)
+	if Player.extra ~= Player.last_extra then
+		if Player.extra then
+			doomedExtraPanel.icon:SetTexture(Player.extra.icon)
 			doomedExtraPanel:Show()
 		else
 			doomedExtraPanel:Hide()
@@ -2636,7 +2637,7 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 			end
 		end
 	end
-	if srcGUID ~= var.player then
+	if srcGUID ~= Player.guid then
 		return
 	end
 	if eventType == 'SPELL_SUMMON' then
@@ -2655,10 +2656,10 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 			Pet.WildImp:sacrifice()
 		end
 	end
-	if dstGUID == var.player then
+	if dstGUID == Player.guid then
 		if ability == DemonicPower then
 			if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
-				summonedPets.empowered_ends = var.time + 15
+				summonedPets.empowered_ends = Player.time + 15
 			elseif eventType == 'SPELL_AURA_REMOVED' then
 				summonedPets.empowered_ends = 0
 			end
@@ -2668,9 +2669,9 @@ end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED()
 	local timeStamp, eventType, _, srcGUID, _, _, _, dstGUID, _, _, _, spellId, spellName, _, missType = CombatLogGetCurrentEventInfo()
-	var.time = timeStamp
-	var.ctime = GetTime()
-	var.time_diff = var.ctime - var.time
+	Player.time = timeStamp
+	Player.ctime = GetTime()
+	Player.time_diff = Player.ctime - Player.time
 
 	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
 		trackAuras:remove(dstGUID)
@@ -2679,9 +2680,9 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		end
 	end
 	if Opt.auto_aoe and (eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED') then
-		if dstGUID == var.player then
+		if dstGUID == Player.guid then
 			autoAoe:add(srcGUID, true)
-		elseif srcGUID == var.player and not (missType == 'EVADE' or missType == 'IMMUNE') then
+		elseif srcGUID == Player.guid and not (missType == 'EVADE' or missType == 'IMMUNE') then
 			autoAoe:add(dstGUID, true)
 		end
 	end
@@ -2692,7 +2693,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		APL[currentSpec]:combat_event(eventType, srcGUID, dstGUID, spellId, ability)
 	end
 
-	if srcGUID ~= var.player or not (
+	if srcGUID ~= Player.guid or not (
 	   eventType == 'SPELL_CAST_START' or
 	   eventType == 'SPELL_CAST_SUCCESS' or
 	   eventType == 'SPELL_CAST_FAILED' or
@@ -2715,21 +2716,21 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 --[[ DEBUG ]
 	print(format('EVENT %s TRACK CHECK FOR %s ID %d', eventType, spellName, spellId))
 	if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' or eventType == 'SPELL_PERIODIC_DAMAGE' or eventType == 'SPELL_DAMAGE' then
-		print(format('%s: %s - time: %.2f - time since last: %.2f', eventType, spellName, var.time, var.time - (ability.last_trigger or var.time)))
-		ability.last_trigger = var.time
+		print(format('%s: %s - time: %.2f - time since last: %.2f', eventType, spellName, Player.time, Player.time - (ability.last_trigger or Player.time)))
+		ability.last_trigger = Player.time
 	end
 --[ DEBUG ]]
 	UpdateCombatWithin(0.05)
 	if eventType == 'SPELL_CAST_SUCCESS' then
-		var.last_ability = ability
+		Player.last_ability = ability
 		if ability.triggers_gcd then
 			PreviousGCD[10] = nil
 			table.insert(PreviousGCD, 1, ability)
 		end
 		if ability.travel_start then
-			ability.travel_start[dstGUID] = var.time
+			ability.travel_start[dstGUID] = Player.time
 			if not ability.range_est_start then
-				ability.range_est_start = var.time
+				ability.range_est_start = Player.time
 			end
 		end
 		if Opt.previous and doomedPanel:IsVisible() then
@@ -2740,7 +2741,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		end
 		return
 	end
-	if dstGUID == var.player or dstGUID == var.pet then
+	if dstGUID == Player.guid or dstGUID == Player.pet then
 		return
 	end
 	if ability.aura_targets then
@@ -2764,7 +2765,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			ability.travel_start[dstGUID] = nil
 		end
 		if ability.range_est_start then
-			Target.estimated_range = floor(ability.velocity * (var.time - ability.range_est_start))
+			Target.estimated_range = floor(ability.velocity * (Player.time - ability.range_est_start))
 			ability.range_est_start = nil
 		end
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and doomedPanel:IsVisible() and ability == doomedPreviousPanel.ability then
@@ -2815,7 +2816,7 @@ local function UpdateTargetInfo()
 		Target.boss = false
 	elseif Target.level == -1 then
 		Target.boss = true
-	elseif var.instance == 'party' and Target.level >= UnitLevel('player') + 2 then
+	elseif Player.instance == 'party' and Target.level >= UnitLevel('player') + 2 then
 		Target.boss = true
 	else
 		Target.boss = false
@@ -2848,7 +2849,7 @@ function events:UNIT_FLAGS(unitID)
 end
 
 function events:PLAYER_REGEN_DISABLED()
-	combatStartTime = GetTime() - var.time_diff
+	combatStartTime = GetTime() - Player.time_diff
 end
 
 function events:PLAYER_REGEN_ENABLED()
@@ -2870,15 +2871,15 @@ function events:PLAYER_REGEN_ENABLED()
 		autoAoe:clear()
 		autoAoe:update()
 	end
-	if var.last_ability then
-		var.last_ability = nil
+	if Player.last_ability then
+		Player.last_ability = nil
 		doomedPreviousPanel:Hide()
 	end
 end
 
 local function UpdateAbilityData()
-	var.mana_max = UnitPowerMax('player', 0)
-	var.soul_shards_max = UnitPowerMax('player', 7)
+	Player.mana_max = UnitPowerMax('player', 0)
+	Player.soul_shards_max = UnitPowerMax('player', 7)
 	local _, ability, pet
 
 	for _, ability in next, abilities.all do
@@ -2994,8 +2995,8 @@ function events:PLAYER_ENTERING_WORLD()
 		HookResourceFrame()
 	end
 	local _
-	_, var.instance = IsInInstance()
-	var.player = UnitGUID('player')
+	_, Player.instance = IsInInstance()
+	Player.guid = UnitGUID('player')
 end
 
 doomedPanel.button:SetScript('OnClick', function(self, button, down)
