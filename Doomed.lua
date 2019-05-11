@@ -885,6 +885,9 @@ Felstorm.triggers_gcd = false
 Felstorm:autoAoe()
 local FelFirebolt = Ability.add(104318, false, false)
 FelFirebolt.triggers_gcd = false
+local LegionStrike = Ability.add(30213, 'pet', true)
+LegionStrike.requires_pet = true
+LegionStrike:autoAoe()
 ------ Talents Abilities
 local BilescourgeBombers = Ability.add(267211, false, true, 267213)
 BilescourgeBombers.buff_duration = 6
@@ -2632,9 +2635,9 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		end
 	end
 	if Opt.auto_aoe and (eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED') then
-		if dstGUID == Player.guid then
+		if dstGUID == Player.guid or dstGUID == Player.pet then
 			autoAoe:add(srcGUID, true)
-		elseif srcGUID == Player.guid and not (missType == 'EVADE' or missType == 'IMMUNE') then
+		elseif (srcGUID == Player.guid or srcGUID == Player.pet) and not (missType == 'EVADE' or missType == 'IMMUNE') then
 			autoAoe:add(dstGUID, true)
 		end
 	end
@@ -2874,6 +2877,7 @@ local function UpdateAbilityData()
 	SummonSuccubus.known = SummonSuccubus.known and not SummonShivarra.known
 	SummonFelguard.known = SummonFelguard.known and not SummonWrathguard.known
 	AxeToss.known = SummonFelguard.known or SummonWrathguard.known
+	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
 	SpellLock.known = SummonFelhunter.known or SummonObserver.known
 	FelFirebolt.known = Pet.WildImp.known
 
