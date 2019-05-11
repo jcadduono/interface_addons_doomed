@@ -1050,6 +1050,16 @@ function SummonedPet:count()
 	return count
 end
 
+function SummonedPet:expiring()
+	local count, guid, unit = 0
+	for guid, unit in next, self.active_units do
+		if unit.expires - Player.time <= Player.execute_remains then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 function SummonedPet:addUnit(guid)
 	local unit = {
 		guid = guid,
@@ -1346,6 +1356,19 @@ SummonWrathguard.up = SummonPetUp
 
 function HandOfGuldan:shardCost()
 	return min(max(Player.soul_shards, 1), 3)
+end
+
+function DemonicCore:remains()
+	if Pet.Dreadstalker:expiring() > 0 then
+		return self:duration()
+	end
+	return Ability.remains(self)
+end
+
+function DemonicCore:stack()
+	local count = Ability.stack(self)
+	count = count + Pet.Dreadstalker:expiring()
+	return min(count, 4)
 end
 
 function CallDreadstalkers:shardCost()
@@ -1915,6 +1938,9 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Doom:usable() and Doom:refreshable() and Target.timeToDie > (Doom:remains() + 30) then
 		return Doom
 	end
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and DemonicCore:remains() <= HandOfGuldan:castTime() then
+		return Demonbolt
+	end
 	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or (Player.soul_shards >= 3 and not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or (SummonDemonicTyrant:ready(Player.gcd * (DemonicConsumption.known and 2 or 4)))) and (not SummonVilefiend.known or not SummonVilefiend:ready(3)))) then
 		return HandOfGuldan
 	end
@@ -1932,6 +1958,9 @@ APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 actions.build_a_shard=soul_strike,if=!talent.demonic_consumption.enabled|time>15|prev_gcd.1.hand_of_guldan&!buff.bloodlust.remains
 actions.build_a_shard+=/shadow_bolt
 ]]
+	if Demonbolt:usable() and DemonicCore:up() and DemonicCore:remains() <= ShadowBoltDemo:castTime() then
+		return Demonbolt
+	end
 	if SoulStrike:usable() and (not DemonicConsumption.known or TimeInCombat() > 15 or (HandOfGuldan:previous(1) and not BloodlustActive())) then
 		return SoulStrike
 	end
