@@ -1274,22 +1274,6 @@ local function PlayerIsMoving()
 	return GetUnitSpeed('player') ~= 0
 end
 
-local function TargetIsStunnable()
-	if Target.player then
-		return true
-	end
-	if Target.boss then
-		return false
-	end
-	if Player.instance == 'raid' then
-		return false
-	end
-	if Target.healthMax > Player.health_max * 10 then
-		return false
-	end
-	return true
-end
-
 local function InArenaOrBattleground()
 	return Player.instance == 'arena' or Player.instance == 'pvp'
 end
@@ -2809,23 +2793,22 @@ local function UpdateTargetInfo()
 			Target.healthArray[i] = UnitHealth('target')
 		end
 	end
+	Target.boss = false
+	Target.stunnable = true
 	Target.level = UnitLevel('target')
 	Target.healthMax = UnitHealthMax('target')
 	Target.player = UnitIsPlayer('target')
-	if Target.player then
-		Target.boss = false
-	elseif Target.level == -1 then
-		Target.boss = true
-	elseif Player.instance == 'party' and Target.level >= UnitLevel('player') + 2 then
-		Target.boss = true
-	else
-		Target.boss = false
+	if not Target.player then
+		if Target.level == -1 or (Player.instance == 'party' and Target.level >= UnitLevel('player') + 2) then
+			Target.boss = true
+			Target.stunnable = false
+		elseif Player.instance == 'raid' or (Target.healthMax > Player.health_max * 10) then
+			Target.stunnable = false
+		end
 	end
 	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
-	Target.stunnable = false
 	if Target.hostile or Opt.always_on then
 		UpdateTargetHealth()
-		Target.stunnable = TargetIsStunnable()
 		UpdateCombat()
 		doomedPanel:Show()
 		return true
