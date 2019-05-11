@@ -431,7 +431,7 @@ function Ability:usable()
 end
 
 function Ability:remains()
-	if self:traveling() then
+	if self:traveling() or self:casting() then
 		return self:duration()
 	end
 	local _, i, id, expires
@@ -458,23 +458,11 @@ function Ability:refreshable()
 end
 
 function Ability:up()
-	if self:traveling() or self:casting() then
-		return true
-	end
-	local _, i, id, expires
-	for i = 1, 40 do
-		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
-		if not id then
-			return false
-		end
-		if self:match(id) then
-			return expires == 0 or expires - var.ctime > var.execute_remains
-		end
-	end
+	return self:remains() > 0
 end
 
 function Ability:down()
-	return not self:up()
+	return self:remains() <= 0
 end
 
 function Ability:setVelocity(velocity)
@@ -731,6 +719,11 @@ SpellLock.cooldown_duration = 24
 local GrimoireOfSacrifice = Ability.add(108503, true, true, 196099)
 GrimoireOfSacrifice.buff_duration = 3600
 GrimoireOfSacrifice.cooldown_duration = 30
+local MortalCoil = Ability.add(6789, false, true)
+MortalCoil.mana_cost = 2
+MortalCoil.buff_duration = 3
+MortalCoil.cooldown_duration = 45
+MortalCoil:setVelocity(24)
 ------ Procs
 local SoulConduit = Ability.add(215941, true, true)
 ------ Permanent Pets
@@ -790,6 +783,7 @@ ShadowBolt:setVelocity(25)
 local SummonDarkglare = Ability.add(205180, false, true)
 SummonDarkglare.mana_cost = 2
 SummonDarkglare.cooldown_duration = 180
+SummonDarkglare.summon_count = 1
 local UnstableAffliction = Ability.add(30108, false, true)
 UnstableAffliction.shard_cost = 1
 UnstableAffliction.buff_duration = 8
@@ -822,11 +816,6 @@ Haunt.mana_cost = 2
 Haunt.buff_duration = 15
 Haunt.cooldown_duration = 15
 Haunt:setVelocity(40)
-local MortalCoil = Ability.add(6789, false, true)
-MortalCoil.mana_cost = 2
-MortalCoil.buff_duration = 3
-MortalCoil.cooldown_duration = 45
-MortalCoil:setVelocity(24)
 local Nightfall = Ability.add(108558, false, true, 264571)
 Nightfall.buff_duration = 12
 local PhantomSingularity = Ability.add(205179, false, true, 205246)
@@ -861,9 +850,11 @@ local CallDreadstalkers = Ability.add(104316, false, true)
 CallDreadstalkers.buff_duration = 12
 CallDreadstalkers.cooldown_duration = 20
 CallDreadstalkers.shard_cost = 2
+CallDreadstalkers.summon_count = 2
 local Demonbolt = Ability.add(264178, false, true)
 Demonbolt.mana_cost = 2
 Demonbolt.shard_cost = -2
+Demonbolt:setVelocity(35)
 local HandOfGuldan = Ability.add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
 HandOfGuldan:autoAoe(true)
@@ -873,10 +864,12 @@ Implosion:autoAoe()
 local ShadowBoltDemo = Ability.add(686, false, true)
 ShadowBoltDemo.mana_cost = 2
 ShadowBoltDemo.shard_cost = -1
+ShadowBoltDemo:setVelocity(20)
 local SummonDemonicTyrant = Ability.add(265187, true, true)
 SummonDemonicTyrant.buff_duration = 15
 SummonDemonicTyrant.cooldown_duration = 90
 SummonDemonicTyrant.mana_cost = 2
+SummonDemonicTyrant.summon_count = 1
 ------ Pet Abilities
 local AxeToss = Ability.add(89766, 'pet', true)
 AxeToss.cooldown_duration = 30
@@ -917,6 +910,7 @@ local InnerDemons = Ability.add(267216, false, true)
 local GrimoireFelguard = Ability.add(111898, false, true)
 GrimoireFelguard.cooldown_duration = 120
 GrimoireFelguard.shard_cost = 1
+GrimoireFelguard.summon_count = 1
 local NetherPortal = Ability.add(267217, true, true, 267218)
 NetherPortal.buff_duration = 15
 NetherPortal.cooldown_duration = 180
@@ -931,6 +925,7 @@ local SummonVilefiend = Ability.add(264119, false, true)
 SummonVilefiend.buff_duration = 15
 SummonVilefiend.cooldown_duration = 45
 SummonVilefiend.shard_cost = 1
+SummonVilefiend.summon_count = 1
 ------ Procs
 local DemonicCore = Ability.add(267102, true, true, 264173)
 DemonicCore.buff_duration = 20
@@ -980,11 +975,7 @@ function summonedPets:count()
 	local _, pet, guid, unit
 	local count = 0
 	for _, pet in next, self.known do
-		for guid, unit in next, pet.active_units do
-			if unit.expires - var.time > var.execute_remains then
-				count = count + 1
-			end
-		end
+		count = count + pet:count()
 	end
 	return count
 end
@@ -1023,12 +1014,15 @@ end
 
 function SummonedPet:remains()
 	local expires_max, guid, unit = 0
+	if self.summon_spell and self.summon_spell:casting() then
+		expires_max = self.duration
+	end
 	for guid, unit in next, self.active_units do
 		if unit.expires > expires_max then
 			expires_max = unit.expires
 		end
 	end
-	return min(max(expires_max - var.time - var.execute_remains, 0), self.duration)
+	return max(expires_max - var.time - var.execute_remains, 0)
 end
 
 function SummonedPet:up()
@@ -1036,11 +1030,14 @@ function SummonedPet:up()
 end
 
 function SummonedPet:down()
-	return not self:up()
+	return self:remains() <= 0
 end
 
 function SummonedPet:count()
 	local count, guid, unit = 0
+	if self.summon_spell and self.summon_spell:casting() then
+		count = count + self.summon_spell.summon_count
+	end
 	for guid, unit in next, self.active_units do
 		if unit.expires - var.time > var.execute_remains then
 			count = count + 1
@@ -1066,10 +1063,14 @@ end
 
 -- Summoned Pets
 Pet.Darkglare = SummonedPet.add(103673, 20)
+Pet.Darkglare.summon_spell = SummonDarkglare
 Pet.DemonicTyrant = SummonedPet.add(135002, 15)
+Pet.DemonicTyrant.summon_spell = SummonDemonicTyrant
 Pet.Dreadstalker = SummonedPet.add(98035, 12)
-Pet.Felguard = SummonedPet.add(17252, 15) -- Grimoire: Felguard
+Pet.Felguard = SummonedPet.add(17252, 15)
+Pet.Felguard.summon_spell = GrimoireFelguard
 Pet.Vilefiend = SummonedPet.add(135816, 15)
+Pet.Vilefiend.summon_spell = SummonVilefiend
 Pet.WildImp = SummonedPet.add(55659, 20, 143622)
 ---- Nether Portal / Inner Demons
 Pet.Bilescourge = SummonedPet.add(136404, 15)
@@ -1321,10 +1322,6 @@ function PowerSiphon:usable()
 	return var.imp_count > 0 and Ability.usable(self)
 end
 
-function Corruption:up()
-	return Ability.up(self) or SeedOfCorruption:previous()
-end
-
 function Corruption:remains()
 	if SeedOfCorruption:up() or SeedOfCorruption:previous() then
 		return self:duration()
@@ -1374,29 +1371,16 @@ function UnstableAffliction:next()
 	return UnstableAffliction:lowest()
 end
 
-function UnstableAffliction:up()
-	return UnstableAffliction[1]:up() or UnstableAffliction[2]:up() or UnstableAffliction[3]:up() or UnstableAffliction[4]:up() or UnstableAffliction[5]:up()
-end
-
-local function UnstableAfflictionRemains(self)
+UnstableAffliction[1].remains = function(self)
 	if UnstableAffliction:casting() and UnstableAffliction:next() == self then
 		return UnstableAffliction:duration()
 	end
 	return Ability.remains(self)
 end
-
-local function UnstableAfflictionUp(self)
-	if UnstableAffliction:casting() and UnstableAffliction:next() == self then
-		return true
-	end
-	return Ability.up(self)
-end
-
-local i
-for i = 1, 5 do
-	UnstableAffliction[i].remains = UnstableAfflictionRemains
-	UnstableAffliction[i].up = UnstableAfflictionUp
-end
+UnstableAffliction[2].remains = UnstableAffliction[1].remains
+UnstableAffliction[3].remains = UnstableAffliction[1].remains
+UnstableAffliction[4].remains = UnstableAffliction[1].remains
+UnstableAffliction[5].remains = UnstableAffliction[1].remains
 
 local function SummonPetUp(self)
 	if self:casting() then
@@ -1451,21 +1435,6 @@ end
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
-
-function Pet.Dreadstalker:count()
-	local count = SummonedPet.count(self)
-	if CallDreadstalkers:casting() then
-		count = count + 2
-	end
-	return count
-end
-
-function Pet.Dreadstalker:remains()
-	if CallDreadstalkers:casting() then
-		return self.duration
-	end
-	return SummonedPet.remains(self)
-end
 
 function Pet.WildImp:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
@@ -1922,7 +1891,7 @@ actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
 ]]
-	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or DemonicTyrant:up() and (not NetherPortal.known or not NetherPortal:ready(160))) then
+	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.DemonicTyrant:up() and (not NetherPortal.known or not NetherPortal:ready(160))) then
 		UseCooldown(BattlePotionOfIntellect)
 	end
 	local apl
@@ -1934,6 +1903,9 @@ actions+=/call_action_list,name=build_a_shard
 		return HandOfGuldan
 	end
 	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:stack() == 4 then
+		return Demonbolt
+	end
+	if Demonbolt:usable() and SoulShards() <= 4 and DemonicCore:up() and DemonicCore:remains() < (GCD() * DemonicCore:stack()) then
 		return Demonbolt
 	end
 	if ExplosivePotential.known and var.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
