@@ -1549,8 +1549,13 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 		elseif not PetIsSummoned() then
 			return SummonImp
 		end
-		if Opt.pot and PotionOfProlongedPower:usable() then
-			UseCooldown(PotionOfProlongedPower)
+		if Opt.pot and Target.boss then
+			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(FlaskOfEndlessFathoms)
+			end
+			if BattlePotionOfIntellect:usable() then
+				UseCooldown(BattlePotionOfIntellect)
+			end
 		end
 		if Enemies() >= 3 and SeedOfCorruption:usable() and SeedOfCorruption:down() then
 			return SeedOfCorruption
@@ -1835,8 +1840,13 @@ actions.precombat+=/demonbolt
 				return SummonWrathguard
 			end
 		end
-		if Opt.pot and Target.boss and PotionOfProlongedPower:usable() then
-			UseCooldown(PotionOfProlongedPower)
+		if Opt.pot and Target.boss then
+			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(FlaskOfEndlessFathoms)
+			end
+			if BattlePotionOfIntellect:usable() then
+				UseCooldown(BattlePotionOfIntellect)
+			end
 		end
 		if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
 			return Demonbolt
@@ -2133,8 +2143,13 @@ APL[SPEC.DESTRUCTION].main = function(self)
 		elseif not PetIsSummoned() then
 			return SummonImp
 		end
-		if Opt.pot and PotionOfProlongedPower:usable() then
-			UseCooldown(PotionOfProlongedPower)
+		if Opt.pot and Target.boss then
+			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(FlaskOfEndlessFathoms)
+			end
+			if BattlePotionOfIntellect:usable() then
+				UseCooldown(BattlePotionOfIntellect)
+			end
 		end
 	else
 		if GrimoireOfSacrifice.known then
@@ -3243,7 +3258,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		if msg[2] then
 			Opt.pot = msg[2] == 'on'
 		end
-		return print('Doomed - Show Battle potions in cooldown UI: ' .. (Opt.pot and '|cFF00C000On' or '|cFFC00000Off'))
+		return print('Doomed - Show flasks and battle potions in cooldown UI: ' .. (Opt.pot and '|cFF00C000On' or '|cFFC00000Off'))
 	end
 	if startsWith(msg[1], 'health') then
 		if msg[2] then
@@ -3279,7 +3294,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		'interrupt |cFF00C000on|r/|cFFC00000off|r - show an icon for interruptable spells',
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
-		'pot |cFF00C000on|r/|cFFC00000off|r - show Battle potions in cooldown UI',
+		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
 	} do
