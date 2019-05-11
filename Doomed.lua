@@ -107,7 +107,26 @@ local timer = {
 	health = 0
 }
 
-local currentSpec, targetMode, combatStartTime = 0, 0, 0, 0
+-- current player information
+local Player = {
+	time = 0,
+	time_diff = 0,
+	ctime = 0,
+	combat_start = 0,
+	spec = 0,
+	gcd = 1.5,
+	health = 0,
+	health_max = 0,
+	mana = 0,
+	mana_max = 0,
+	mana_regen = 0,
+	soul_shards = 0,
+	soul_shards_max = 0,
+	previous_gcd = {},-- list of previous GCD abilities
+	equipped = {-- items equipped with special effects
+		WilfredsSigilOfSuperiorSummoning = false
+	},
+}
 
 -- current target information
 local Target = {
@@ -118,31 +137,8 @@ local Target = {
 	estimated_range = 30,
 }
 
--- list of previous GCD abilities
-local PreviousGCD = {}
-
--- items equipped with special effects
-local ItemEquipped = {
-	WilfredsSigilOfSuperiorSummoning = false
-}
-
 -- Azerite trait API access
 local Azerite = {}
-
--- current player information
-local Player = {
-	gcd = 1.5,
-	time = 0,
-	time_diff = 0,
-	ctime = 0,
-	health = 0,
-	health_max = 0,
-	mana = 0,
-	mana_max = 0,
-	mana_regen = 0,
-	soul_shards = 0,
-	soul_shards_max = 0,
-}
 
 local doomedPanel = CreateFrame('Frame', 'doomedPanel', UIParent)
 doomedPanel:SetPoint('CENTER', 0, -169)
@@ -263,21 +259,21 @@ local function SetTargetMode(mode)
 	if mode == targetMode then
 		return
 	end
-	targetMode = min(mode, #targetModes[currentSpec])
-	Player.enemy_count = targetModes[currentSpec][targetMode][1]
-	doomedPanel.targets:SetText(targetModes[currentSpec][targetMode][2])
+	targetMode = min(mode, #targetModes[Player.spec])
+	Player.enemies = targetModes[Player.spec][targetMode][1]
+	doomedPanel.targets:SetText(targetModes[Player.spec][targetMode][2])
 end
 Doomed_SetTargetMode = SetTargetMode
 
 function ToggleTargetMode()
 	local mode = targetMode + 1
-	SetTargetMode(mode > #targetModes[currentSpec] and 1 or mode)
+	SetTargetMode(mode > #targetModes[Player.spec] and 1 or mode)
 end
 Doomed_ToggleTargetMode = ToggleTargetMode
 
 local function ToggleTargetModeReverse()
 	local mode = targetMode - 1
-	SetTargetMode(mode < 1 and #targetModes[currentSpec] or mode)
+	SetTargetMode(mode < 1 and #targetModes[Player.spec] or mode)
 end
 Doomed_ToggleTargetModeReverse = ToggleTargetModeReverse
 
@@ -330,11 +326,11 @@ function autoAoe:update()
 		SetTargetMode(1)
 		return
 	end
-	Player.enemy_count = count
-	for i = #targetModes[currentSpec], 1, -1 do
-		if count >= targetModes[currentSpec][i][1] then
+	Player.enemies = count
+	for i = #targetModes[Player.spec], 1, -1 do
+		if count >= targetModes[Player.spec][i][1] then
 			SetTargetMode(i)
-			Player.enemy_count = count
+			Player.enemies = count
 			return
 		end
 	end
@@ -600,12 +596,12 @@ end
 
 function Ability:previous(n)
 	if n and n > 1 then
-		return PreviousGCD[n] == self
+		return Player.previous_gcd[n] == self
 	end
 	if self:casting() or self:channeling() then
 		return true
 	end
-	return PreviousGCD[1] == self or Player.last_ability == self
+	return Player.previous_gcd[1] == self or Player.last_ability == self
 end
 
 function Ability:azeriteRank()
@@ -1108,7 +1104,7 @@ end
 
 function InventoryItem:charges()
 	local charges = GetItemCount(self.itemId, false, true) or 0
-	if self.created_by and (self.created_by:previous() or PreviousGCD[1] == self.created_by) then
+	if self.created_by and (self.created_by:previous() or Player.previous_gcd[1] == self.created_by) then
 		charges = max(charges, self.max_charges)
 	end
 	return charges
@@ -1116,7 +1112,7 @@ end
 
 function InventoryItem:count()
 	local count = GetItemCount(self.itemId, false, false) or 0
-	if self.created_by and (self.created_by:previous() or PreviousGCD[1] == self.created_by) then
+	if self.created_by and (self.created_by:previous() or Player.previous_gcd[1] == self.created_by) then
 		count = max(count, 1)
 	end
 	return count
@@ -1191,32 +1187,12 @@ end
 
 -- Start Helpful Functions
 
-local function Health()
-	return Player.health
-end
-
-local function HealthMax()
-	return Player.health_max
-end
-
 local function HealthPct()
 	return Player.health / Player.health_max * 100
 end
 
-local function Mana()
-	return Player.mana
-end
-
 local function ManaDeficit()
 	return Player.mana_max - Player.mana
-end
-
-local function ManaRegen()
-	return Player.mana_regen
-end
-
-local function ManaMax()
-	return Player.mana_max
 end
 
 local function ManaTimeToMax()
@@ -1227,21 +1203,9 @@ local function ManaTimeToMax()
 	return deficit / Player.mana_regen
 end
 
-local function SoulShards()
-	return Player.soul_shards
-end
-
-local function GCD()
-	return Player.gcd
-end
-
-local function Enemies()
-	return Player.enemy_count
-end
-
 local function TimeInCombat()
-	if combatStartTime > 0 then
-		return Player.time - combatStartTime
+	if Player.combat_start > 0 then
+		return Player.time - Player.combat_start
 	end
 	if Player.ability_casting then
 		return 0.1
@@ -1268,18 +1232,6 @@ local function BloodlustActive()
 			return true
 		end
 	end
-end
-
-local function PlayerIsMoving()
-	return GetUnitSpeed('player') ~= 0
-end
-
-local function InArenaOrBattleground()
-	return Player.instance == 'arena' or Player.instance == 'pvp'
-end
-
-local function SpellHasteFactor()
-	return Player.haste_factor
 end
 
 function GetPetActive()
@@ -1557,14 +1509,14 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
-		if Enemies() >= 3 and SeedOfCorruption:usable() and SeedOfCorruption:down() then
+		if Player.enemies >= 3 and SeedOfCorruption:usable() and SeedOfCorruption:down() then
 			return SeedOfCorruption
 		end
 		if Haunt.known then
 			if Haunt:usable() then
 				return Haunt
 			end
-		elseif Enemies() < 3 and ShadowBolt:usable() then
+		elseif Player.enemies < 3 and ShadowBolt:usable() then
 			return ShadowBolt
 		end
 		
@@ -1608,35 +1560,35 @@ actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
 ]]
 	local apl
-	Player.use_seed = (SowTheSeeds.known and Enemies() >= 3) or (SiphonLife.known and Enemies() >= 5) or Enemies() >= 8
-	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= GCD())) then
-		Player.padding = GCD()
+	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
+	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= Player.gcd)) then
+		Player.padding = Player.gcd
 	else
 		Player.padding = ShadowBolt:castTime() * (CascadingCalamity.known and 1 or 0)
 	end
-	Player.maintain_se = (Enemies() <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Enemies() > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
+	Player.maintain_se = (Player.enemies <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Player.enemies > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
 	apl = self:cooldowns()
 	if apl then return apl end
-	if DrainSoul:usable() and Target.timeToDie <= GCD() and SoulShards() < 5 then
+	if DrainSoul:usable() and Target.timeToDie <= Player.gcd and Player.soul_shards < 5 then
 		return DrainSoul
 	end
-	if Haunt:usable() and Enemies() <= 2 then
+	if Haunt:usable() and Player.enemies <= 2 then
 		return Haunt
 	end
-	if SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or SoulShards() == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= GCD() or Enemies() > 1) then
+	if SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
 		UseCooldown(SummonDarkglare)
 	end
-	if Deathbolt:usable() and not SummonDarkglare:ready() and Enemies() == 1 then
+	if Deathbolt:usable() and not SummonDarkglare:ready() and Player.enemies == 1 then
 		return Deathbolt
 	end
-	if Agony:usable() and Agony:remains() <= GCD() + ShadowBolt:castTime() and Target.timeToDie > 8 then
+	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
 		return Agony
 	end
 	if UnstableAffliction:usable() and Target.timeToDie <= 8 then
 		return UnstableAffliction
 	end
 	if ShadowEmbrace.known and Player.maintain_se and ShadowEmbrace:up() then
-		if DrainSoul:usable() and ShadowEmbrace:remains() <= (GCD() * 2) then
+		if DrainSoul:usable() and ShadowEmbrace:remains() <= (Player.gcd * 2) then
 			return DrainSoul
 		end
 		if ShadowBolt:usable() and ShadowEmbrace:remains() <= (ShadowBolt:castTime() * 2 + ShadowBolt:travelTime()) and not ShadowBolt:traveling() then
@@ -1649,7 +1601,7 @@ actions+=/call_action_list,name=fillers
 	if VileTaint:usable() and TimeInCombat() > 15 and Target.timeToDie >= 10 then
 		UseCooldown(VileTaint)
 	end
-	if SoulShards() == 5 then
+	if Player.soul_shards == 5 then
 		if Player.use_seed then
 			if SeedOfCorruption:usable() then
 				return SeedOfCorruption
@@ -1668,7 +1620,7 @@ actions+=/call_action_list,name=fillers
 	if VileTaint:usable() and TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
 	end
-	if DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and PhantomSingularity:up() or Target.timeToDie < 20 + GCD() or Enemies() > 1) then
+	if DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and PhantomSingularity:up() or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
 		UseCooldown(DarkSoulMisery)
 	end
 	apl = self:spenders()
@@ -1714,16 +1666,16 @@ actions.dots+=/agony,target_if=min:remains,if=!talent.creeping_death.enabled&act
 actions.dots+=/siphon_life,target_if=min:remains,if=(active_dot.siphon_life<8-talent.creeping_death.enabled-spell_targets.sow_the_seeds_aoe)&target.time_to_die>10&refreshable&(!remains&spell_targets.seed_of_corruption_aoe=1|cooldown.summon_darkglare.remains>soul_shard*action.unstable_affliction.execute_time)
 actions.dots+=/corruption,cycle_targets=1,if=spell_targets.seed_of_corruption_aoe<3+raid_event.invulnerable.up+talent.writhe_in_agony.enabled&(remains<=gcd|cooldown.summon_darkglare.remains>10&refreshable)&target.time_to_die>10
 ]]
-	if Enemies() >= 3 and SeedOfCorruption:usable() and Corruption:remains() < (SeedOfCorruption:castTime() + (Corruption:duration() * 0.3)) and not (SeedOfCorruption:up() or SeedOfCorruption:ticking() > 0) then
+	if Player.enemies >= 3 and SeedOfCorruption:usable() and Corruption:remains() < (SeedOfCorruption:castTime() + (Corruption:duration() * 0.3)) and not (SeedOfCorruption:up() or SeedOfCorruption:ticking() > 0) then
 		return SeedOfCorruption
 	end
-	if Agony:usable() and (Agony:ticking() < (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:remains() <= GCD() or SummonDarkglare:cooldown() > 10 and (Agony:remains() < 5 or not PandemicInvocation.known and Agony:refreshable()))) then
+	if Agony:usable() and (Agony:ticking() < (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:remains() <= Player.gcd or SummonDarkglare:cooldown() > 10 and (Agony:remains() < 5 or not PandemicInvocation.known and Agony:refreshable()))) then
 		return Agony
 	end
-	if SiphonLife:usable() and (SiphonLife:ticking() < (8 - (CreepingDeath.known and 1 or 0) - Enemies())) and Target.timeToDie > 10 and SiphonLife:refreshable() and (SiphonLife:down() and Enemies() == 1 or SummonDarkglare:cooldown() > (SoulShards() * UnstableAffliction:castTime())) then
+	if SiphonLife:usable() and (SiphonLife:ticking() < (8 - (CreepingDeath.known and 1 or 0) - Player.enemies)) and Target.timeToDie > 10 and SiphonLife:refreshable() and (SiphonLife:down() and Player.enemies == 1 or SummonDarkglare:cooldown() > (Player.soul_shards * UnstableAffliction:castTime())) then
 		return SiphonLife
 	end
-	if Corruption:usable() and Enemies() < (3 + (WritheInAgony.known and 1 or 0)) and (Corruption:remains() <= GCD() or SummonDarkglare:cooldown() > 10 and Corruption:refreshable()) and Target.timeToDie > 10 then
+	if Corruption:usable() and Player.enemies < (3 + (WritheInAgony.known and 1 or 0)) and (Corruption:remains() <= Player.gcd or SummonDarkglare:cooldown() > 10 and Corruption:refreshable()) and Target.timeToDie > 10 then
 		return Corruption
 	end
 end
@@ -1749,17 +1701,17 @@ actions.fillers+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=tal
 actions.fillers+=/shadow_bolt
 ]]
 	local apl
-	if Deathbolt.known and Deathbolt:cooldown() <= (GCD() * 4) and Enemies() < 3 and SummonDarkglare:cooldown() >= (30 + GCD() + Deathbolt:cooldown()) then
+	if Deathbolt.known and Deathbolt:cooldown() <= (Player.gcd * 4) and Player.enemies < 3 and SummonDarkglare:cooldown() >= (30 + Player.gcd + Deathbolt:cooldown()) then
 		if UnstableAffliction:usable() and not UnstableAffliction:previous() and Deathbolt:cooldown() <= UnstableAffliction:castTime() then
 			return UnstableAffliction
 		end
 		apl = self:db_refresh()
 		if apl then return apl end
 	end
-	if Deathbolt:usable() and SummonDarkglare:cooldown() >= (30 + GCD()) then
+	if Deathbolt:usable() and SummonDarkglare:cooldown() >= (30 + Player.gcd) then
 		return Deathbolt
 	end
-	if PlayerIsMoving() then
+	if Player.moving then
 		if ShadowBolt:usable() and Nightfall.known and Nightfall:up() then
 			return ShadowBolt
 		end
@@ -1794,7 +1746,7 @@ actions.spenders+=/unstable_affliction,if=!variable.use_seed&contagion<=cast_tim
 actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!talent.deathbolt.enabled|cooldown.deathbolt.remains>time_to_shard|soul_shard>1)&(!talent.vile_taint.enabled|soul_shard>1)&contagion<=cast_time+variable.padding&(!azerite.cascading_calamity.enabled|buff.cascading_calamity.remains>time_to_shard)
 ]]
 	local ua_ct = UnstableAffliction:castTime()
-	if UnstableAffliction:usable() and SummonDarkglare:cooldown() <= (SoulShards() * ua_ct) and (not Deathbolt.known or Deathbolt:cooldown() <= (SoulShards() * ua_ct)) then
+	if UnstableAffliction:usable() and SummonDarkglare:cooldown() <= (Player.soul_shards * ua_ct) and (not Deathbolt.known or Deathbolt:cooldown() <= (Player.soul_shards * ua_ct)) then
 		return UnstableAffliction
 	end
 	if SummonDarkglare:ready() and Target.timeToDie > SummonDarkglare:cooldown() then
@@ -1806,13 +1758,13 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 			return SeedOfCorruption
 		end
 	elseif UnstableAffliction:usable() then
-		if not SummonDarkglare:previous() and (Deathbolt.known and Deathbolt:cooldown() <= ua_ct and not CascadingCalamity.known or (SoulShards() >= 5 and Enemies() < 2 or SoulShards() >= 2 and Enemies() >= 2) and Target.timeToDie > (4 + ua_ct) and Enemies()  == 1 or Target.timeToDie <= (8 + ua_ct * SoulShards())) then
+		if not SummonDarkglare:previous() and (Deathbolt.known and Deathbolt:cooldown() <= ua_ct and not CascadingCalamity.known or (Player.soul_shards >= 5 and Player.enemies < 2 or Player.soul_shards >= 2 and Player.enemies >= 2) and Target.timeToDie > (4 + ua_ct) and Player.enemies  == 1 or Target.timeToDie <= (8 + ua_ct * Player.soul_shards)) then
 			return UnstableAffliction
 		end
 		if UnstableAffliction:remains() <= (ua_ct + Player.padding) then
 			return UnstableAffliction
 		end
-		if (not Deathbolt.known or SoulShards() > 1) and (not VileTaint.known or SoulShards() > 1) and UnstableAffliction:remains() <= (ua_ct + Player.padding) and not CascadingCalamity.known then
+		if (not Deathbolt.known or Player.soul_shards > 1) and (not VileTaint.known or Player.soul_shards > 1) and UnstableAffliction:remains() <= (ua_ct + Player.padding) and not CascadingCalamity.known then
 			return UnstableAffliction
 		end
 	end
@@ -1897,28 +1849,28 @@ actions+=/call_action_list,name=build_a_shard
 		apl = self:dcon_opener()
 		if apl then return apl end
 	end
-	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and SoulShards() > 2 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and Player.soul_shards > 2 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 		return HandOfGuldan
 	end
-	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:stack() == 4 then
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:stack() == 4 then
 		return Demonbolt
 	end
-	if Demonbolt:usable() and SoulShards() <= 4 and DemonicCore:up() and DemonicCore:remains() < (GCD() * DemonicCore:stack()) then
+	if Demonbolt:usable() and Player.soul_shards <= 4 and DemonicCore:up() and DemonicCore:remains() < (Player.gcd * DemonicCore:stack()) then
 		return Demonbolt
 	end
 	if ExplosivePotential.known and Player.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
 		return Implosion
 	end
-	if Doom:usable() and Enemies() == 1 and Target.timeToDie > 30 and Doom:down() then
+	if Doom:usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:down() then
 		return Doom
 	end
-	if BilescourgeBombers:usable() and ExplosivePotential.known and NetherPortal.known and TimeInCombat() < 10 and Enemies() == 1 and Pet.Dreadstalker:up() then
+	if BilescourgeBombers:usable() and ExplosivePotential.known and NetherPortal.known and TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:up() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if DemonicStrength:usable() and (Enemies() == 1 or DemonicPower:up() or Player.imp_count < 6) then
+	if DemonicStrength:usable() and (Player.enemies == 1 or DemonicPower:up() or Player.imp_count < 6) then
 		UseCooldown(DemonicStrength)
 	end
-	if NetherPortal.known and Enemies() < 3 then
+	if NetherPortal.known and Player.enemies < 3 then
 --[[
 actions.nether_portal=call_action_list,name=nether_portal_building,if=cooldown.nether_portal.remains<20
 actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.nether_portal.remains>165
@@ -1930,7 +1882,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 		end
 		if apl then return apl end
 	end
-	if Enemies() > 1 then
+	if Player.enemies > 1 then
 		apl = self:implosion()
 		if apl then return apl end
 	end
@@ -1949,22 +1901,22 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if HandOfGuldan:usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:previous(1) and SummonDemonicTyrant:ready(2) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and SoulShards() < 3 and (not DemonicConsumption.known or Target.timeToDie < 20 or Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6) then
+	if SummonDemonicTyrant:usable() and Player.soul_shards < 3 and (not DemonicConsumption.known or Target.timeToDie < 20 or Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6) then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if PowerSiphon:usable() and Enemies() == 1 and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
+	if PowerSiphon:usable() and Player.enemies == 1 and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
 		UseCooldown(PowerSiphon)
 	end
 	if Doom:usable() and Doom:refreshable() and Target.timeToDie > (Doom:remains() + 30) then
 		return Doom
 	end
-	if HandOfGuldan:usable() and (SoulShards() >= 5 or (SoulShards() >= 3 and not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or (SummonDemonicTyrant:ready(GCD() * (DemonicConsumption.known and 2 or 4)))) and (not SummonVilefiend.known or not SummonVilefiend:ready(3)))) then
+	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or (Player.soul_shards >= 3 and not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or (SummonDemonicTyrant:ready(Player.gcd * (DemonicConsumption.known and 2 or 4)))) and (not SummonVilefiend.known or not SummonVilefiend:ready(3)))) then
 		return HandOfGuldan
 	end
-	if SoulStrike:usable() and SoulShards() < 5 and DemonicCore:stack() <= 2 then
+	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
 		return SoulStrike
 	end
-	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:up() and ((SummonDemonicTyrant:ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:ready(22))) or DemonicCore:stack() >= 3 or DemonicCore:remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:up())) then
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and ((SummonDemonicTyrant:ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:ready(22))) or DemonicCore:stack() >= 3 or DemonicCore:remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:up())) then
 		return Demonbolt
 	end
 	return self:build_a_shard()
@@ -2021,10 +1973,10 @@ actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demoni
 actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
 actions.implosion+=/call_action_list,name=build_a_shard
 ]]
-	if Implosion:usable() and ((Player.imp_count >= 6 and (SoulShards() < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or Target.timeToDie < 3 or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
+	if Implosion:usable() and ((Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or Target.timeToDie < 3 or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
 		return Implosion
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not ItemEquipped.WilfredsSigilOfSuperiorSummoning then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not Player.equipped.WilfredsSigilOfSuperiorSummoning then
 		UseCooldown(GrimoireFelguard)
 	end
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
@@ -2033,22 +1985,22 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if SummonDemonicTyrant:usable() then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if HandOfGuldan:usable() and (SoulShards() >= 5 or (SoulShards() >= 3 and (((HandOfGuldan:previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:ready(GCD() * 2) or DemonicPower:remains() > (GCD() * 2)))) then
+	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or (Player.soul_shards >= 3 and (((HandOfGuldan:previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:ready(Player.gcd * 2) or DemonicPower:remains() > (Player.gcd * 2)))) then
 		return HandOfGuldan
 	end
-	if Demonbolt:usable() and HandOfGuldan:previous(1) and between(SoulShards(), 1, 3) and (Player.imp_count <= 3 or HandOfGuldan:previous(3)) and DemonicCore:up() then
+	if Demonbolt:usable() and HandOfGuldan:previous(1) and between(Player.soul_shards, 1, 3) and (Player.imp_count <= 3 or HandOfGuldan:previous(3)) and DemonicCore:up() then
 		return Demonbolt
 	end
-	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or (Enemies() <= 2 and not SummonDemonicTyrant:ready(40))) then
+	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or (Player.enemies <= 2 and not SummonDemonicTyrant:ready(40))) then
 		UseCooldown(SummonVilefiend)
 	end
 	if BilescourgeBombers:usable() and not SummonDemonicTyrant:ready(9) then
 		UseCooldown(BilescourgeBombers)
 	end
-	if SoulStrike:usable() and SoulShards() < 5 and DemonicCore:stack() <= 2 then
+	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
 		return SoulStrike
 	end
-	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:up() and (DemonicCore:stack() >= 3 or DemonicCore:remains() <= (GCD() * 5.7)) then
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and (DemonicCore:stack() >= 3 or DemonicCore:remains() <= (Player.gcd * 5.7)) then
 		return Demonbolt
 	end
 	if Doom:usable() and Doom:refreshable() and Target.timeToDie > (Doom:remains() + 30) then
@@ -2073,7 +2025,7 @@ actions.nether_portal_active+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not ItemEquipped.WilfredsSigilOfSuperiorSummoning then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not Player.equipped.WilfredsSigilOfSuperiorSummoning then
 		UseCooldown(GrimoireFelguard)
 	end
 	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or not SummonDemonicTyrant:ready(40)) then
@@ -2082,17 +2034,17 @@ actions.nether_portal_active+=/call_action_list,name=build_a_shard
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
 		return CallDreadstalkers
 	end
-	if SoulShards() == 1 and (CallDreadstalkers:ready(ShadowBoltDemo:castTime()) or (BilescourgeBombers.known and BilescourgeBombers:ready(ShadowBoltDemo:castTime()))) then
+	if Player.soul_shards == 1 and (CallDreadstalkers:ready(ShadowBoltDemo:castTime()) or (BilescourgeBombers.known and BilescourgeBombers:ready(ShadowBoltDemo:castTime()))) then
 		local apl = self:build_a_shard()
 		if apl then return apl end
 	end
 	if HandOfGuldan:usable() and not NetherPortal:ready(165 + HandOfGuldan:castTime()) and not CallDreadstalkers:ready(Demonbolt:castTime()) and not CallDreadstalkers:ready(ShadowBoltDemo:castTime())  then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and ((SoulShards() == 0 and NetherPortal:remains() < 5) or (NetherPortal:remains() < SummonDemonicTyrant:castTime() + 0.5)) then
+	if SummonDemonicTyrant:usable() and ((Player.soul_shards == 0 and NetherPortal:remains() < 5) or (NetherPortal:remains() < SummonDemonicTyrant:castTime() + 0.5)) then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if Demonbolt:usable() and SoulShards() <= 3 and DemonicCore:up() then
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() then
 		return Demonbolt
 	end
 	return self:build_a_shard()
@@ -2107,20 +2059,20 @@ actions.nether_portal_building+=/power_siphon,if=buff.wild_imps.stack>=2&buff.de
 actions.nether_portal_building+=/hand_of_guldan,if=soul_shard>=5
 actions.nether_portal_building+=/call_action_list,name=build_a_shard
 ]]
-	if NetherPortal:usable() and SoulShards() >= 5 and (not PowerSiphon.known or DemonicCore:up()) then
+	if NetherPortal:usable() and Player.soul_shards >= 5 and (not PowerSiphon.known or DemonicCore:up()) then
 		UseCooldown(NetherPortal)
 	end
 	if CallDreadstalkers:usable() then
 		return CallDreadstalkers
 	end
-	if SoulShards() >= 3 then
+	if Player.soul_shards >= 3 then
 		if HandOfGuldan:usable() and not CallDreadstalkers:ready(18) then
 			return HandOfGuldan
 		end
 		if PowerSiphon:usable() and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
 			UseCooldown(PowerSiphon)
 		end
-		if HandOfGuldan:usable() and SoulShards() >= 5 then
+		if HandOfGuldan:usable() and Player.soul_shards >= 5 then
 			return HandOfGuldan
 		end
 	end
@@ -2303,10 +2255,10 @@ function events:ACTIONBAR_SLOT_CHANGED()
 end
 
 local function ShouldHide()
-	return (currentSpec == SPEC.NONE or
-		   (currentSpec == SPEC.AFFLICTION and Opt.hide.affliction) or
-		   (currentSpec == SPEC.DEMONOLOGY and Opt.hide.demonology) or
-		   (currentSpec == SPEC.DESTRUCTION and Opt.hide.destruction))
+	return (Player.spec == SPEC.NONE or
+		   (Player.spec == SPEC.AFFLICTION and Opt.hide.affliction) or
+		   (Player.spec == SPEC.DEMONOLOGY and Opt.hide.demonology) or
+		   (Player.spec == SPEC.DESTRUCTION and Opt.hide.destruction))
 end
 
 local function Disappear()
@@ -2417,7 +2369,7 @@ end
 local function OnResourceFrameShow()
 	if Opt.snap then
 		doomedPanel:ClearAllPoints()
-		local p = ResourceFramePoints[resourceAnchor.name][currentSpec][Opt.snap]
+		local p = ResourceFramePoints[resourceAnchor.name][Player.spec][Opt.snap]
 		doomedPanel:SetPoint(p[1], resourceAnchor.frame, p[2], p[3], p[4])
 		SnapAllPanels()
 	end
@@ -2464,7 +2416,7 @@ local function UpdateDisplay()
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if currentSpec == SPEC.DEMONOLOGY and Player.pet_count > 0 then
+	if Player.spec == SPEC.DEMONOLOGY and Player.pet_count > 0 then
 		doomedPanel.text:SetText(Player.pet_count)
 		text = true
 	end
@@ -2503,6 +2455,7 @@ local function UpdateCombat()
 	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
 	Player.pet = UnitGUID('pet')
 	Player.pet_active = GetPetActive()
+	Player.moving = GetUnitSpeed('player') ~= 0
 
 	summonedPets:purge()
 	trackAuras:purge()
@@ -2514,12 +2467,12 @@ local function UpdateCombat()
 		autoAoe:purge()
 	end
 
-	if currentSpec == SPEC.DEMONOLOGY then
+	if Player.spec == SPEC.DEMONOLOGY then
 		Player.pet_count = summonedPets:count()
 		Player.imp_count = Pet.WildImp:count()
 	end
 
-	Player.main = APL[currentSpec]:main()
+	Player.main = APL[Player.spec]:main()
 	if Player.main ~= Player.last_main then
 		if Player.main then
 			doomedPanel.icon:SetTexture(Player.main.icon)
@@ -2688,8 +2641,8 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 
 	local ability = spellId and abilities.bySpellId[spellId]
 
-	if APL[currentSpec].combat_event then
-		APL[currentSpec]:combat_event(eventType, srcGUID, dstGUID, spellId, ability)
+	if APL[Player.spec].combat_event then
+		APL[Player.spec]:combat_event(eventType, srcGUID, dstGUID, spellId, ability)
 	end
 
 	if srcGUID ~= Player.guid or not (
@@ -2723,8 +2676,8 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		Player.last_ability = ability
 		if ability.triggers_gcd then
-			PreviousGCD[10] = nil
-			table.insert(PreviousGCD, 1, ability)
+			Player.previous_gcd[10] = nil
+			table.insert(Player.previous_gcd, 1, ability)
 		end
 		if ability.travel_start then
 			ability.travel_start[dstGUID] = Player.time
@@ -2796,7 +2749,7 @@ local function UpdateTargetInfo()
 			doomedPanel:Show()
 			return true
 		end
-		if Opt.previous and combatStartTime == 0 then
+		if Opt.previous and Player.combat_start == 0 then
 			doomedPreviousPanel:Hide()
 		end
 		return
@@ -2847,11 +2800,11 @@ function events:UNIT_FLAGS(unitID)
 end
 
 function events:PLAYER_REGEN_DISABLED()
-	combatStartTime = GetTime() - Player.time_diff
+	Player.combat_start = GetTime() - Player.time_diff
 end
 
 function events:PLAYER_REGEN_ENABLED()
-	combatStartTime = 0
+	Player.combat_start = 0
 	Target.estimated_range = 30
 	local _, ability, guid
 	for _, ability in next, abilities.velocity do
@@ -2961,12 +2914,12 @@ end
 function events:PLAYER_EQUIPMENT_CHANGED()
 	Azerite:update()
 	UpdateAbilityData()
-	ItemEquipped.WilfredsSigilOfSuperiorSummoning = Equipped(132369)
+	Player.equipped.WilfredsSigilOfSuperiorSummoning = Equipped(132369)
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 	if unitName == 'player' then
-		currentSpec = GetSpecialization() or 0
+		Player.spec = GetSpecialization() or 0
 		Azerite:update()
 		UpdateAbilityData()
 		local _, i
@@ -2974,7 +2927,7 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 			inventoryItems[i].name, _, _, _, _, _, _, _, _, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
 		end
 		doomedPreviousPanel.ability = nil
-		PreviousGCD = {}
+		Player.previous_gcd = {}
 		SetTargetMode(1)
 		UpdateTargetInfo()
 		events:PLAYER_REGEN_ENABLED()
