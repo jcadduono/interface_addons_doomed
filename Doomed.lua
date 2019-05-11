@@ -134,6 +134,8 @@ local var = {
 	time = 0,
 	time_diff = 0,
 	ctime = 0,
+	health = 0,
+	health_max = 0,
 	mana = 0,
 	mana_max = 0,
 	mana_regen = 0,
@@ -1272,9 +1274,6 @@ local function PlayerIsMoving()
 end
 
 local function TargetIsStunnable()
-	if Target.stunnable ~= '?' then
-		return Target.stunnable
-	end
 	if Target.player then
 		return true
 	end
@@ -1422,14 +1421,18 @@ function SummonDemonicTyrant:shardCost()
 	return self.shard_cost
 end
 
+function SpellLock:usable()
+	if not (SummonFelhunter:up() or SummonObserver:up()) then
+		return false
+	end
+	return Ability.usable(self)
+end
+
 function AxeToss:usable()
-	if not (SummonFelguard:up() or SummonWrathguard:up()) then
+	if not Target.stunnable or not (SummonFelguard:up() or SummonWrathguard:up()) then
 		return false
 	end
-	if not TargetIsStunnable() then
-		return false
-	end
-	return self:ready()
+	return Ability.usable(self)
 end
 
 -- End Ability Modifications
@@ -2164,8 +2167,11 @@ APL[SPEC.DESTRUCTION].main = function(self)
 end
 
 APL.Interrupt = function(self)
-	if SummonFelhunter:up() and SpellLock:ready() then
+	if SpellLock:usable() then
 		return SpellLock
+	end
+	if AxeToss:usable() then
+		return AxeToss
 	end
 end
 
@@ -2818,6 +2824,7 @@ local function UpdateTargetInfo()
 	Target.stunnable = false
 	if Target.hostile or Opt.always_on then
 		UpdateTargetHealth()
+		Target.stunnable = TargetIsStunnable()
 		UpdateCombat()
 		doomedPanel:Show()
 		return true
@@ -2896,7 +2903,6 @@ local function UpdateAbilityData()
 	Pet.Felguard.known = GrimoireFelguard.known
 	Pet.Vilefiend.known = SummonVilefiend.known
 	Pet.WildImp.known = HandOfGuldan.known
-	FelFirebolt.known = Pet.WildImp.known
 	if InnerDemons.known or NetherPortal.known then
 		Pet.Bilescourge.known = true
 		Pet.Darkhound.known = true
@@ -2910,6 +2916,14 @@ local function UpdateAbilityData()
 		Pet.VoidTerror.known = true
 		Pet.Wrathguard.known = true
 	end
+	SummonImp.known = SummonImp.known and not SummonFelImp.known
+	SummonFelhunter.known = SummonFelhunter.known and not SummonObserver.known
+	SummonVoidwalker.known = SummonVoidwalker.known and not SummonVoidlord.known
+	SummonSuccubus.known = SummonSuccubus.known and not SummonShivarra.known
+	SummonFelguard.known = SummonFelguard.known and not SummonWrathguard.known
+	AxeToss.known = SummonFelguard.known or SummonWrathguard.known
+	SpellLock.known = SummonFelhunter.known or SummonObserver.known
+	FelFirebolt.known = Pet.WildImp.known
 
 	abilities.bySpellId = {}
 	abilities.velocity = {}
