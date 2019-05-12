@@ -1081,6 +1081,7 @@ Pet.Darkglare.summon_spell = SummonDarkglare
 Pet.DemonicTyrant = SummonedPet.add(135002, 15)
 Pet.DemonicTyrant.summon_spell = SummonDemonicTyrant
 Pet.Dreadstalker = SummonedPet.add(98035, 12)
+Pet.Dreadstalker.summon_spell = CallDreadstalkers
 Pet.Felguard = SummonedPet.add(17252, 15)
 Pet.Felguard.summon_spell = GrimoireFelguard
 Pet.Vilefiend = SummonedPet.add(135816, 15)
