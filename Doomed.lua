@@ -1250,15 +1250,12 @@ local function BloodlustActive()
 end
 
 function GetPetActive()
-	return (IsFlying() or (UnitExists('pet') and not UnitIsDead('pet')) or
+	return (IsFlying() or (UnitExists('pet') and not (UnitIsDead('pet') or Player.pet_stuck)) or
 		SummonFelhunter:up() or SummonObserver:up() or
 		SummonImp:up() or SummonFelImp:up() or
 		SummonVoidwalker:up() or SummonVoidlord:up() or
-		SummonSuccubus:up() or SummonShivarra:up())
-end
-
-local function PetIsSummoned()
-	return Player.pet_active
+		SummonSuccubus:up() or SummonShivarra:up() or
+		SummonFelguard:up() or SummonWrathguard:up())
 end
 
 -- End Helpful Functions
@@ -1337,7 +1334,7 @@ local function SummonPetUp(self)
 	if self:casting() then
 		return true
 	end
-	if UnitIsDead('pet') then
+	if UnitIsDead('pet') or Player.pet_stuck then
 		return false
 	end
 	return UnitCreatureFamily('pet') == self.pet_family
@@ -1520,13 +1517,13 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 		end
 		if GrimoireOfSacrifice.known then
 			if GrimoireOfSacrifice:remains() < 300 then
-				if PetIsSummoned() then
+				if Player.pet_active then
 					return GrimoireOfSacrifice
 				else
 					return SummonImp
 				end
 			end
-		elseif not PetIsSummoned() then
+		elseif not Player.pet_active then
 			return SummonImp
 		end
 		if Opt.pot and Target.boss then
@@ -1551,13 +1548,13 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 	else
 		if GrimoireOfSacrifice.known then
 			if GrimoireOfSacrifice:remains() < 300 then
-				if PetIsSummoned() then
+				if Player.pet_active then
 					UseExtra(GrimoireOfSacrifice)
 				else
 					UseExtra(SummonImp)
 				end
 			end
-		elseif not PetIsSummoned() then
+		elseif not Player.pet_active then
 			UseExtra(SummonImp)
 		end
 	end
@@ -1813,7 +1810,7 @@ actions.precombat+=/demonbolt
 		if Opt.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
 			return CreateHealthstone
 		end
-		if not PetIsSummoned() then
+		if not Player.pet_active then
 			if SummonFelguard:usable() then
 				return SummonFelguard
 			elseif SummonWrathguard:usable() then
@@ -1832,7 +1829,7 @@ actions.precombat+=/demonbolt
 			return Demonbolt
 		end
 	else
-		if not PetIsSummoned() then
+		if not Player.pet_active then
 			if SummonFelguard:usable() then
 				UseExtra(SummonFelguard)
 			elseif SummonWrathguard:usable() then
@@ -2120,13 +2117,13 @@ APL[SPEC.DESTRUCTION].main = function(self)
 		end
 		if GrimoireOfSacrifice.known then
 			if GrimoireOfSacrifice:remains() < 300 then
-				if PetIsSummoned() then
+				if Player.pet_active then
 					return GrimoireOfSacrifice
 				else
 					return SummonImp
 				end
 			end
-		elseif not PetIsSummoned() then
+		elseif not Player.pet_active then
 			return SummonImp
 		end
 		if Opt.pot and Target.boss then
@@ -2140,13 +2137,13 @@ APL[SPEC.DESTRUCTION].main = function(self)
 	else
 		if GrimoireOfSacrifice.known then
 			if GrimoireOfSacrifice:remains() < 300 then
-				if PetIsSummoned() then
+				if Player.pet_active then
 					UseExtra(GrimoireOfSacrifice)
 				else
 					UseExtra(SummonImp)
 				end
 			end
-		elseif not PetIsSummoned() then
+		elseif not Player.pet_active then
 			UseExtra(SummonImp)
 		end
 	end
@@ -2653,6 +2650,16 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 	end
 end
 
+function events:UI_ERROR_MESSAGE(errorId)
+	if (
+	    errorId == 394 or -- pet is rooted
+	    errorId == 396 or -- target out of pet range
+	    errorId == 400    -- no pet path to target
+	) then
+		Player.pet_stuck = true
+	end
+end
+
 function events:COMBAT_LOG_EVENT_UNFILTERED()
 	local timeStamp, eventType, _, srcGUID, _, _, _, dstGUID, _, _, _, spellId, spellName, _, missType = CombatLogGetCurrentEventInfo()
 	Player.time = timeStamp
@@ -2683,6 +2690,14 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		return
 	end
 
+	if srcGUID == Player.pet then
+		if Player.pet_stuck and (eventType == 'SPELL_CAST_SUCCESS' or eventType == 'SPELL_DAMAGE' or eventType == 'SWING_DAMAGE') then
+			Player.pet_stuck = false
+		elseif not Player.pet_stuck and eventType == 'SPELL_CAST_FAILED' and missType == 'No path available' then
+			Player.pet_stuck = true
+		end
+	end
+
 	if not ability then
 		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
 		return
@@ -2704,23 +2719,35 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 
 	UpdateCombatWithin(0.05)
-	if (srcGUID == Player.guid or ability.player_triggered) and eventType == 'SPELL_CAST_SUCCESS' then
-		Player.last_ability = ability
-		if ability.triggers_gcd then
-			Player.previous_gcd[10] = nil
-			table.insert(Player.previous_gcd, 1, ability)
-		end
-		if ability.travel_start then
-			ability.travel_start[dstGUID] = Player.time
-			if not ability.range_est_start then
-				ability.range_est_start = Player.time
+	if eventType == 'SPELL_CAST_SUCCESS' then
+		if srcGUID == Player.guid or ability.player_triggered then
+			Player.last_ability = ability
+			if ability.triggers_gcd then
+				Player.previous_gcd[10] = nil
+				table.insert(Player.previous_gcd, 1, ability)
 			end
+			if ability.travel_start then
+				ability.travel_start[dstGUID] = Player.time
+				if not ability.range_est_start then
+					ability.range_est_start = Player.time
+				end
+			end
+			if Opt.previous and doomedPanel:IsVisible() then
+				doomedPreviousPanel.ability = ability
+				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+				doomedPreviousPanel.icon:SetTexture(ability.icon)
+				doomedPreviousPanel:Show()
+			end
+
 		end
-		if Opt.previous and doomedPanel:IsVisible() then
-			doomedPreviousPanel.ability = ability
-			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
-			doomedPreviousPanel.icon:SetTexture(ability.icon)
-			doomedPreviousPanel:Show()
+		if Player.pet_stuck and ability.requires_pet then
+			Player.pet_stuck = false
+		end
+		return
+	end
+	if eventType == 'SPELL_CAST_FAILED' then
+		if ability.requires_pet and missType == 'No path available' then
+			Player.pet_stuck = true
 		end
 		return
 	end
@@ -2836,6 +2863,7 @@ end
 
 function events:PLAYER_REGEN_ENABLED()
 	Player.combat_start = 0
+	Player.pet_stuck = false
 	Target.estimated_range = 30
 	local _, ability, guid
 	for _, ability in next, abilities.velocity do
