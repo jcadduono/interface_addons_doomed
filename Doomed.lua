@@ -1911,7 +1911,7 @@ actions+=/use_items,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/berserking,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/blood_fury,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/fireblood,if=pet.demonic_tyrant.active|target.time_to_die<=15
-actions+=/call_action_list,name=dcon_opener,if=talent.demonic_consumption.enabled&time<30&!cooldown.summon_demonic_tyrant.remains
+actions+=/call_action_list,name=dcon_prep,if=talent.demonic_consumption.enabled&cooldown.summon_demonic_tyrant.remains<8
 actions+=/hand_of_guldan,if=azerite.explosive_potential.rank&time<5&soul_shard>=3&buff.explosive_potential.down&buff.wild_imps.stack<3&!prev_gcd.1.hand_of_guldan&&!prev_gcd.2.hand_of_guldan
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&buff.demonic_core.stack=4
 actions+=/demonbolt,if=soul_shard<=4&buff.demonic_core.up&buff.demonic_core.remains<(gcd*buff.demonic_core.stack)
@@ -1924,7 +1924,7 @@ actions+=/call_action_list,name=implosion,if=spell_targets.implosion>1
 actions+=/grimoire_felguard,if=(target.time_to_die>120|target.time_to_die<cooldown.summon_demonic_tyrant.remains+15|cooldown.summon_demonic_tyrant.remains<13)
 actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
 actions+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
-actions+=/bilescourge_bombers,if=cooldown.summon_demonic_tyrant.remains>20|target.time_to_die<8+cooldown.summon_demonic_tyrant.remains
+actions+=/bilescourge_bombers
 actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_consumption.enabled)&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
 # 2000%spell_haste is shorthand for the cast time of Demonic Tyrant. The intent is to only begin casting if a certain number of imps will be out by the end of the cast.
 actions+=/summon_demonic_tyrant,if=soul_shard<3&(!talent.demonic_consumption.enabled|buff.wild_imps.stack+imps_spawned_during.2000%spell_haste>=6&time_to_imps.all.remains<cast_time)|target.time_to_die<20
@@ -1938,8 +1938,8 @@ actions+=/call_action_list,name=build_a_shard
 	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.DemonicTyrant:up() and (not NetherPortal.known or not NetherPortal:ready(160))) then
 		UseCooldown(BattlePotionOfIntellect)
 	end
-	if DemonicConsumption.known and TimeInCombat() < 30 and SummonDemonicTyrant:ready() then
-		local apl = self:dcon_opener()
+	if DemonicConsumption.known and SummonDemonicTyrant:ready(8) then
+		local apl = self:dcon_prep()
 		if apl then return apl end
 	end
 	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and Player.soul_shards >= 3 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
@@ -1989,7 +1989,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
 		return CallDreadstalkers
 	end
-	if BilescourgeBombers:usable() and (not SummonDemonicTyrant:ready(20) or Target.timeToDie < (8 + SummonDemonicTyrant:cooldown())) then
+	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
 	if HandOfGuldan:usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:previous(1) and SummonDemonicTyrant:ready(2) then
@@ -2021,11 +2021,11 @@ end
 
 APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 --[[
-actions.build_a_shard=soul_strike,if=!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains
+actions.build_a_shard=soul_strike,if=!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>8
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard))
 actions.build_a_shard+=/shadow_bolt
 ]]
-	if SoulStrike:usable() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready()) then
+	if SoulStrike:usable() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(8)) then
 		return SoulStrike
 	end
 	if Demonbolt:usable() and DemonicCore:up() and DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards)) then
@@ -2036,24 +2036,24 @@ actions.build_a_shard+=/shadow_bolt
 	end
 end
 
-APL[SPEC.DEMONOLOGY].dcon_opener = function(self)
+APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
 --[[
-actions.dcon_opener=doom,if=!dot.doom.remains&target.time_to_die>30
-actions.dcon_opener+=/bilescourge_bombers
-actions.dcon_opener+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=5&buff.wild_imps.stack>=3
-actions.dcon_opener+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=4&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
-actions.dcon_opener+=/soul_strike,if=soul_shard>=2&prev_gcd.1.hand_of_guldan
-actions.dcon_opener+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.soul_strike
-actions.dcon_opener+=/demonic_strength,if=prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&(buff.wild_imps.stack>1&action.hand_of_guldan.in_flight)
-actions.dcon_opener+=/summon_vilefiend,if=soul_shard=5
-actions.dcon_opener+=/grimoire_felguard,if=soul_shard=5
-actions.dcon_opener+=/call_dreadstalkers,if=soul_shard=5
-actions.dcon_opener+=/hand_of_guldan,if=soul_shard=5
-actions.dcon_opener+=/hand_of_guldan,if=soul_shard>=3&prev_gcd.2.hand_of_guldan&(prev_gcd.1.soul_strike|!talent.soul_strike.enabled&prev_gcd.1.shadow_bolt)
+actions.dcon_prep=doom,if=!dot.doom.remains&target.time_to_die>30
+actions.dcon_prep+=/bilescourge_bombers
+actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack>=3
+actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
+actions.dcon_prep+=/soul_strike,if=soul_shard>=2&prev_gcd.1.hand_of_guldan
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.soul_strike
+actions.dcon_prep+=/demonic_strength,if=prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&(buff.wild_imps.stack>1&action.hand_of_guldan.in_flight)
+actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
+actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
+actions.dcon_prep+=/call_dreadstalkers,if=soul_shard=5
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=3&prev_gcd.2.hand_of_guldan&(prev_gcd.1.soul_strike|!talent.soul_strike.enabled&prev_gcd.1.shadow_bolt)
 # 2000%spell_haste is shorthand for the cast time of Demonic Tyrant. The intent is to only begin casting if a certain number of imps will be out by the end of the cast.
-actions.dcon_opener+=/summon_demonic_tyrant,if=prev_gcd.1.demonic_strength|prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan|!talent.demonic_strength.enabled&buff.wild_imps.stack+imps_spawned_during.2000%spell_haste>=6
-actions.dcon_opener+=/demonbolt,if=soul_shard<=3&buff.demonic_core.remains
-actions.dcon_opener+=/call_action_list,name=build_a_shard
+actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.demonic_strength|prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan|!talent.demonic_strength.enabled&buff.wild_imps.stack+imps_spawned_during.2000%spell_haste>=6
+actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.remains
+actions.dcon_prep+=/call_action_list,name=build_a_shard
 ]]
 	if Doom:usable() and Doom:down() and Target.timeToDie > 30 then
 		return Doom
