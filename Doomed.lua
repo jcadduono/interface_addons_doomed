@@ -1251,13 +1251,10 @@ local function BloodlustActive()
 	end
 end
 
-function GetPetActive()
-	return (IsFlying() or (UnitExists('pet') and not (UnitIsDead('pet') or Player.pet_stuck)) or
-		SummonFelhunter:up() or SummonObserver:up() or
-		SummonImp:up() or SummonFelImp:up() or
-		SummonVoidwalker:up() or SummonVoidlord:up() or
-		SummonSuccubus:up() or SummonShivarra:up() or
-		SummonFelguard:up() or SummonWrathguard:up())
+local function UpdatePetStatus()
+	Player.pet = UnitGUID('pet')
+	Player.pet_alive = (Player.pet and not UnitIsDead('pet') or (Player.ability_casting and Player.ability_casting.pet_family)) and true
+	Player.pet_active = (Player.pet_alive and not Player.pet_stuck or IsFlying()) and true
 end
 
 -- End Helpful Functions
@@ -1336,7 +1333,7 @@ local function SummonPetUp(self)
 	if self:casting() then
 		return true
 	end
-	if UnitIsDead('pet') or Player.pet_stuck then
+	if not Player.pet_active then
 		return false
 	end
 	return UnitCreatureFamily('pet') == self.pet_family
@@ -2068,7 +2065,7 @@ actions.dcon_opener+=/call_action_list,name=build_a_shard
 		if Implosion:usable() and Player.imp_count >= 3 then
 			return Implosion
 		end
-		if HandOfGuldan:usable() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or HandOfGuldan:previous(3)) then
+		if HandOfGuldan:usable() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 			return HandOfGuldan
 		end
 	end
@@ -2565,7 +2562,7 @@ local function UpdateDisplay()
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if Player.spec == SPEC.DEMONOLOGY and Player.pet_count > 0 then
+	if Player.spec == SPEC.DEMONOLOGY then
 		doomedPanel.text:SetText(Player.pet_count)
 		text = true
 	end
@@ -2602,9 +2599,8 @@ local function UpdateCombat()
 	end
 	Player.mana = min(max(Player.mana, 0), Player.mana_max)
 	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
-	Player.pet = UnitGUID('pet')
-	Player.pet_active = GetPetActive()
 	Player.moving = GetUnitSpeed('player') ~= 0
+	UpdatePetStatus()
 
 	summonedPets:purge()
 	trackAuras:purge()
@@ -2617,7 +2613,7 @@ local function UpdateCombat()
 	end
 
 	if Player.spec == SPEC.DEMONOLOGY then
-		Player.pet_count = summonedPets:count()
+		Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
 		Player.imp_count = Pet.WildImp:count()
 	end
 
