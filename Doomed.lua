@@ -1004,10 +1004,9 @@ function summonedPets:empoweredRemains()
 	return max((self.empowered_ends or 0) - Player.time, 0)
 end
 
-function SummonedPet.add(unitId, duration, unitId2)
+function SummonedPet.add(unitId, duration)
 	local pet = {
 		unitId = unitId,
-		unitId2 = unitId2,
 		duration = duration,
 		active_units = {},
 		known = false,
@@ -1087,7 +1086,7 @@ Pet.Felguard = SummonedPet.add(17252, 15)
 Pet.Felguard.summon_spell = GrimoireFelguard
 Pet.Vilefiend = SummonedPet.add(135816, 15)
 Pet.Vilefiend.summon_spell = SummonVilefiend
-Pet.WildImp = SummonedPet.add(55659, 20, 143622)
+Pet.WildImp = SummonedPet.add(55659, 20)
 ---- Nether Portal / Inner Demons
 Pet.Bilescourge = SummonedPet.add(136404, 15)
 Pet.Darkhound = SummonedPet.add(136408, 15)
@@ -1100,6 +1099,7 @@ Pet.Urzul = SummonedPet.add(136402, 15)
 Pet.ViciousHellhound = SummonedPet.add(136399, 15)
 Pet.VoidTerror = SummonedPet.add(136403, 15)
 Pet.Wrathguard = SummonedPet.add(136407, 15)
+Pet.WildImpID = SummonedPet.add(143622, 20)
 -- End Summoned Pets
 
 -- Start Inventory Items
@@ -1257,6 +1257,40 @@ local function UpdatePetStatus()
 	Player.pet_active = (Player.pet_alive and not Player.pet_stuck or IsFlying()) and true
 end
 
+local function ImpsIn(seconds)
+	local count, guid, unit = 0
+	for guid, unit in next, Pet.WildImp.active_units do
+		if Pet.WildImp:unitRemains(unit) > (Player.execute_remains + seconds) then
+			count = count + 1
+		end
+	end
+	for guid, unit in next, HandOfGuldan.imp_pool do
+		if (unit - Player.time) < (Player.execute_remains + seconds) then
+			count = count + 1
+		end
+	end
+	if Pet.WildImpID.known then
+		for guid, unit in next, Pet.WildImpID.active_units do
+			if Pet.WildImpID:unitRemains(unit) > (Player.execute_remains + seconds) then
+				count = count + 1
+			end
+		end
+		if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < (Player.execute_remains + seconds) then
+			count = count + 1
+		end
+	end
+	if HandOfGuldan:casting() then
+		if HandOfGuldan.cast_shards >= 3 and seconds > 2.0 then
+			count = count + 3
+		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.6 then
+			count = count + 2
+		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.2 then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 -- End Helpful Functions
 
 -- Start Ability Modifications
@@ -1385,6 +1419,46 @@ function InnerDemons:impSpawned()
 	self.next_imp = Player.time + 12
 end
 
+function PowerSiphon:sacrifice()
+	local expires_min, guid, unit, sacrifice = Player.time + 60
+	for guid, unit in next, Pet.WildImp.active_units do
+		if unit.expires < expires_min then
+			expires_min = unit.expires
+			sacrifice = guid
+		end
+	end
+	if Pet.WildImpID.known then
+		for guid, unit in next, Pet.WildImpID.active_units do
+			if unit.expires < expires_min then
+				expires_min = unit.expires
+				sacrifice = guid
+			end
+		end
+	end
+	if sacrifice then
+		if Pet.WildImp.active_units[sacrifice] then
+			Pet.WildImp.active_units[sacrifice] = nil
+			return
+		end
+		if Pet.WildImpID.active_units[sacrifice] then
+			Pet.WildImpID.active_units[sacrifice] = nil
+			return
+		end
+	end
+end
+
+function Implosion:implode()
+	local guid
+	for guid in next, Pet.WildImp.active_units do
+		Pet.WildImp.active_units[guid] = nil
+	end
+	if Pet.WildImpID.known then
+		for guid in next, Pet.WildImpID.active_units do
+			Pet.WildImpID.active_units[guid] = nil
+		end
+	end
+end
+
 --[[
 function DemonicCore:remains()
 	if Pet.Dreadstalker:expiring() > 0 then
@@ -1437,17 +1511,16 @@ function Pet.WildImp:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.energy = 100
 	unit.cast_end = 0
-	unit.id = tonumber(guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)'))
-	if unit.id == self.unitId then
-		HandOfGuldan:impSpawned()
-	elseif unit.id == self.unitId2 then
-		InnerDemons:impSpawned()
-	end
+	HandOfGuldan:impSpawned()
 	return unit
 end
 
-function Pet.WildImp:getUnit(guid)
-	return self.active_units[guid]
+function Pet.WildImpID:addUnit(guid)
+	local unit = SummonedPet.addUnit(self, guid)
+	unit.energy = 100
+	unit.cast_end = 0
+	InnerDemons:impSpawned()
+	return unit
 end
 
 function Pet.WildImp:unitRemains(unit)
@@ -1468,6 +1541,7 @@ function Pet.WildImp:unitRemains(unit)
 	end
 	return max(remains, 0)
 end
+Pet.WildImpID.unitRemains = Pet.WildImp.unitRemains
 
 function Pet.WildImp:count()
 	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
@@ -1484,6 +1558,19 @@ function Pet.WildImp:count()
 			count = count + 1
 		end
 	end
+	return count
+end
+
+function Pet.WildImpID:count()
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
+	local count, guid, unit = 0
+	for guid, unit in next, self.active_units do
+		if self:unitRemains(unit) > Player.execute_remains then
+			count = count + 1
+		end
+	end
 	if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < Player.execute_remains then
 		count = count + 1
 	end
@@ -1496,37 +1583,12 @@ function Pet.WildImp:remains()
 	end
 	return SummonedPet.remains(self)
 end
-
-function Pet.WildImp:impsIn(seconds)
-	local count, guid, unit = 0
-	for guid, unit in next, self.active_units do
-		if self:unitRemains(unit) > (Player.execute_remains + seconds) then
-			count = count + 1
-		end
-	end
-	for guid, unit in next, HandOfGuldan.imp_pool do
-		if (unit - Player.time) < (Player.execute_remains + seconds) then
-			count = count + 1
-		end
-	end
-	if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < (Player.execute_remains + seconds) then
-		count = count + 1
-	end
-	if HandOfGuldan:casting() then
-		if HandOfGuldan.cast_shards >= 3 and seconds > 2.0 then
-			count = count + 3
-		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.6 then
-			count = count + 2
-		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.2 then
-			count = count + 1
-		end
-	end
-	return count
-end
+Pet.WildImpID.remains = Pet.WildImp.remains
 
 function Pet.WildImp:castStart(unit)
 	unit.cast_end = Player.time + FelFirebolt:castTime()
 end
+Pet.WildImpID.castStart = Pet.WildImp.castStart
 
 function Pet.WildImp:castSuccess(unit)
 	if not summonedPets:empowered() then
@@ -1538,26 +1600,7 @@ function Pet.WildImp:castSuccess(unit)
 	end
 	unit.cast_end = 0
 end
-
-function Pet.WildImp:sacrifice()
-	local expires_min, guid, unit, sacrifice = Player.time + 60
-	for guid, unit in next, self.active_units do
-		if unit.expires < expires_min then
-			expires_min = unit.expires
-			sacrifice = guid
-		end
-	end
-	if sacrifice then
-		self.active_units[sacrifice] = nil
-	end
-end
-
-function Pet.WildImp:implode()
-	local guid
-	for guid in next, self.active_units do
-		self.active_units[guid] = nil
-	end
-end
+Pet.WildImpID.castSuccess = Pet.WildImp.castSuccess
 
 -- End Summoned Pet Modifications
 
@@ -2013,7 +2056,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if HandOfGuldan:usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:previous(1) and SummonDemonicTyrant:ready(2) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and Player.soul_shards < 3 and (not DemonicConsumption.known or Target.timeToDie < 20 or Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6) then
+	if SummonDemonicTyrant:usable() and Player.soul_shards < 3 and (not DemonicConsumption.known or Target.timeToDie < 20 or ImpsIn(SummonDemonicTyrant:castTime()) >= 6) then
 		UseCooldown(SummonDemonicTyrant)
 	end
 	if PowerSiphon:usable() and Player.enemies == 1 and Player.imp_count >= 2 and DemonicCore:stack() <= 2 and DemonicPower:down() then
@@ -2112,7 +2155,7 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if HandOfGuldan:usable() and Player.soul_shards >= 3 and HandOfGuldan:previous(2) and (SoulStrike:previous(1) or (not SoulStrike.known and ShadowBoltDemo:previous(1))) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and not CallDreadstalkers:ready() and (DemonicStrength:previous(1) or (HandOfGuldan:previous(1) and HandOfGuldan:previous(2)) or (not DemonicStrength.known and Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6)) then
+	if SummonDemonicTyrant:usable() and not CallDreadstalkers:ready() and (DemonicStrength:previous(1) or (HandOfGuldan:previous(1) and HandOfGuldan:previous(2)) or (not DemonicStrength.known and ImpsIn(SummonDemonicTyrant:castTime()) >= 6)) then
 		UseCooldown(SummonDemonicTyrant)
 	end
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() then
@@ -2633,7 +2676,7 @@ local function UpdateCombat()
 	if Player.spec == SPEC.DEMONOLOGY then
 		HandOfGuldan:purge()
 		Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
-		Player.imp_count = Pet.WildImp:count()
+		Player.imp_count = Pet.WildImp:count() + (Pet.WildImpID and Pet.WildImpID:count() or 0)
 	end
 
 	Player.main = APL[Player.spec]:main()
@@ -2750,12 +2793,15 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 		return
 	end
 	if ability == FelFirebolt then
-		local unit = Pet.WildImp:getUnit(srcGUID)
-		if unit then
-			if eventType == 'SPELL_CAST_START' then
-				Pet.WildImp:castStart(unit)
-			elseif eventType == 'SPELL_CAST_SUCCESS' then
-				Pet.WildImp:castSuccess(unit)
+		local pet = summonedPets:find(dstGUID)
+		if pet then
+			local unit = pet.active_units[dstGUID]
+			if unit then
+				if eventType == 'SPELL_CAST_START' then
+					pet:castStart(unit)
+				elseif eventType == 'SPELL_CAST_SUCCESS' then
+					pet:castSuccess(unit)
+				end
 			end
 		end
 	end
@@ -2772,10 +2818,10 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 		end
 	elseif eventType == 'SPELL_CAST_SUCCESS' then
 		if ability == Implosion or (DemonicConsumption.known and ability == SummonDemonicTyrant) then
-			Pet.WildImp:implode()
+			Implosion:implode()
 		elseif ability == PowerSiphon then
-			Pet.WildImp:sacrifice()
-			Pet.WildImp:sacrifice()
+			PowerSiphon:sacrifice()
+			PowerSiphon:sacrifice()
 		elseif ability == HandOfGuldan then
 			HandOfGuldan:castSuccess()
 		end
@@ -3055,6 +3101,7 @@ local function UpdateAbilityData()
 	Pet.Felguard.known = GrimoireFelguard.known
 	Pet.Vilefiend.known = SummonVilefiend.known
 	Pet.WildImp.known = HandOfGuldan.known
+	Pet.WildImpID.known = InnerDemons.known
 	if InnerDemons.known or NetherPortal.known then
 		Pet.Bilescourge.known = true
 		Pet.Darkhound.known = true
@@ -3077,7 +3124,7 @@ local function UpdateAbilityData()
 	Felstorm.known = SummonFelguard.known or SummonWrathguard.known
 	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
 	SpellLock.known = SummonFelhunter.known or SummonObserver.known
-	FelFirebolt.known = Pet.WildImp.known
+	FelFirebolt.known = Pet.WildImp.known or Pet.WildImpID.known
 
 	abilities.bySpellId = {}
 	abilities.velocity = {}
