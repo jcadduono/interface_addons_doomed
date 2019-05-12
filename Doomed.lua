@@ -1050,10 +1050,10 @@ function SummonedPet:count()
 	return count
 end
 
-function SummonedPet:expiring()
+function SummonedPet:expiring(seconds)
 	local count, guid, unit = 0
 	for guid, unit in next, self.active_units do
-		if unit.expires - Player.time <= Player.execute_remains then
+		if unit.expires - Player.time <= (seconds or Player.execute_remains) then
 			count = count + 1
 		end
 	end
@@ -1356,6 +1356,7 @@ function HandOfGuldan:shardCost()
 	return min(max(Player.soul_shards, 1), 3)
 end
 
+--[[
 function DemonicCore:remains()
 	if Pet.Dreadstalker:expiring() > 0 then
 		return self:duration()
@@ -1368,6 +1369,7 @@ function DemonicCore:stack()
 	count = count + Pet.Dreadstalker:expiring()
 	return min(count, 4)
 end
+]]
 
 function CallDreadstalkers:shardCost()
 	local cost = self.shard_cost
