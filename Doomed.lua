@@ -1858,7 +1858,7 @@ actions+=/call_action_list,name=implosion,if=spell_targets.implosion>1
 actions+=/grimoire_felguard,if=(target.time_to_die>120|target.time_to_die<cooldown.summon_demonic_tyrant.remains+15|cooldown.summon_demonic_tyrant.remains<13)
 actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
 actions+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
-actions+=/bilescourge_bombers
+actions+=/bilescourge_bombers,if=cooldown.summon_demonic_tyrant.remains>20|target.time_to_die<8+cooldown.summon_demonic_tyrant.remains
 actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_consumption.enabled)&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
 # 2000%spell_haste is shorthand for the cast time of Demonic Tyrant. The intent is to only begin casting if a certain number of imps will be out by the end of the cast.
 actions+=/summon_demonic_tyrant,if=soul_shard<3&(!talent.demonic_consumption.enabled|buff.wild_imps.stack+imps_spawned_during.2000%spell_haste>=6&time_to_imps.all.remains<cast_time)|target.time_to_die<20
@@ -1923,7 +1923,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
 		return CallDreadstalkers
 	end
-	if BilescourgeBombers:usable() then
+	if BilescourgeBombers:usable() and (not SummonDemonicTyrant:ready(20) or Target.timeToDie < (8 + SummonDemonicTyrant:cooldown())) then
 		UseCooldown(BilescourgeBombers)
 	end
 	if HandOfGuldan:usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:previous(1) and SummonDemonicTyrant:ready(2) then
