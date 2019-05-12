@@ -1415,7 +1415,24 @@ function Pet.WildImp:getUnit(guid)
 	return self.active_units[guid]
 end
 
+function Pet.WildImp:count()
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
+	return SummonedPet.count(self)
+end
+
+function Pet.WildImp:remains()
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
+	return SummonedPet.remains(self)
+end
+
 function Pet.WildImp:unitRemains(unit)
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
 	local energy, remains = unit.energy, 0
 	if unit.cast_end > 0 then
 		if summonedPets:empowered() then
@@ -1434,7 +1451,7 @@ end
 function Pet.WildImp:impsIn(seconds)
 	local count, guid, unit = 0
 	for guid, unit in next, self.active_units do
-		if self:unitRemains(unit) > (Player.execute_time + seconds) then
+		if self:unitRemains(unit) > (Player.execute_remains + seconds) then
 			count = count + 1
 		end
 	end
@@ -1886,7 +1903,7 @@ actions+=/call_action_list,name=build_a_shard
 	if Demonbolt:usable() and Player.soul_shards <= 4 and DemonicCore:up() and DemonicCore:remains() < (Player.gcd * DemonicCore:stack()) then
 		return Demonbolt
 	end
-	if ExplosivePotential.known and Player.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
+	if ExplosivePotential.known and Implosion:usable() and Player.imp_count >= 3 and ExplosivePotential:remains() < ShadowBoltDemo:castTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(12)) then
 		return Implosion
 	end
 	if Doom:usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:down() then
@@ -1971,24 +1988,70 @@ end
 
 APL[SPEC.DEMONOLOGY].dcon_opener = function(self)
 --[[
-actions.dcon_opener=hand_of_guldan,line_cd=30,if=azerite.explosive_potential.enabled
-actions.dcon_opener+=/implosion,if=azerite.explosive_potential.enabled&buff.wild_imps.stack>2&buff.explosive_potential.down
-actions.dcon_opener+=/doom,line_cd=30
+actions.dcon_opener=/implosion,if=azerite.explosive_potential.enabled&buff.wild_imps.stack>2&buff.explosive_potential.down
+actions.dcon_opener+=hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&!prev_gcd.1.hand_of_guldan
+actions.dcon_opener+=/doom,if=!dot.doom.remains&target.time_to_die>30
 actions.dcon_opener+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&soul_shard>0&prev_gcd.2.soul_strike
 actions.dcon_opener+=/demonic_strength,if=prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&(buff.wild_imps.stack>1&action.hand_of_guldan.in_flight)
 actions.dcon_opener+=/bilescourge_bombers
-actions.dcon_opener+=/soul_strike,line_cd=30,if=!buff.bloodlust.remains|time>5&prev_gcd.1.hand_of_guldan
+actions.dcon_opener+=/soul_strike,if=soul_shard<5&(!buff.bloodlust.remains|prev_gcd.1.hand_of_guldan)
 actions.dcon_opener+=/summon_vilefiend,if=soul_shard=5
 actions.dcon_opener+=/grimoire_felguard,if=soul_shard=5
 actions.dcon_opener+=/call_dreadstalkers,if=soul_shard=5
 actions.dcon_opener+=/hand_of_guldan,if=soul_shard=5
-actions.dcon_opener+=/hand_of_guldan,if=soul_shard>=3&prev_gcd.2.hand_of_guldan&time>5&(prev_gcd.1.soul_strike|!talent.soul_strike.enabled&prev_gcd.1.shadow_bolt)
+actions.dcon_opener+=/hand_of_guldan,if=soul_shard>=3&prev_gcd.2.hand_of_guldan&(prev_gcd.1.soul_strike|!talent.soul_strike.enabled&prev_gcd.1.shadow_bolt)
 # 2000%spell_haste is shorthand for the cast time of Demonic Tyrant. The intent is to only begin casting if a certain number of imps will be out by the end of the cast.
 actions.dcon_opener+=/summon_demonic_tyrant,if=prev_gcd.1.demonic_strength|prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan|!talent.demonic_strength.enabled&buff.wild_imps.stack+imps_spawned_during.2000%spell_haste>=6
 actions.dcon_opener+=/demonbolt,if=soul_shard<=3&buff.demonic_core.remains
 actions.dcon_opener+=/call_action_list,name=build_a_shard
 ]]
-
+	if ExplosivePotential.known and ExplosivePotential:down() then
+		if Implosion:usable() and Player.imp_count >= 3 then
+			return Implosion
+		end
+		if HandOfGuldan:usable() and Player.soul_shards >= 3 and Player.imp_count < 3 and not HandOfGuldan:previous(1) then
+			return HandOfGuldan
+		end
+	end
+	if Doom:usable() and Doom:down() and Target.timeToDie > 30 then
+		return Doom
+	end
+	if HandOfGuldan:usable() and HandOfGuldan:previous(1) and SoulStrike:previous(2) then
+		return HandOfGuldan
+	end
+	if DemonicStrength:usable() and HandOfGuldan:previous(1) and not HandOfGuldan:previous(2) and Player.imp_count > 1 then
+		UseCooldown(DemonicStrength)
+	end
+	if BilescourgeBombers:usable() then
+		UseCooldown(BilescourgeBombers)
+	end
+	if Player.soul_shards < 5 then
+		if SoulStrike:usable() and (not BloodlustActive() or HandOfGuldan:previous(1)) then
+			return SoulStrike
+		end
+		if HandOfGuldan:usable() and Player.soul_shards >= 3 and HandOfGuldan:previous(2) and (SoulStrike:previous(1) or (not SoulStrike.known and ShadowBoltDemo:previous(1))) then
+			return HandOfGuldan
+		end
+	else
+		if SummonVilefiend:usable() then
+			UseCooldown(SummonVilefiend)
+		elseif GrimoireFelguard:usable() then
+			UseCooldown(GrimoireFelguard)
+		end
+		if CallDreadstalkers:usable() then
+			return CallDreadstalkers
+		end
+		if HandOfGuldan:usable() then
+			return HandOfGuldan
+		end
+	end
+	if SummonDemonicTyrant:usable() and (DemonicStrength:previous(1) or (HandOfGuldan:previous(1) and HandOfGuldan:previous(2)) or (not DemonicStrength.known and Pet.WildImp:impsIn(SummonDemonicTyrant:castTime()) >= 6)) then
+		UseCooldown(SummonDemonicTyrant)
+	end
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() then
+		return Demonbolt
+	end
+	return self:build_a_shard()
 end
 
 APL[SPEC.DEMONOLOGY].implosion = function(self)
