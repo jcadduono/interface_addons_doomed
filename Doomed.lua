@@ -1357,6 +1357,27 @@ function HandOfGuldan:shardCost()
 	return min(max(Player.soul_shards, 1), 3)
 end
 
+HandOfGuldan.imp_pool = {}
+
+function HandOfGuldan:castSuccess()
+	if self.cast_shards >= 1 then
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.15
+	end
+	if self.cast_shards >= 2 then
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.55
+	end
+	if self.cast_shards >= 3 then
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.95
+	end
+end
+
+function HandOfGuldan:impSpawned()
+	if #self.imp_pool == 0 then
+		return
+	end
+	table.remove(self.imp_pool, 1)
+end
+
 --[[
 function DemonicCore:remains()
 	if Pet.Dreadstalker:expiring() > 0 then
@@ -1409,25 +1430,15 @@ function Pet.WildImp:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.energy = 100
 	unit.cast_end = 0
+	unit.id = tonumber(guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)'))
+	if unit.id == self.unitId then
+		HandOfGuldan:impSpawned()
+	end
 	return unit
 end
 
 function Pet.WildImp:getUnit(guid)
 	return self.active_units[guid]
-end
-
-function Pet.WildImp:count()
-	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
-		return 0
-	end
-	return SummonedPet.count(self)
-end
-
-function Pet.WildImp:remains()
-	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
-		return 0
-	end
-	return SummonedPet.remains(self)
 end
 
 function Pet.WildImp:unitRemains(unit)
@@ -1449,6 +1460,31 @@ function Pet.WildImp:unitRemains(unit)
 	return max(remains, 0)
 end
 
+function Pet.WildImp:count()
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
+	local count, guid, unit = 0
+	for guid, unit in next, self.active_units do
+		if self:unitRemains(unit) > Player.execute_remains then
+			count = count + 1
+		end
+	end
+	for guid, unit in next, HandOfGuldan.imp_pool do
+		if unit - Player.time < Player.execute_remains then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function Pet.WildImp:remains()
+	if DemonicConsumption.known and SummonDemonicTyrant:casting() then
+		return 0
+	end
+	return SummonedPet.remains(self)
+end
+
 function Pet.WildImp:impsIn(seconds)
 	local count, guid, unit = 0
 	for guid, unit in next, self.active_units do
@@ -1456,12 +1492,17 @@ function Pet.WildImp:impsIn(seconds)
 			count = count + 1
 		end
 	end
+	for guid, unit in next, HandOfGuldan.imp_pool do
+		if unit - Player.time < (Player.execute_remains + seconds) then
+			count = count + 1
+		end
+	end
 	if HandOfGuldan:casting() then
-		if HandOfGuldan.cast_shards >= 3 and seconds >= 0.95 then
+		if HandOfGuldan.cast_shards >= 3 and seconds > 1.95 then
 			count = count + 3
-		elseif HandOfGuldan.cast_shards >= 2 and seconds > 0.55 then
+		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.55 then
 			count = count + 2
-		elseif HandOfGuldan.cast_shards >= 1 and seconds > 0.15 then
+		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.15 then
 			count = count + 1
 		end
 	end
@@ -2720,6 +2761,8 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 		elseif ability == PowerSiphon then
 			Pet.WildImp:sacrifice()
 			Pet.WildImp:sacrifice()
+		elseif ability == HandOfGuldan then
+			HandOfGuldan:castSuccess()
 		end
 	end
 	if dstGUID == Player.guid then
