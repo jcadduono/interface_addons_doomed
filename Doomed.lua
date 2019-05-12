@@ -1358,13 +1358,13 @@ HandOfGuldan.imp_pool = {}
 
 function HandOfGuldan:castSuccess()
 	if self.cast_shards >= 1 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.15
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.2
 	end
 	if self.cast_shards >= 2 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.55
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.6
 	end
 	if self.cast_shards >= 3 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.95
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 2.0
 	end
 end
 
@@ -1373,6 +1373,12 @@ function HandOfGuldan:impSpawned()
 		return
 	end
 	table.remove(self.imp_pool, 1)
+end
+
+function HandOfGuldan:purge()
+	while #self.imp_pool > 0 and self.imp_pool[1] < Player.time do
+		table.remove(self.imp_pool, 1)
+	end
 end
 
 --[[
@@ -1495,11 +1501,11 @@ function Pet.WildImp:impsIn(seconds)
 		end
 	end
 	if HandOfGuldan:casting() then
-		if HandOfGuldan.cast_shards >= 3 and seconds > 1.95 then
+		if HandOfGuldan.cast_shards >= 3 and seconds > 2.0 then
 			count = count + 3
-		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.55 then
+		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.6 then
 			count = count + 2
-		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.15 then
+		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.2 then
 			count = count + 1
 		end
 	end
@@ -2613,6 +2619,7 @@ local function UpdateCombat()
 	end
 
 	if Player.spec == SPEC.DEMONOLOGY then
+		HandOfGuldan:purge()
 		Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
 		Player.imp_count = Pet.WildImp:count()
 	end
