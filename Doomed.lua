@@ -1381,6 +1381,10 @@ function HandOfGuldan:purge()
 	end
 end
 
+function InnerDemons:impSpawned()
+	self.next_imp = Player.time + 12
+end
+
 --[[
 function DemonicCore:remains()
 	if Pet.Dreadstalker:expiring() > 0 then
@@ -1436,6 +1440,8 @@ function Pet.WildImp:addUnit(guid)
 	unit.id = tonumber(guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)'))
 	if unit.id == self.unitId then
 		HandOfGuldan:impSpawned()
+	elseif unit.id == self.unitId2 then
+		InnerDemons:impSpawned()
 	end
 	return unit
 end
@@ -1474,9 +1480,12 @@ function Pet.WildImp:count()
 		end
 	end
 	for guid, unit in next, HandOfGuldan.imp_pool do
-		if unit - Player.time < Player.execute_remains then
+		if (unit - Player.time) < Player.execute_remains then
 			count = count + 1
 		end
+	end
+	if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < Player.execute_remains then
+		count = count + 1
 	end
 	return count
 end
@@ -1496,9 +1505,12 @@ function Pet.WildImp:impsIn(seconds)
 		end
 	end
 	for guid, unit in next, HandOfGuldan.imp_pool do
-		if unit - Player.time < (Player.execute_remains + seconds) then
+		if (unit - Player.time) < (Player.execute_remains + seconds) then
 			count = count + 1
 		end
+	end
+	if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < (Player.execute_remains + seconds) then
+		count = count + 1
 	end
 	if HandOfGuldan:casting() then
 		if HandOfGuldan.cast_shards >= 3 and seconds > 2.0 then
@@ -3112,6 +3124,7 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		Player.spec = GetSpecialization() or 0
 		Azerite:update()
 		UpdateAbilityData()
+		InnerDemons.next_imp = nil
 		local _, i
 		for i = 1, #inventoryItems do
 			inventoryItems[i].name, _, _, _, _, _, _, _, _, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
