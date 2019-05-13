@@ -1955,8 +1955,13 @@ actions.precombat+=/demonbolt
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
-		if Demonbolt:usable() and Player.soul_shards < 5 and (Target.boss or DemonicCore:up()) then
-			return Demonbolt
+		if Player.soul_shards < 5 then
+			if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
+				return Demonbolt
+			end
+			if ShadowBoltDemo:usable() then
+				return ShadowBoltDemo
+			end
 		end
 	else
 		if not Player.pet_active then
