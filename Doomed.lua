@@ -3071,6 +3071,7 @@ function events:PLAYER_REGEN_ENABLED()
 		autoAoe:clear()
 		autoAoe:update()
 	end
+	Player.previous_gcd = {}
 	if Player.last_ability then
 		Player.last_ability = nil
 		doomedPreviousPanel:Hide()
@@ -3180,7 +3181,6 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 			inventoryItems[i].name, _, _, _, _, _, _, _, _, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
 		end
 		doomedPreviousPanel.ability = nil
-		Player.previous_gcd = {}
 		SetTargetMode(1)
 		UpdateTargetInfo()
 		events:PLAYER_REGEN_ENABLED()
