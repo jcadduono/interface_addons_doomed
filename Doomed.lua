@@ -1528,7 +1528,7 @@ function Pet.WildImp:unitRemains(unit)
 		return 0
 	end
 	local energy, remains = unit.energy, 0
-	if unit.cast_end > 0 then
+	if unit.cast_end > Player.time then
 		if summonedPets:empowered() then
 			remains = summonedPets:empoweredRemains()
 		else
@@ -1537,6 +1537,7 @@ function Pet.WildImp:unitRemains(unit)
 		end
 		remains = remains + (energy / 20 * FelFirebolt:castTime())
 	else
+		unit.cast_end = 0
 		remains = unit.expires - Player.time
 	end
 	return max(remains, 0)
@@ -2796,9 +2797,9 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 		return
 	end
 	if ability == FelFirebolt then
-		local pet = summonedPets:find(dstGUID)
+		local pet = summonedPets:find(srcGUID)
 		if pet then
-			local unit = pet.active_units[dstGUID]
+			local unit = pet.active_units[srcGUID]
 			if unit then
 				if eventType == 'SPELL_CAST_START' then
 					pet:castStart(unit)
