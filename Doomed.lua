@@ -2169,7 +2169,7 @@ end
 
 APL[SPEC.DEMONOLOGY].implosion = function(self)
 --[[
-actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0)|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
+actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0&!azerite.explosive_potential.rank)|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
 actions.implosion+=/grimoire_felguard,if=cooldown.summon_demonic_tyrant.remains<13|!equipped.132369
 actions.implosion+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
 actions.implosion+=/summon_demonic_tyrant
@@ -2183,7 +2183,7 @@ actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demoni
 actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
 actions.implosion+=/call_action_list,name=build_a_shard
 ]]
-	if Implosion:usable() and ((Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or Target.timeToDie < 3 or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
+	if Implosion:usable() and ((Target.timeToDie < 3 and not ExplosivePotential.known) or (Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
 		return Implosion
 	end
 	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not Player.equipped.WilfredsSigilOfSuperiorSummoning then
