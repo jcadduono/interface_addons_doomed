@@ -2164,7 +2164,7 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if HandOfGuldan:usable() and Player.soul_shards >= 3 and HandOfGuldan:previous(2) and SummonDemonicTyrant:ready(HandOfGuldan:castTime()) and (SoulStrike:previous(1) or (not SoulStrike.known and ShadowBoltDemo:previous(1))) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and not CallDreadstalkers:ready() and (DemonicStrength:previous(1) or (HandOfGuldan:previous(1) and HandOfGuldan:previous(2)) or (not DemonicStrength.known and ImpsIn(SummonDemonicTyrant:castTime()) >= 6)) then
+	if SummonDemonicTyrant:usable() and (DemonicStrength:previous(1) or (HandOfGuldan:previous(1) and HandOfGuldan:previous(2)) or (not DemonicStrength.known and ImpsIn(SummonDemonicTyrant:castTime()) >= 6)) then
 		UseCooldown(SummonDemonicTyrant)
 	end
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() then
