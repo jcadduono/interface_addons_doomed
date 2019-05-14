@@ -1507,6 +1507,35 @@ end
 
 -- Start Summoned Pet Modifications
 
+function Pet.DemonicTyrant:addUnit(guid)
+	summonedPets:extend(15)
+	local unit = SummonedPet.addUnit(self, guid)
+	unit.power = 0
+	if DemonicConsumption.known then
+		self:consumption(unit)
+	end
+	return unit
+end
+
+function Pet.DemonicTyrant:consumption(unit)
+	local guid, imp = 0
+	for guid, imp in next, Pet.WildImp.active_units do
+		if imp.expires > Player.time then
+			unit.power = unit.power + (imp.energy / 2)
+		end
+		Pet.WildImp.active_units[guid] = nil
+	end
+	if Pet.WildImpID.known then
+		for guid, imp in next, Pet.WildImpID.active_units do
+			if imp.expires > Player.time then
+				count = count + 1
+				unit.power = unit.power + (imp.energy / 2)
+			end
+			Pet.WildImpID.active_units[guid] = nil
+		end
+	end
+end
+
 function Pet.WildImp:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.energy = 100
@@ -2820,19 +2849,16 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 	if eventType == 'SPELL_SUMMON' then
 		local pet = summonedPets:find(dstGUID)
 		if pet then
-			if pet == DemonicTyrant then
-				summonedPets:extend(15)
-			end
 			pet:addUnit(dstGUID)
 		end
 	elseif eventType == 'SPELL_CAST_SUCCESS' then
-		if ability == Implosion or (DemonicConsumption.known and ability == SummonDemonicTyrant) then
-			Implosion:implode()
+		if ability == Implosion then
+			ability:implode()
 		elseif ability == PowerSiphon then
-			PowerSiphon:sacrifice()
-			PowerSiphon:sacrifice()
+			ability:sacrifice()
+			ability:sacrifice()
 		elseif ability == HandOfGuldan then
-			HandOfGuldan:castSuccess()
+			ability:castSuccess()
 		end
 	end
 	if dstGUID == Player.guid then
