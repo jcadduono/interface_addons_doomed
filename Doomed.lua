@@ -2131,11 +2131,11 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if ExplosivePotential.known and ExplosivePotential:down() and Player.soul_shards >= 3 then
-		if Implosion:usable() and Player.imp_count >= 3 then
+	if ExplosivePotential.known and ExplosivePotential:down() then
+		if Implosion:usable() and Player.imp_count >= 3 and (Player.soul_shards >= 3 or ImpsIn(ShadowBoltDemo:castTime()) < 3) then
 			return Implosion
 		end
-		if HandOfGuldan:usable() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 			return HandOfGuldan
 		end
 	end
