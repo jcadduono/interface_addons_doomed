@@ -2017,6 +2017,9 @@ actions.precombat+=/demonbolt
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
+		if DemonicConsumption.known and SummonDemonicTyrant:usable() and Player.tyrant_available_power >= 270 then
+			UseCooldown(SummonDemonicTyrant)
+		end
 		if Player.soul_shards < 5 then
 			if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
 				return Demonbolt
