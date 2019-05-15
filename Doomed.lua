@@ -2170,13 +2170,13 @@ end
 APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 --[[
 actions.build_a_shard=soul_strike,if=!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>9|buff.demonic_core.up
-actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard))
+actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard)+action.hand_of_guldan.execute_time)
 actions.build_a_shard+=/shadow_bolt
 ]]
 	if SoulStrike:usable() and (not DemonicConsumption.known or not SummonDemonicTyrant:ready(9) or DemonicCore:up()) then
 		return SoulStrike
 	end
-	if Demonbolt:usable() and DemonicCore:up() and DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards)) then
+	if Demonbolt:usable() and DemonicCore:up() and DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards) + HandOfGuldan:castTime()) then
 		return Demonbolt
 	end
 	if ShadowBoltDemo:usable() then
