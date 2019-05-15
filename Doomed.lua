@@ -88,7 +88,7 @@ local function InitializeOpts()
 		auto_aoe_ttl = 10,
 		pot = false,
 		healthstone = true,
-		pet_count = true,
+		pet_count = 'imps',
 	})
 end
 
