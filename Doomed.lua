@@ -89,6 +89,7 @@ local function InitializeOpts()
 		pot = false,
 		healthstone = true,
 		pet_count = 'imps',
+		tyrant = true,
 	})
 end
 
@@ -2711,14 +2712,16 @@ local function UpdateDisplay()
 				text_tl = Player.pet_count > 0 and Player.pet_count
 			end
 		end
-		if Player.tyrant_remains > 0 then
-			if Player.tyrant_power > 0 and Player.tyrant_remains > 5 then
-				text_tr = Player.tyrant_power .. '%'
-			else
-				text_tr = format('%.1fs', Player.tyrant_remains)
+		if Opt.tyrant then
+			if Player.tyrant_remains > 0 then
+				if Player.tyrant_power > 0 and Player.tyrant_remains > 5 then
+					text_tr = Player.tyrant_power .. '%'
+				else
+					text_tr = format('%.1fs', Player.tyrant_remains)
+				end
+			elseif DemonicConsumption.known and Player.tyrant_available_power > 0 and (Player.tyrant_cd < 9 or Player.ability_casting == SummonDemonicTyrant) then
+				text_tr = Player.tyrant_available_power .. '%'
 			end
-		elseif DemonicConsumption.known and Player.tyrant_available_power > 0 and (Player.tyrant_cd < 9 or Player.ability_casting == SummonDemonicTyrant) then
-			text_tr = Player.tyrant_available_power .. '%'
 		end
 	end
 	doomedPanel.dimmer:SetShown(dim)
@@ -3576,6 +3579,12 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Show Demonology summoned pet counter (topleft): ' .. ((Opt.pet_count == 'imps' and '|cFFFFD000Wild Imps only') or (Opt.pet_count and '|cFF00C000On' or '|cFFC00000Off')))
 	end
+	if startsWith(msg[1], 'tyr') then
+		if msg[2] then
+			Opt.tyrant = msg[2] == 'on'
+		end
+		return print('Doomed - Show Demonology Demonic Tyrant power/remains (topright): ' .. (Opt.tyrant and '|cFF00C000On' or '|cFFC00000Off'))
+	end
 	if msg[1] == 'reset' then
 		doomedPanel:ClearAllPoints()
 		doomedPanel:SetPoint('CENTER', 0, -169)
@@ -3607,6 +3616,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show Demonology summoned pet counter (topleft)',
+		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Demonology Demonic Tyrant power/remains (topright)',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
