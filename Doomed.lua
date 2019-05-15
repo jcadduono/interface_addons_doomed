@@ -1527,7 +1527,7 @@ function Pet.DemonicTyrant:addUnit(guid)
 end
 
 function Pet.DemonicTyrant:consumption(unit)
-	local guid, imp = 0
+	local guid, imp
 	for guid, imp in next, Pet.WildImp.active_units do
 		if imp.expires > Player.time then
 			unit.power = unit.power + (imp.energy / 2)
@@ -1537,7 +1537,6 @@ function Pet.DemonicTyrant:consumption(unit)
 	if Pet.WildImpID.known then
 		for guid, imp in next, Pet.WildImpID.active_units do
 			if imp.expires > Player.time then
-				count = count + 1
 				unit.power = unit.power + (imp.energy / 2)
 			end
 			Pet.WildImpID.active_units[guid] = nil
@@ -1551,6 +1550,23 @@ function Pet.DemonicTyrant:power()
 		return unit.power
 	end
 	return 0
+end
+
+function Pet.DemonicTyrant:available_power()
+	local power, guid, imp = 0
+	for guid, imp in next, Pet.WildImp.active_units do
+		if (imp.expires - Player.time) > Player.execute_remains then
+			power = power + (imp.energy / 2)
+		end
+	end
+	if Pet.WildImpID.known then
+		for guid, imp in next, Pet.WildImpID.active_units do
+			if (imp.expires - Player.time) > Player.execute_remains then
+				power = power + (imp.energy / 2)
+			end
+		end
+	end
+	return power
 end
 
 function Pet.WildImp:addUnit(guid)
@@ -2685,22 +2701,19 @@ local function UpdateDisplay()
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
 	if Player.spec == SPEC.DEMONOLOGY then
-		if Opt.pet_count then
-			local count = Player.pet_count
-			if Opt.pet_count == 'imps' then
-				count = Player.imp_count
-			end
-			if count > 0 then
-				text_tl = count
-			end
+		if Opt.pet_count == 'imps' and Player.imp_count > 0 then
+			text_tl = Player.imp_count
+		elseif Opt.pet_count then
+			text_tl = Player.pet_count
 		end
 		if Player.tyrant_remains > 0 then
-			local power = Pet.DemonicTyrant:power()
-			if power > 0 and Player.tyrant_remains > 5 then
-				text_tr = power .. '%'
+			if Player.tyrant_power > 0 and Player.tyrant_remains > 5 then
+				text_tr = Player.tyrant_power .. '%'
 			else
 				text_tr = format('%.1fs', Player.tyrant_remains)
 			end
+		elseif DemonicConsumption.known and Player.tyrant_available_power > 0 and (Player.tyrant_cd < 9 or Player.ability_casting == SummonDemonicTyrant) then
+			text_tr = Player.tyrant_available_power .. '%'
 		end
 	end
 	doomedPanel.dimmer:SetShown(dim)
@@ -2756,7 +2769,10 @@ local function UpdateCombat()
 			Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
 		end
 		Player.imp_count = Pet.WildImp:count() + (Pet.WildImpID and Pet.WildImpID:count() or 0)
+		Player.tyrant_cd = SummonDemonicTyrant:cooldown()
 		Player.tyrant_remains = Pet.DemonicTyrant:remains()
+		Player.tyrant_power = Pet.DemonicTyrant:power()
+		Player.tyrant_available_power = Pet.DemonicTyrant:available_power()
 	end
 
 	Player.main = APL[Player.spec]:main()
