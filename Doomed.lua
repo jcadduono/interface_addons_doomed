@@ -154,19 +154,27 @@ doomedPanel.border = doomedPanel:CreateTexture(nil, 'ARTWORK')
 doomedPanel.border:SetAllPoints(doomedPanel)
 doomedPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 doomedPanel.border:Hide()
-doomedPanel.swipe = CreateFrame('Cooldown', nil, doomedPanel, 'CooldownFrameTemplate')
-doomedPanel.swipe:SetAllPoints(doomedPanel)
 doomedPanel.dimmer = doomedPanel:CreateTexture(nil, 'BORDER')
 doomedPanel.dimmer:SetAllPoints(doomedPanel)
 doomedPanel.dimmer:SetColorTexture(0, 0, 0, 0.6)
 doomedPanel.dimmer:Hide()
-doomedPanel.text = doomedPanel:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text:SetPoint('TOPLEFT', doomedPanel, 'TOPLEFT', 4, -4)
-doomedPanel.targets = doomedPanel:CreateFontString(nil, 'OVERLAY')
-doomedPanel.targets:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.targets:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMRIGHT', -1.5, 3)
-doomedPanel.button = CreateFrame('Button', 'doomedPanelButton', doomedPanel)
+doomedPanel.swipe = CreateFrame('Cooldown', nil, doomedPanel, 'CooldownFrameTemplate')
+doomedPanel.swipe:SetAllPoints(doomedPanel)
+doomedPanel.text = CreateFrame('Frame', nil, doomedPanel)
+doomedPanel.text:SetAllPoints(doomedPanel)
+doomedPanel.text.tl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
+doomedPanel.text.tl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
+doomedPanel.text.tl:SetPoint('TOPLEFT', doomedPanel, 'TOPLEFT', 3, -3)
+doomedPanel.text.tr = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
+doomedPanel.text.tr:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
+doomedPanel.text.tr:SetPoint('TOPRIGHT', doomedPanel, 'TOPRIGHT', -1.5, -3)
+doomedPanel.text.br = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
+doomedPanel.text.br:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
+doomedPanel.text.br:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMRIGHT', -1.5, 3)
+doomedPanel.text.bl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
+doomedPanel.text.bl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
+doomedPanel.text.bl:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMLEFT', -3, 3)
+doomedPanel.button = CreateFrame('Button', nil, doomedPanel)
 doomedPanel.button:SetAllPoints(doomedPanel)
 doomedPanel.button:RegisterForClicks('LeftButtonDown', 'RightButtonDown', 'MiddleButtonDown')
 local doomedPreviousPanel = CreateFrame('Frame', 'doomedPreviousPanel', UIParent)
@@ -262,7 +270,7 @@ local function SetTargetMode(mode)
 	end
 	targetMode = min(mode, #targetModes[Player.spec])
 	Player.enemies = targetModes[Player.spec][targetMode][1]
-	doomedPanel.targets:SetText(targetModes[Player.spec][targetMode][2])
+	doomedPanel.text.br:SetText(targetModes[Player.spec][targetMode][2])
 end
 Doomed_SetTargetMode = SetTargetMode
 
@@ -1537,6 +1545,14 @@ function Pet.DemonicTyrant:consumption(unit)
 	end
 end
 
+function Pet.DemonicTyrant:power()
+	local _, unit
+	for _, unit in next, self.active_units do
+		return unit.power
+	end
+	return 0
+end
+
 function Pet.WildImp:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.energy = 100
@@ -2662,24 +2678,34 @@ end
 
 local function UpdateDisplay()
 	timer.display = 0
-	local dim, text = false, false
+	local dim, text_tl, text_tr = false
 	if Opt.dimmer then
 		dim = not ((not Player.main) or
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if Player.spec == SPEC.DEMONOLOGY and Opt.pet_count then
-		local count = Player.pet_count
-		if Opt.pet_count == 'imps' then
-			count = Player.imp_count
+	if Player.spec == SPEC.DEMONOLOGY then
+		if Opt.pet_count then
+			local count = Player.pet_count
+			if Opt.pet_count == 'imps' then
+				count = Player.imp_count
+			end
+			if count > 0 then
+				text_tl = count
+			end
 		end
-		if count > 0 then
-			doomedPanel.text:SetText(count)
-			text = true
+		if Player.tyrant_remains > 0 then
+			local power = Pet.DemonicTyrant:power()
+			if power > 0 and Player.tyrant_remains > 5 then
+				text_tr = power .. '%'
+			else
+				text_tr = format('%.1fs', Player.tyrant_remains)
+			end
 		end
 	end
 	doomedPanel.dimmer:SetShown(dim)
-	doomedPanel.text:SetShown(text)
+	doomedPanel.text.tl:SetText(text_tl)
+	doomedPanel.text.tr:SetText(text_tr)
 end
 
 local function UpdateCombat()
@@ -2730,6 +2756,7 @@ local function UpdateCombat()
 			Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
 		end
 		Player.imp_count = Pet.WildImp:count() + (Pet.WildImpID and Pet.WildImpID:count() or 0)
+		Player.tyrant_remains = Pet.DemonicTyrant:remains()
 	end
 
 	Player.main = APL[Player.spec]:main()
@@ -2975,7 +3002,6 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 				doomedPreviousPanel.icon:SetTexture(ability.icon)
 				doomedPreviousPanel:Show()
 			end
-
 		end
 		if Player.pet_stuck and ability.requires_pet then
 			Player.pet_stuck = false
