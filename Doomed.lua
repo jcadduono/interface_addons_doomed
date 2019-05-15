@@ -88,6 +88,7 @@ local function InitializeOpts()
 		auto_aoe_ttl = 10,
 		pot = false,
 		healthstone = true,
+		pet_count = true,
 	})
 end
 
@@ -2667,9 +2668,15 @@ local function UpdateDisplay()
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if Player.spec == SPEC.DEMONOLOGY then
-		doomedPanel.text:SetText(Player.pet_count)
-		text = true
+	if Player.spec == SPEC.DEMONOLOGY and Opt.pet_count then
+		local count = Player.pet_count
+		if Opt.pet_count == 'imps' then
+			count = Player.imp_count
+		end
+		if count > 0 then
+			doomedPanel.text:SetText(count)
+			text = true
+		end
 	end
 	doomedPanel.dimmer:SetShown(dim)
 	doomedPanel.text:SetShown(text)
@@ -2719,7 +2726,9 @@ local function UpdateCombat()
 
 	if Player.spec == SPEC.DEMONOLOGY then
 		HandOfGuldan:purge()
-		Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
+		if Opt.pet_count then
+			Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
+		end
 		Player.imp_count = Pet.WildImp:count() + (Pet.WildImpID and Pet.WildImpID:count() or 0)
 	end
 
@@ -3510,6 +3519,16 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return print('Doomed - Show Create Healthstone reminder out of combat: ' .. (Opt.healthstone and '|cFF00C000On' or '|cFFC00000Off'))
 	end
+	if startsWith(msg[1], 'pet') then
+		if msg[2] then
+			if startsWith(msg[2], 'imp') then
+				Opt.pet_count = 'imps'
+			else
+				Opt.pet_count = msg[2] == 'on'
+			end
+		end
+		return print('Doomed - Show Demonology summoned pet counter (topleft): ' .. ((Opt.pet_count == 'imps' and '|cFFFFD000Wild Imps only') or (Opt.pet_count and '|cFF00C000On' or '|cFFC00000Off')))
+	end
 	if msg[1] == 'reset' then
 		doomedPanel:ClearAllPoints()
 		doomedPanel:SetPoint('CENTER', 0, -169)
@@ -3540,6 +3559,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
+		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show Demonology summoned pet counter (topleft)',
 		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
