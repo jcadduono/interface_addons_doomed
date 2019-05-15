@@ -2704,10 +2704,12 @@ local function UpdateDisplay()
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
 	if Player.spec == SPEC.DEMONOLOGY then
-		if Opt.pet_count == 'imps' and Player.imp_count > 0 then
-			text_tl = Player.imp_count
-		elseif Opt.pet_count then
-			text_tl = Player.pet_count
+		if Opt.pet_count then
+			if Opt.pet_count == 'imps' then
+				text_tl = Player.imp_count > 0 and Player.imp_count
+			else
+				text_tl = Player.pet_count > 0 and Player.pet_count
+			end
 		end
 		if Player.tyrant_remains > 0 then
 			if Player.tyrant_power > 0 and Player.tyrant_remains > 5 then
