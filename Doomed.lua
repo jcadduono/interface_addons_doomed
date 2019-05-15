@@ -2583,30 +2583,30 @@ local resourceAnchor = {}
 local ResourceFramePoints = {
 	['blizzard'] = {
 		[SPEC.AFFLICTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 18 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
 		},
 		[SPEC.DEMONOLOGY] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 18 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
 		},
 		[SPEC.DESTRUCTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 18 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
 		}
 	},
 	['kui'] = {
 		[SPEC.AFFLICTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
 		},
 		[SPEC.DEMONOLOGY] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
 		},
 		[SPEC.DESTRUCTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
 		}
 	},
 }
