@@ -1234,9 +1234,6 @@ local function TimeInCombat()
 	if Player.combat_start > 0 then
 		return Player.time - Player.combat_start
 	end
-	if Player.ability_casting then
-		return 0.1
-	end
 	return 0
 end
 
@@ -1649,6 +1646,20 @@ function Pet.WildImp:remains()
 end
 Pet.WildImpID.remains = Pet.WildImp.remains
 
+function Pet.WildImp:casting()
+	if Player.combat_start == 0 then
+		return false
+	end
+	local guid, unit = 0
+	for guid, unit in next, self.active_units do
+		if unit.cast_end >= Player.time then
+			return true
+		end
+	end
+	return false
+end
+Pet.WildImpID.casting = Pet.WildImp.casting
+
 function Pet.WildImp:castStart(unit)
 	unit.cast_end = Player.time + FelFirebolt:castTime()
 end
@@ -1734,7 +1745,7 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 			if Haunt:usable() then
 				return Haunt
 			end
-		elseif Player.enemies < 3 and ShadowBolt:usable() then
+		elseif Player.enemies < 3 and ShadowBolt:usable() and not ShadowBolt:casting() then
 			return ShadowBolt
 		end
 		
@@ -2018,17 +2029,6 @@ actions.precombat+=/demonbolt
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
-		if DemonicConsumption.known and SummonDemonicTyrant:usable() and Player.tyrant_available_power >= 270 then
-			UseCooldown(SummonDemonicTyrant)
-		end
-		if Player.soul_shards < 5 then
-			if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
-				return Demonbolt
-			end
-			if ShadowBoltDemo:usable() then
-				return ShadowBoltDemo
-			end
-		end
 	else
 		if not Player.pet_active then
 			if SummonFelguard:usable() then
@@ -2036,6 +2036,22 @@ actions.precombat+=/demonbolt
 			elseif SummonWrathguard:usable() then
 				UseExtra(SummonWrathguard)
 			end
+		end
+	end
+	if DemonicConsumption.known and Player.tyrant_available_power >= 200 and SummonDemonicTyrant:ready() and not (Pet.WildImp:casting() or Pet.WildImpID:casting()) then
+		if HandOfGuldan:usable() and not HandOfGuldan:casting() and ImpsIn(HandOfGuldan:castTime() + SummonDemonicTyrant:castTime()) >= (Player.imp_count - 2) then
+			return HandOfGuldan
+		end
+		if SummonDemonicTyrant:usable() and (HandOfGuldan:casting() or (Player.tyrant_available_power >= 270 and ImpsIn(SummonDemonicTyrant:castTime()) >= Player.imp_count)) then
+			UseCooldown(SummonDemonicTyrant)
+		end
+	end
+	if TimeInCombat() == 0 and Player.soul_shards < 5 and not (Demonbolt:casting() or ShadowBoltDemo:casting()) then
+		if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
+			return Demonbolt
+		end
+		if ShadowBoltDemo:usable() then
+			return ShadowBoltDemo
 		end
 	end
 --[[
@@ -3152,6 +3168,11 @@ function events:PLAYER_REGEN_ENABLED()
 	Player.combat_start = 0
 	Player.pet_stuck = false
 	Target.estimated_range = 30
+	Player.previous_gcd = {}
+	if Player.last_ability then
+		Player.last_ability = nil
+		doomedPreviousPanel:Hide()
+	end
 	local _, ability, guid
 	for _, ability in next, abilities.velocity do
 		for guid in next, ability.travel_start do
@@ -3167,11 +3188,6 @@ function events:PLAYER_REGEN_ENABLED()
 		end
 		autoAoe:clear()
 		autoAoe:update()
-	end
-	Player.previous_gcd = {}
-	if Player.last_ability then
-		Player.last_ability = nil
-		doomedPreviousPanel:Hide()
 	end
 end
 
