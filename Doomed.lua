@@ -1354,7 +1354,7 @@ end
 function UnstableAffliction:next()
 	local i
 	for i = 1, 5 do
-		if not Ability.up(UnstableAffliction[i]) then
+		if Ability.remains(UnstableAffliction[i]) > 0 then
 			return UnstableAffliction[i]
 		end
 	end
