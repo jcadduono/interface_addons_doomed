@@ -3349,6 +3349,16 @@ for event in next, events do
 	doomedPanel:RegisterEvent(event)
 end
 
+-- this fancy hack allows you to click BattleTag links to add them as a friend!
+local ChatFrame_OnHyperlinkShow_Original = ChatFrame_OnHyperlinkShow
+function ChatFrame_OnHyperlinkShow(chatFrame, link, ...)
+	local linkType, linkData = link:match('(.-):(.*)')
+	if linkType == 'BNadd' then
+		return BattleTagInviteFrame_Show(linkData)
+	end
+	return ChatFrame_OnHyperlinkShow_Original(chatFrame, link, ...)
+end
+
 function SlashCmdList.Doomed(msg, editbox)
 	msg = { strsplit(' ', strlower(msg)) }
 	if startsWith(msg[1], 'lock') then
@@ -3638,5 +3648,6 @@ function SlashCmdList.Doomed(msg, editbox)
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
 	end
 	print('Need to threaten with the wrath of doom? You can still use |cFFFFD000/wrath|r!')
-	print('Got ideas for improvement or found a bug? Contact |cFF9482C9Baad|cFFFFD000-Dalaran|r or |cFFFFD000Spy#1955|r (the author of this addon)')
+	print('Got ideas for improvement or found a bug? Talk to me on Battle.net:',
+		'|c' .. BATTLENET_FONT_COLOR:GenerateHexColor() .. '|HBNadd:Spy#1955|h[Spy#1955]|h|r')
 end
