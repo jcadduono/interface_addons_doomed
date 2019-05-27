@@ -2080,7 +2080,7 @@ actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_c
 actions+=/summon_demonic_tyrant,if=soul_shard<3|target.time_to_die<20
 actions+=/power_siphon,if=buff.wild_imps.stack>=2&buff.demonic_core.stack<=2&buff.demonic_power.down&spell_targets.implosion<2
 actions+=/doom,if=talent.doom.enabled&refreshable&time_to_die>(dot.doom.remains+30)
-actions+=/hand_of_guldan,if=soul_shard>=5|(soul_shard>=3&cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
+actions+=/hand_of_guldan,if=soul_shard>=5|soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
 actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
@@ -2157,7 +2157,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and DemonicCore:remains() <= HandOfGuldan:castTime() then
 		return Demonbolt
 	end
-	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or (Player.soul_shards >= 3 and not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or SummonDemonicTyrant:ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:ready(3)))) then
+	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or Player.soul_shards >= 3 and (DemonicCore:stack() >= 3 or (not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or SummonDemonicTyrant:ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:ready(3))))) then
 		return HandOfGuldan
 	end
 	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
