@@ -59,9 +59,9 @@ actions.build_a_shard+=/shadow_bolt
 
 actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up&cooldown.demonic_tyrant.remains<execute_time+action.hand_of_guldan.execute_time
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time*2
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt
 actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&buff.wild_imps.stack>=3&soul_shard>=3
 actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)

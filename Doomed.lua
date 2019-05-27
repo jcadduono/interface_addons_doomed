@@ -2194,9 +2194,9 @@ APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
 --[[
 actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up&cooldown.demonic_tyrant.remains<execute_time+action.hand_of_guldan.execute_time
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time*2
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt
 actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&buff.wild_imps.stack>=3&soul_shard>=3
 actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
@@ -2214,14 +2214,14 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if SummonDemonicTyrant:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and (HandOfGuldan:previous(3) or HandOfGuldan:previous(4)) then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if Demonbolt:usable() and Player.soul_shards >= 2 and HandOfGuldan:previous(1) and not (HandOfGuldan:previous(3) and HandOfGuldan:previous(5)) and DemonicCore:up() and SummonDemonicTyrant:ready(Player.gcd + HandOfGuldan:castTime()) then
+	if Demonbolt:usable() and Player.soul_shards >= 2 and HandOfGuldan:previous(1) and not (HandOfGuldan:previous(3) and HandOfGuldan:previous(5)) and DemonicCore:up() then
 		return Demonbolt
 	end
 	if HandOfGuldan:usable() then
-		if Player.soul_shards >= 4 and Demonbolt:previous(1) and HandOfGuldan:previous(2) and SummonDemonicTyrant:ready(HandOfGuldan:castTime() * 2) then
+		if Player.soul_shards >= 4 and Demonbolt:previous(1) and HandOfGuldan:previous(2) then
 			return HandOfGuldan
 		end
-		if HandOfGuldan:previous(1) and Demonbolt:previous(2) and SummonDemonicTyrant:ready(HandOfGuldan:castTime()) then
+		if HandOfGuldan:previous(1) and Demonbolt:previous(2) then
 			return HandOfGuldan
 		end
 	end
