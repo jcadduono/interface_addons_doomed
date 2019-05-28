@@ -2106,7 +2106,7 @@ actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
 ]]
-	if DemonicPower:up() then
+	if DemonicPower:up() or (Target.boss and Target.timeToDie < 15) then
 		if Trinket1:usable() then
 			UseCooldown(Trinket1)
 		elseif Trinket2:usable() then
