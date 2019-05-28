@@ -125,9 +125,6 @@ local Player = {
 	soul_shards = 0,
 	soul_shards_max = 0,
 	previous_gcd = {},-- list of previous GCD abilities
-	equipped = {-- items equipped with special effects
-		WilfredsSigilOfSuperiorSummoning = false
-	},
 }
 
 -- current target information
@@ -1124,7 +1121,8 @@ function InventoryItem.add(itemId)
 	local item = {
 		itemId = itemId,
 		name = name,
-		icon = icon
+		icon = icon,
+		can_use = false,
 	}
 	setmetatable(item, InventoryItem)
 	inventoryItems[#inventoryItems + 1] = item
@@ -1148,16 +1146,28 @@ function InventoryItem:count()
 end
 
 function InventoryItem:cooldown()
-	local startTime, duration = GetItemCooldown(self.itemId)
-	return startTime == 0 and 0 or duration - (Player.time - startTime)
+	local startTime, duration
+	if self.equip_slot then
+		startTime, duration = GetInventoryItemCooldown('player', self.equip_slot)
+	else
+		startTime, duration = GetItemCooldown(self.itemId)
+	end
+	return startTime == 0 and 0 or duration - (Player.ctime - startTime)
 end
 
 function InventoryItem:ready(seconds)
 	return self:cooldown() <= (seconds or 0)
 end
 
+function InventoryItem:equipped()
+	return self.equip_slot and true
+end
+
 function InventoryItem:usable(seconds)
-	if self:charges() == 0 then
+	if not self.can_use then
+		return false
+	end
+	if not self:equipped() and self:charges() == 0 then
 		return false
 	end
 	return self:ready(seconds)
@@ -1172,6 +1182,10 @@ FlaskOfEndlessFathoms.buff = Ability.add(251837, true, true)
 local BattlePotionOfIntellect = InventoryItem.add(163222)
 BattlePotionOfIntellect.buff = Ability.add(279151, true, true)
 BattlePotionOfIntellect.buff.triggers_gcd = false
+-- Equipment
+local Trinket1 = InventoryItem.add(0)
+local Trinket2 = InventoryItem.add(0)
+local WilfredsSigilOfSuperiorSummoning = InventoryItem.add(132369)
 -- End Inventory Items
 
 -- Start Azerite Trait API
@@ -2049,7 +2063,7 @@ actions.precombat+=/demonbolt
 		end
 	end
 	if TimeInCombat() == 0 and Player.soul_shards < 5 and not (Demonbolt:casting() or ShadowBoltDemo:casting()) then
-		if Demonbolt:usable() and (Target.boss or DemonicCore:up()) then
+		if Demonbolt:usable() and (Target.boss or DemonicCore:up()) and (Player.soul_shards <= 3 or DemonicCore:up() and DemonicCore:remains() < (ShadowBoltDemo:castTime() * 2)) then
 			return Demonbolt
 		end
 		if ShadowBoltDemo:usable() then
@@ -2085,6 +2099,13 @@ actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
 ]]
+	if DemonicPower:up() then
+		if Trinket1:usable() then
+			UseCooldown(Trinket1)
+		elseif Trinket2:usable() then
+			UseCooldown(Trinket2)
+		end
+	end
 	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.DemonicTyrant:up() and (not NetherPortal.known or not NetherPortal:ready(160))) then
 		UseCooldown(BattlePotionOfIntellect)
 	end
@@ -2277,7 +2298,7 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if Implosion:usable() and ((Target.timeToDie < 3 and (not ExplosivePotential.known or Player.imp_count >= 3)) or (Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:previous(1) or Player.imp_count >= 9 or BilescourgeBombers:previous(1) or not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2))) and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2) or DemonicPower:up())) or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:previous(2))) then
 		return Implosion
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not Player.equipped.WilfredsSigilOfSuperiorSummoning then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not WilfredsSigilOfSuperiorSummoning:equipped() then
 		UseCooldown(GrimoireFelguard)
 	end
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
@@ -2326,7 +2347,7 @@ actions.nether_portal_active+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not Player.equipped.WilfredsSigilOfSuperiorSummoning then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not WilfredsSigilOfSuperiorSummoning:equipped() then
 		UseCooldown(GrimoireFelguard)
 	end
 	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or not SummonDemonicTyrant:ready(40)) then
@@ -2575,12 +2596,12 @@ end
 
 local function Equipped(itemID, slot)
 	if slot then
-		return GetInventoryItemID('player', slot) == itemID
+		return GetInventoryItemID('player', slot) == itemID, slot
 	end
 	local i
 	for i = 1, 19 do
 		if GetInventoryItemID('player', i) == itemID then
-			return true
+			return true, i
 		end
 	end
 	return false
@@ -3259,24 +3280,34 @@ end
 function events:PLAYER_EQUIPMENT_CHANGED()
 	Azerite:update()
 	UpdateAbilityData()
-	Player.equipped.WilfredsSigilOfSuperiorSummoning = Equipped(132369)
+	Trinket1.itemId = GetInventoryItemID('player', 13)
+	Trinket2.itemId = GetInventoryItemID('player', 14)
+	local _, i, equipType, hasCooldown
+	for i = 1, #inventoryItems do
+		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
+		inventoryItems[i].can_use = inventoryItems[i].name and true or false
+		if equipType and equipType ~= '' then
+			hasCooldown = 0
+			_, inventoryItems[i].equip_slot = Equipped(inventoryItems[i].itemId)
+			if inventoryItems[i].equip_slot then
+				_, _, hasCooldown = GetInventoryItemCooldown('player', inventoryItems[i].equip_slot)
+			end
+			inventoryItems[i].can_use = hasCooldown == 1
+		end
+	end
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
-	if unitName == 'player' then
-		Player.spec = GetSpecialization() or 0
-		Azerite:update()
-		UpdateAbilityData()
-		InnerDemons.next_imp = nil
-		local _, i
-		for i = 1, #inventoryItems do
-			inventoryItems[i].name, _, _, _, _, _, _, _, _, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
-		end
-		doomedPreviousPanel.ability = nil
-		SetTargetMode(1)
-		UpdateTargetInfo()
-		events:PLAYER_REGEN_ENABLED()
+	if unitName ~= 'player' then
+		return
 	end
+	Player.spec = GetSpecialization() or 0
+	doomedPreviousPanel.ability = nil
+	SetTargetMode(1)
+	UpdateTargetInfo()
+	events:PLAYER_EQUIPMENT_CHANGED()
+	events:PLAYER_REGEN_ENABLED()
+	InnerDemons.next_imp = nil
 end
 
 function events:PLAYER_PVP_TALENT_UPDATE()
@@ -3284,8 +3315,6 @@ function events:PLAYER_PVP_TALENT_UPDATE()
 end
 
 function events:PLAYER_ENTERING_WORLD()
-	events:PLAYER_EQUIPMENT_CHANGED()
-	events:PLAYER_SPECIALIZATION_CHANGED('player')
 	if #glows == 0 then
 		CreateOverlayGlows()
 		HookResourceFrame()
@@ -3293,6 +3322,7 @@ function events:PLAYER_ENTERING_WORLD()
 	local _
 	_, Player.instance = IsInInstance()
 	Player.guid = UnitGUID('player')
+	events:PLAYER_SPECIALIZATION_CHANGED('player')
 end
 
 doomedPanel.button:SetScript('OnClick', function(self, button, down)
