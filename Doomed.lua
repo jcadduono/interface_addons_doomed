@@ -87,6 +87,7 @@ local function InitializeOpts()
 		auto_aoe = false,
 		auto_aoe_ttl = 10,
 		pot = false,
+		trinket = true,
 		healthstone = true,
 		pet_count = 'imps',
 		tyrant = true,
@@ -2106,7 +2107,7 @@ actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
 ]]
-	if DemonicPower:up() or (Target.boss and Target.timeToDie < 15) then
+	if Opt.trinket and (DemonicPower:up() or (Target.boss and Target.timeToDie < 15)) then
 		if Trinket1:usable() then
 			UseCooldown(Trinket1)
 		elseif Trinket2:usable() then
@@ -3615,6 +3616,12 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return Status('Show flasks and battle potions in cooldown UI', Opt.pot)
 	end
+	if startsWith(msg[1], 'tri') then
+		if msg[2] then
+			Opt.trinket = msg[2] == 'on'
+		end
+		return Status('Show on-use trinkets in cooldown UI', Opt.trinket)
+	end
 	if startsWith(msg[1], 'health') then
 		if msg[2] then
 			Opt.healthstone = msg[2] == 'on'
@@ -3666,6 +3673,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
+		'trinket |cFF00C000on|r/|cFFC00000off|r - show on-use trinkets in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show Demonology summoned pet counter (topleft)',
 		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Demonology Demonic Tyrant power/remains (topright)',
