@@ -1482,6 +1482,13 @@ function Implosion:implode()
 	end
 end
 
+function DemonicPower:remains()
+	if SummonDemonicTyrant:casting() then
+		return self:duration()
+	end
+	return Ability.remains(self)
+end
+
 --[[
 function DemonicCore:remains()
 	if Pet.Dreadstalker:expiring() > 0 then
