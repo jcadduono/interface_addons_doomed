@@ -995,17 +995,6 @@ function summonedPets:count()
 	return count
 end
 
-function summonedPets:extend(seconds)
-	local _, pet, guid, unit
-	for _, pet in next, self.known do
-		for guid, unit in next, pet.active_units do
-			if unit.expires > Player.time then
-				unit.expires = unit.expires + seconds
-			end
-		end
-	end
-end
-
 function summonedPets:empowered()
 	return Player.time < (self.empowered_ends or 0)
 end
@@ -1539,12 +1528,12 @@ end
 -- Start Summoned Pet Modifications
 
 function Pet.DemonicTyrant:addUnit(guid)
-	summonedPets:extend(15)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.power = 0
 	if DemonicConsumption.known then
 		self:consumption(unit)
 	end
+	self:empowerLesser()
 	return unit
 end
 
@@ -1562,6 +1551,19 @@ function Pet.DemonicTyrant:consumption(unit)
 				unit.power = unit.power + (imp.energy / 2)
 			end
 			Pet.WildImpID.active_units[guid] = nil
+		end
+	end
+end
+
+function Pet.DemonicTyrant:empowerLesser()
+	local _, pet, guid, unit
+	for _, pet in next, summonedPets.known do
+		if pet ~= self then
+			for guid, unit in next, pet.active_units do
+				if unit.expires > Player.time then
+					unit.expires = unit.expires + 15
+				end
+			end
 		end
 	end
 end
