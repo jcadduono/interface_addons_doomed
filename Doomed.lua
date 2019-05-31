@@ -2223,53 +2223,55 @@ APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
 --[[
 actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt
-actions.dcon_prep+=/call_dreadstalkers
-actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&buff.wild_imps.stack>=3&soul_shard>=3
+actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&cooldown.demonic_tyrant.remains<execute_time+action.hand_of_guldan.cast_time*2
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time*2
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep+=/call_dreadstalkers,if=buff.demonic_core.remains<6
+actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.remains<6&buff.wild_imps.stack>=3&soul_shard>=3
 actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
 actions.dcon_prep+=/bilescourge_bombers
-actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
+actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
 actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
 actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
 actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.stack>=2
+actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
 actions.dcon_prep+=/call_action_list,name=build_a_shard
 ]]
-	if HandOfGuldan:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and not HandOfGuldan:previous(3) and SummonDemonicTyrant:ready(HandOfGuldan:castTime()) then
+	local tyrant_cd, hog_ct = SummonDemonicTyrant:cooldown(), HandOfGuldan:castTime()
+	if HandOfGuldan:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and not HandOfGuldan:previous(3) and tyrant_cd < hog_ct then
 		return HandOfGuldan
 	end
 	if SummonDemonicTyrant:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and (HandOfGuldan:previous(3) or HandOfGuldan:previous(4)) then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if Demonbolt:usable() and Player.soul_shards >= 2 and HandOfGuldan:previous(1) and not (HandOfGuldan:previous(3) and HandOfGuldan:previous(5)) and DemonicCore:up() then
+	if Demonbolt:usable() and Player.soul_shards >= 2 and DemonicCore:up() and HandOfGuldan:previous(1) and not (HandOfGuldan:previous(3) and HandOfGuldan:previous(5)) and tyrant_cd < (Player.gcd + hog_ct * 2) then
 		return Demonbolt
 	end
 	if HandOfGuldan:usable() then
-		if Player.soul_shards >= 4 and Demonbolt:previous(1) and HandOfGuldan:previous(2) then
+		if Player.soul_shards >= 4 and Demonbolt:previous(1) and HandOfGuldan:previous(2) and tyrant_cd < (hog_ct * 2) then
 			return HandOfGuldan
 		end
-		if HandOfGuldan:previous(1) and Demonbolt:previous(2) then
+		if HandOfGuldan:previous(1) and Demonbolt:previous(2) and HandOfGuldan:previous(3) and tyrant_cd < hog_ct then
 			return HandOfGuldan
 		end
 	end
-	if CallDreadstalkers:usable() then
+	if CallDreadstalkers:usable() and DemonicCore:remains() < 6 then
 		return CallDreadstalkers
 	end
-	if ExplosivePotential.known and ExplosivePotential:down() then
+	if ExplosivePotential.known and ExplosivePotential:remains() < 6 then
 		if Implosion:usable() and Player.imp_count >= 3 and (Player.soul_shards >= 3 or ImpsIn(ShadowBoltDemo:castTime()) < 3) then
 			return Implosion
 		end
-		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:down() and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 			return HandOfGuldan
 		end
 	end
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if Doom:usable() and Doom:refreshable() and Target.timeToDie > Doom:remains() + 30 then
-		return Doom
+	if CallDreadstalkers:usable() then
+		return CallDreadstalkers
 	end
 	if Player.soul_shards >= 5 then
 		if SummonVilefiend:usable() then
@@ -2283,6 +2285,9 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	end
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:stack() >= 2 then
 		return Demonbolt
+	end
+	if Doom:usable() and Doom:refreshable() and Target.timeToDie > Doom:remains() + 30 then
+		return Doom
 	end
 	return self:build_a_shard()
 end

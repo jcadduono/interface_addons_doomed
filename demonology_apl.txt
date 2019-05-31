@@ -59,18 +59,19 @@ actions.build_a_shard+=/shadow_bolt
 
 actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&buff.demonic_core.up
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt
-actions.dcon_prep+=/call_dreadstalkers
-actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&buff.wild_imps.stack>=3&soul_shard>=3
+actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&cooldown.demonic_tyrant.remains<execute_time+action.hand_of_guldan.cast_time*2
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time*2
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep+=/call_dreadstalkers,if=buff.demonic_core.remains<6
+actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.remains<6&buff.wild_imps.stack>=3&soul_shard>=3
 actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
 actions.dcon_prep+=/bilescourge_bombers
-actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
+actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
 actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
 actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
 actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.stack>=2
+actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
 actions.dcon_prep+=/call_action_list,name=build_a_shard
 
 actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0)|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
@@ -108,7 +109,7 @@ actions.nether_portal_building+=/power_siphon,if=buff.wild_imps.stack>=2&buff.de
 actions.nether_portal_building+=/hand_of_guldan,if=soul_shard>=5
 actions.nether_portal_building+=/call_action_list,name=build_a_shard
 
-head=blazewing_hood,id=165500,bonus_id=5062/1587/4786/4775,azerite_powers=231/428/31/13
+head=blazewing_hood,id=165500,bonus_id=4824/1537/4775,azerite_powers=231/428/31/13
 neck=heart_of_azeroth,id=158075,bonus_id=4929/5814/4936/1566,azerite_level=48
 shoulders=gigacharged_shoulderpads,id=165497,bonus_id=4824/1537/4775,azerite_powers=231/562/459/13
 back=silverback_cloak,id=165513,bonus_id=4800/1537
