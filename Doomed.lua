@@ -2055,6 +2055,14 @@ actions.precombat+=/demonbolt
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
+		if Player.soul_shards < 5 and Player.imp_count < 6 and not (Demonbolt:casting() or ShadowBoltDemo:casting()) then
+			if Demonbolt:usable() and (Target.boss or DemonicCore:up()) and (Player.soul_shards <= 3 or DemonicCore:up() and DemonicCore:remains() < (ShadowBoltDemo:castTime() * 2)) then
+				return Demonbolt
+			end
+			if ShadowBoltDemo:usable() then
+				return ShadowBoltDemo
+			end
+		end
 	else
 		if not Player.pet_active then
 			if SummonFelguard:usable() then
@@ -2062,22 +2070,6 @@ actions.precombat+=/demonbolt
 			elseif SummonWrathguard:usable() then
 				UseExtra(SummonWrathguard)
 			end
-		end
-	end
-	if DemonicConsumption.known and Player.tyrant_available_power >= 200 and SummonDemonicTyrant:ready() and not (Pet.WildImp:casting() or Pet.WildImpID:casting()) then
-		if HandOfGuldan:usable() and not HandOfGuldan:casting() and ImpsIn(HandOfGuldan:castTime() + SummonDemonicTyrant:castTime()) >= (Player.imp_count - 2) then
-			return HandOfGuldan
-		end
-		if SummonDemonicTyrant:usable() and (HandOfGuldan:casting() or (Player.tyrant_available_power >= 270 and ImpsIn(SummonDemonicTyrant:castTime()) >= Player.imp_count)) then
-			UseCooldown(SummonDemonicTyrant)
-		end
-	end
-	if TimeInCombat() == 0 and Player.soul_shards < 5 and not (Demonbolt:casting() or ShadowBoltDemo:casting()) then
-		if Demonbolt:usable() and (Target.boss or DemonicCore:up()) and (Player.soul_shards <= 3 or DemonicCore:up() and DemonicCore:remains() < (ShadowBoltDemo:castTime() * 2)) then
-			return Demonbolt
-		end
-		if ShadowBoltDemo:usable() then
-			return ShadowBoltDemo
 		end
 	end
 --[[
@@ -2244,8 +2236,19 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if HandOfGuldan:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and not HandOfGuldan:previous(3) and tyrant_cd < hog_ct then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:usable() and HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and (HandOfGuldan:previous(3) or HandOfGuldan:previous(4)) then
-		UseCooldown(SummonDemonicTyrant)
+	if SummonDemonicTyrant:usable() then
+		if HandOfGuldan:previous(1) and HandOfGuldan:previous(2) and (HandOfGuldan:previous(3) or HandOfGuldan:previous(4)) then
+			UseCooldown(SummonDemonicTyrant)
+		end
+		if Player.tyrant_available_power >= 200 then
+			local imps_idle = not (Pet.WildImp:casting() or Pet.WildImpID:casting())
+			if HandOfGuldan:usable() and imps_idle and (Player.soul_shards >= 2 or Player.tyrant_available_power >= 250) and ImpsIn(hog_ct + SummonDemonicTyrant:castTime()) >= (Player.imp_count - 2) then
+				return HandOfGuldan
+			end
+			if (HandOfGuldan:previous(1) and (HandOfGuldan:previous(2) or imps_idle)) or (Player.tyrant_available_power >= 280 and imps_idle and ImpsIn(SummonDemonicTyrant:castTime()) >= Player.imp_count) then
+				UseCooldown(SummonDemonicTyrant)
+			end
+		end
 	end
 	if Demonbolt:usable() and Player.soul_shards >= 2 and DemonicCore:up() and HandOfGuldan:previous(1) and not (HandOfGuldan:previous(3) and HandOfGuldan:previous(5)) and tyrant_cd < (Player.gcd + hog_ct * 2) then
 		return Demonbolt
