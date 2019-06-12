@@ -415,7 +415,6 @@ function Ability:match(spell)
 	return false
 end
 
-
 function Ability:ready(seconds)
 	return self:cooldown() <= (seconds or 0)
 end
@@ -1705,14 +1704,14 @@ Pet.WildImpID.castSuccess = Pet.WildImp.castSuccess
 
 -- End Summoned Pet Modifications
 
-local function UseCooldown(ability, overwrite, always)
-	if always or (Opt.cooldown and (not Opt.boss_only or Target.boss) and (not Player.cd or overwrite)) then
+local function UseCooldown(ability, overwrite)
+	if Opt.cooldown and (not Opt.boss_only or Target.boss) and (not Player.cd or overwrite) then
 		Player.cd = ability
 	end
 end
 
-local function UseExtra(ability, overwrite, always)
-	if always or (not Player.extra or overwrite) then
+local function UseExtra(ability, overwrite)
+	if not Player.extra or overwrite then
 		Player.extra = ability
 	end
 end
@@ -2885,9 +2884,12 @@ function events:UNIT_POWER_UPDATE(srcName, powerType)
 	end
 end
 
-function events:UNIT_SPELLCAST_START(srcName)
+function events:UNIT_SPELLCAST_START(srcName, castId, spellId)
 	if Opt.interrupt and srcName == 'target' then
 		UpdateCombatWithin(0.05)
+	end
+	if srcName == 'player' and spellId == HandOfGuldan.spellId then
+		HandOfGuldan.cast_shards = Player.soul_shards
 	end
 end
 
@@ -2917,12 +2919,6 @@ function events:ADDON_LOADED(name)
 		doomedCooldownPanel:SetScale(Opt.scale.cooldown)
 		doomedInterruptPanel:SetScale(Opt.scale.interrupt)
 		doomedExtraPanel:SetScale(Opt.scale.extra)
-	end
-end
-
-function events:UNIT_SPELLCAST_START(srcName, castId, spellId)
-	if srcName == 'player' and spellId == HandOfGuldan.spellId then
-		HandOfGuldan.cast_shards = Player.soul_shards
 	end
 end
 
@@ -3350,11 +3346,11 @@ end
 doomedPanel.button:SetScript('OnClick', function(self, button, down)
 	if down then
 		if button == 'LeftButton' then
-			Doomed_ToggleTargetMode()
+			ToggleTargetMode()
 		elseif button == 'RightButton' then
-			Doomed_ToggleTargetModeReverse()
+			ToggleTargetModeReverse()
 		elseif button == 'MiddleButton' then
-			Doomed_SetTargetMode(1)
+			SetTargetMode(1)
 		end
 	end
 end)
