@@ -2335,7 +2335,7 @@ actions.implosion+=/demonbolt,if=prev_gcd.1.hand_of_guldan&soul_shard>=1&(buff.w
 actions.implosion+=/summon_vilefiend,if=(cooldown.summon_demonic_tyrant.remains>40&spell_targets.implosion<=2)|cooldown.summon_demonic_tyrant.remains<12
 actions.implosion+=/bilescourge_bombers,if=cooldown.summon_demonic_tyrant.remains>9
 actions.implosion+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
-actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demonic_core.stack>=3|buff.demonic_core.remains<=gcd*5.7)
+actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demonic_core.stack>=3|buff.demonic_core.remains<=gcd*5.7|spell_targets.implosion>=4&cooldown.summon_demonic_tyrant.remains>22)
 actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
 actions.implosion+=/call_action_list,name=build_a_shard
 ]]
@@ -2369,7 +2369,7 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
 		return SoulStrike
 	end
-	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and (DemonicCore:stack() >= 3 or DemonicCore:remains() <= (Player.gcd * 5.7)) then
+	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and (DemonicCore:stack() >= 3 or DemonicCore:remains() <= (Player.gcd * 5.7) or Player.enemies >= 4 and not SummonDemonicTyrant:ready(22)) then
 		return Demonbolt
 	end
 	if Doom:usable() and Doom:refreshable() and Target.timeToDie > (Doom:remains() + 30) then
