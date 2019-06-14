@@ -8,13 +8,13 @@
 	<Binding name="Set Targets to 1" category="ADDONS">
 		Doomed_SetTargetMode(1)
 	</Binding>
-	<Binding name="Set Targets to 2+" category="ADDONS">
+	<Binding name="Set Targets to 2" category="ADDONS">
 		Doomed_SetTargetMode(2)
 	</Binding>
 	<Binding name="Set Targets to 3+" category="ADDONS">
 		Doomed_SetTargetMode(3)
 	</Binding>
-	<Binding name="Set Targets to 5+" category="ADDONS">
+	<Binding name="Set Targets to 4+ (Demonology) or 5+ (Affliction/Destruction)" category="ADDONS">
 		Doomed_SetTargetMode(4)
 	</Binding>
 </Bindings>
