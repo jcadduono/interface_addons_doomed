@@ -2078,6 +2078,7 @@ actions+=/berserking,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/blood_fury,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/fireblood,if=pet.demonic_tyrant.active|target.time_to_die<=15
 actions+=/call_action_list,name=dcon_prep,if=talent.demonic_consumption.enabled&cooldown.summon_demonic_tyrant.remains<5
+actions+=/call_action_list,name=tyrant_active,if=pet.demonic_tyrant.active
 actions+=/hand_of_guldan,if=azerite.explosive_potential.rank&time<5&soul_shard>=3&buff.explosive_potential.down&buff.wild_imps.stack<3&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&buff.demonic_core.stack=4
 actions+=/demonbolt,if=soul_shard<=4&buff.demonic_core.up&buff.demonic_core.remains<(gcd*buff.demonic_core.stack)
@@ -2112,6 +2113,10 @@ actions+=/call_action_list,name=build_a_shard
 	end
 	if DemonicConsumption.known and SummonDemonicTyrant:ready(5) then
 		local apl = self:dcon_prep()
+		if apl then return apl end
+	end
+	if Pet.DemonicTyrant:up() then
+		local apl = self:tyrant_active()
 		if apl then return apl end
 	end
 	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and Player.soul_shards >= 3 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
@@ -2195,14 +2200,20 @@ APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 --[[
 actions.build_a_shard=soul_strike,if=soul_shard=4
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard)+action.hand_of_guldan.execute_time)
+actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&soul_shard<=3&pet.demonic_tyrant.active
 actions.build_a_shard+=/soul_strike
 actions.build_a_shard+=/shadow_bolt
 ]]
 	if SoulStrike:usable() and Player.soul_shards == 4 then
 		return SoulStrike
 	end
-	if Demonbolt:usable() and DemonicCore:up() and DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards) + HandOfGuldan:castTime()) then
-		return Demonbolt
+	if Demonbolt:usable() and DemonicCore:up() then
+		if DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards) + HandOfGuldan:castTime()) then
+			return Demonbolt
+		end
+		if Player.soul_shards <= 3 and Pet.DemonicTyrant:up() then
+			return Demonbolt
+		end
 	end
 	if SoulStrike:usable() then
 		return SoulStrike
@@ -2212,13 +2223,28 @@ actions.build_a_shard+=/shadow_bolt
 	end
 end
 
+APL[SPEC.DEMONOLOGY].tyrant_active = function(self)
+--[[
+actions.tyrant_active=implosion,if=azerite.explosive_potential.enabled&buff.wild_imps.stack>=3&buff.explosive_potential.remains<pet.demonic_tyrant.remains
+actions.tyrant_active+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.wild_imps.stack<3&soul_shard>=3&buff.explosive_potential.remains<execute_time&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan
+]]
+	if ExplosivePotential.known then
+		if Implosion:usable() and Player.imp_count >= 3 and ExplosivePotential:remains() < Pet.DemonicTyrant:remains() then
+			return Implosion
+		end
+		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:remains() < HandOfGuldan:castTime() and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+			return HandOfGuldan
+		end
+	end
+end
+
 APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
 --[[
-actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&cooldown.demonic_tyrant.remains<execute_time+action.hand_of_guldan.cast_time*2
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time*2
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.demonic_tyrant.remains<execute_time
+actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&cooldown.summon_demonic_tyrant.remains<execute_time+action.hand_of_guldan.cast_time*2
+actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time*2
+actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/call_dreadstalkers,if=buff.demonic_core.remains<6
 actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.remains<6&buff.wild_imps.stack>=3&soul_shard>=3
 actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
