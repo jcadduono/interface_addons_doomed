@@ -901,7 +901,7 @@ FelFirebolt.triggers_gcd = false
 local LegionStrike = Ability.add(30213, false, true)
 LegionStrike.requires_pet = true
 LegionStrike:autoAoe()
------- Talents Abilities
+------ Talents
 local BilescourgeBombers = Ability.add(267211, false, true, 267213)
 BilescourgeBombers.buff_duration = 6
 BilescourgeBombers.cooldown_duration = 30
@@ -946,6 +946,57 @@ local DemonicCore = Ability.add(267102, true, true, 264173)
 DemonicCore.buff_duration = 20
 local DemonicPower = Ability.add(265273, true, true)
 DemonicPower.buff_duration = 15
+---- Destruction
+------ Base Abilities
+local Conflagrate = Ability.add(17962, false, true)
+Conflagrate.cooldown_duration = 12.96
+Conflagrate.mana_cost = 1
+Conflagrate.requires_charge = true
+Conflagrate.hasted_cooldown = true
+local Immolate = Ability.add(348, false, true, 157736)
+Immolate.buff_duration = 18
+Immolate.mana_cost = 1.5
+Immolate.tick_interval = 3
+Immolate.hasted_ticks = true
+local Incinerate = Ability.add(29722, false, true)
+Incinerate.mana_cost = 2
+Incinerate:setVelocity(25)
+local Havoc = Ability.add(80240, false, true)
+Havoc.buff_duration = 10
+Havoc.cooldown_duration = 30
+Havoc.mana_cost = 2
+local ChaosBolt = Ability.add(116858, false, true)
+ChaosBolt.shard_cost = 2
+ChaosBolt:setVelocity(20)
+local RainOfFire = Ability.add(5470, false, true, 42223)
+RainOfFire.buff_duration = 8
+RainOfFire.shard_cost = 3
+RainOfFire.hasted_ticks = true
+RainOfFire:autoAoe(true)
+local SummonInfernal = Ability.add(1122, false, true, 22703)
+SummonInfernal.cooldown_duration = 180
+SummonInfernal.mana_cost = 2
+SummonInfernal.shard_cost = 1
+SummonInfernal:autoAoe(true)
+------ Talents
+local Cataclysm = Ability.add(152108, false, true)
+Cataclysm.cooldown_duration = 30
+Cataclysm:autoAoe(true)
+local ChannelDemonfire = Ability.add(196447, false, true)
+ChannelDemonfire.cooldown_duration = 25
+ChannelDemonfire.mana_cost = 1.5
+local SoulFire = Ability.add(6353, false, true)
+SoulFire.cooldown_duration = 20
+SoulFire.mana_cost = 2
+SoulFire:setVelocity(24)
+local Shadowburn = Ability.add(17877, false, true)
+Shadowburn.buff_duration = 5
+Shadowburn.cooldown_duration = 12
+Shadowburn.mana_cost = 1
+Shadowburn.requires_charge = true
+------ Procs
+local Backdraft = Ability.add(117828, true, true)
+Backdraft.duration = 10
 -- Azerite Traits
 local BalefulInvocation = Ability.add(287059, true, true)
 local CascadingCalamity = Ability.add(275372, true, true, 275378)
@@ -2451,6 +2502,17 @@ end
 
 APL[SPEC.DESTRUCTION].main = function(self)
 	if TimeInCombat() == 0 then
+--[[
+actions.precombat=flask
+actions.precombat+=/food
+actions.precombat+=/augmentation
+actions.precombat+=/summon_pet
+actions.precombat+=/grimoire_of_sacrifice,if=talent.grimoire_of_sacrifice.enabled
+actions.precombat+=/snapshot_stats
+actions.precombat+=/potion
+actions.precombat+=/soul_fire
+actions.precombat+=/incinerate,if=!talent.soul_fire.enabled
+]]
 		if Opt.healthstone and Healthstone:charges() == 0 and CreateHealthstone:usable() then
 			return CreateHealthstone
 		end
@@ -2473,6 +2535,14 @@ APL[SPEC.DESTRUCTION].main = function(self)
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
+		if Player.soul_shards < 5 and not (SoulFire:casting() or Incinerate:casting()) then
+			if SoulFire:usable() then
+				return SoulFire
+			end
+			if Incinerate:usable() then
+				return Incinerate
+			end
+		end
 	else
 		if GrimoireOfSacrifice.known then
 			if GrimoireOfSacrifice:remains() < 300 then
@@ -2486,6 +2556,109 @@ APL[SPEC.DESTRUCTION].main = function(self)
 			UseExtra(SummonImp)
 		end
 	end
+--[[
+# Havoc uses a special priority list on most multitarget scenarios, but the target threshold can vary depending on talents
+actions=call_action_list,name=havoc,if=havoc_active&active_enemies<5-talent.inferno.enabled+(talent.inferno.enabled&talent.internal_combustion.enabled)
+# Cataclysm should be used on cooldown as soon as possible
+actions+=/cataclysm
+# Two target scenarios are handled like single target with Havoc weaved in. Starting with three targets, a specialized AoE priority is required
+actions+=/call_action_list,name=aoe,if=active_enemies>2
+# Immolate should never fall off the primary target. If Cataclysm will refresh Immolate before it expires, there's no reason to waste time casting it
+actions+=/immolate,cycle_targets=1,if=refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
+# #With Internal Combustion talented, it's possible Immolate will need to be refreshed sooner than the remaining duration says, if there's already a Chaos Bolt on the way to the target.
+actions+=/immolate,if=talent.internal_combustion.enabled&action.chaos_bolt.in_flight&remains<duration*0.5
+# The general rule of thumb for talents is to maximize the number of uses of each
+actions+=/call_action_list,name=cds
+actions+=/channel_demonfire
+# The if condition here always applies Havoc to something other than the primary target
+actions+=/havoc,cycle_targets=1,if=!(target=self.target)&(dot.immolate.remains>dot.immolate.duration*0.5|!talent.internal_combustion.enabled)&(!cooldown.summon_infernal.ready|!talent.grimoire_of_supremacy.enabled|talent.grimoire_of_supremacy.enabled&pet.infernal.remains<=10)
+# Soul Fire should be used on cooldown, it does not appear worth saving for generating Soul Shards during cooldowns
+actions+=/soul_fire
+# Conflagrate should only be used to set up Chaos Bolts. Flashover lets Conflagrate be used earlier to set up an Incinerate before CB. If a major cooldown is coming up, save charges for it
+actions+=/conflagrate,if=buff.backdraft.down&soul_shard>=1.5-0.3*talent.flashover.enabled&!variable.pool_soul_shards
+# Shadowburn is used as a discount Conflagrate to generate shards if you don't have enough for a Chaos Bolt. The same rules about saving it for major cooldowns applies
+actions+=/shadowburn,if=soul_shard<2&(!variable.pool_soul_shards|charges>1)
+# It's worth stocking up on Soul Shards before a major cooldown usage
+actions+=/variable,name=pool_soul_shards,value=active_enemies>1&cooldown.havoc.remains<=10|cooldown.summon_infernal.remains<=20&(talent.grimoire_of_supremacy.enabled|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20)|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20&(cooldown.summon_infernal.remains>target.time_to_die|cooldown.summon_infernal.remains+cooldown.summon_infernal.duration>target.time_to_die)
+# Chaos Bolt has several possible use conditions. Crashing Chaos, Grimoire of Supremacy, and Dark Soul: Instability all favor casting as many CBs as possible when any of them are active
+actions+=/chaos_bolt,if=(talent.grimoire_of_supremacy.enabled|azerite.crashing_chaos.enabled)&pet.infernal.active|buff.dark_soul_instability.up
+# If Soul Shards are not being pooled and Eradication is not talented, just spend CBs as they become available
+actions+=/chaos_bolt,if=!variable.pool_soul_shards&!talent.eradication.enabled
+# With Eradication, it's beneficial to maximize the uptime on the debuff. However, it's still better to use Chaos Bolt immediately if Backdraft is up
+actions+=/chaos_bolt,if=!variable.pool_soul_shards&talent.eradication.enabled&(debuff.eradication.remains<cast_time|buff.backdraft.up)
+# Even when saving, do not overcap on Soul Shards
+actions+=/chaos_bolt,if=(soul_shard>=4.5-0.2*active_enemies)
+# Don't overcap on charges of Conflagrate
+actions+=/conflagrate,if=charges>1
+actions+=/incinerate
+]]
+end
+
+APL[SPEC.DESTRUCTION].aoe = function(self)
+--[[
+# Rain of Fire is typically the highest priority action, but certain situations favor using Chaos Bolt instead
+actions.aoe=rain_of_fire,if=pet.infernal.active&(buff.crashing_chaos.down|!talent.grimoire_of_supremacy.enabled)&(!cooldown.havoc.ready|active_enemies>3)
+# Channel Demonfire only needs one Immolate active during its cast for AoE. Primary target is used here for simplicity
+actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
+# Similar to single target, there is no need to refresh Immolates if Cataclysm can do it instead
+actions.aoe+=/immolate,cycle_targets=1,if=remains<5&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
+# Rules for cooldowns do not change for AoE, so call the same list as on single target
+actions.aoe+=/call_action_list,name=cds
+# Three targets is an in-between case that gives a slight benefit to higher priority Havoc
+actions.aoe+=/havoc,cycle_targets=1,if=!(target=self.target)&active_enemies<4
+# Rain of Fire will start to dominate on heavy AoE, but some significant Chaos Bolt buffs will still give higher damage output on occasion
+actions.aoe+=/chaos_bolt,if=talent.grimoire_of_supremacy.enabled&pet.infernal.active&(havoc_active|talent.cataclysm.enabled|talent.inferno.enabled&active_enemies<4)
+# Barring any exceptions, Rain of Fire will be used as much as possible, since multiple copies of it can stack
+actions.aoe+=/rain_of_fire
+# Even if the Havoc priority list won't be used, Havoc is pretty much free damage and resources and should be used almost on cooldown
+actions.aoe+=/havoc,cycle_targets=1,if=!(target=self.target)&(!talent.grimoire_of_supremacy.enabled|!talent.inferno.enabled|talent.grimoire_of_supremacy.enabled&pet.infernal.remains<=10)
+# Use Fire and Brimstone if Backdraft is active, as long as it will not overcap on Soul Shards
+actions.aoe+=/incinerate,if=talent.fire_and_brimstone.enabled&buff.backdraft.up&soul_shard<5-0.2*active_enemies
+# Other Soul Shard generating abilities are good filler if not using Fire and Brimstone
+actions.aoe+=/soul_fire
+actions.aoe+=/conflagrate,if=buff.backdraft.down
+actions.aoe+=/shadowburn,if=!talent.fire_and_brimstone.enabled
+# With Fire and Brimstone, Incinerate will be a strong filler. It's placed here for all talents to prevent accidentally using the single target rotation list
+actions.aoe+=/incinerate
+]]
+
+end
+
+APL[SPEC.DESTRUCTION].cds = function(self)
+--[[
+# If both cooldowns are ready, summon the Infernal then activate DSI. If not using DSI, use this on CD
+actions.cds=summon_infernal,if=cooldown.dark_soul_instability.ready|!talent.dark_soul_instability.enabled
+actions.cds+=/dark_soul_instability,if=pet.infernal.active
+# If DSI is not ready but you can get more than one infernal in before the end of the fight, summon the Infernal now
+actions.cds+=/summon_infernal,if=target.time_to_die>cooldown.summon_infernal.duration
+# If you can get in more than one more DSI before the end of the fight, use that now
+actions.cds+=/dark_soul_instability,if=target.time_to_die>cooldown.dark_soul_instability.duration+20
+# If the fight will end before DSI is back up, summon the Infernal
+actions.cds+=/summon_infernal,if=talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains>target.time_to_die
+# If the fight will end before infernal is back up, use DSI
+actions.cds+=/dark_soul_instability,if=cooldown.summon_infernal.remains>target.time_to_die
+# If the fight is about to end, use CDs such that they get as much time up as possible
+actions.cds+=/summon_infernal,if=target.time_to_die<30
+actions.cds+=/dark_soul_instability,if=target.time_to_die<20
+actions.cds+=/potion,if=pet.infernal.active|target.time_to_die<30
+actions.cds+=/berserking
+actions.cds+=/blood_fury
+actions.cds+=/fireblood
+actions.cds+=/use_items
+]]
+
+end
+
+APL[SPEC.DESTRUCTION].havoc = function(self)
+--[[
+actions.havoc=conflagrate,if=buff.backdraft.down&soul_shard>=1&soul_shard<=4
+actions.havoc+=/immolate,if=talent.internal_combustion.enabled&remains<duration*0.5|!talent.internal_combustion.enabled&refreshable
+actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains
+actions.havoc+=/soul_fire
+actions.havoc+=/shadowburn,if=active_enemies<3|!talent.fire_and_brimstone.enabled
+actions.havoc+=/incinerate,if=cast_time<havoc_remains
+]]
+
 end
 
 APL.Interrupt = function(self)
@@ -3329,7 +3502,7 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 	Trinket2.itemId = GetInventoryItemID('player', 14)
 	local _, i, equipType, hasCooldown
 	for i = 1, #inventoryItems do
-		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId)
+		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId or 0)
 		inventoryItems[i].can_use = inventoryItems[i].name and true or false
 		if equipType and equipType ~= '' then
 			hasCooldown = 0
