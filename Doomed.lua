@@ -397,7 +397,7 @@ function Ability.add(spellId, buff, player, spellId2)
 		max_range = 40,
 		velocity = 0,
 		last_used = 0,
-		auraTarget = buff == 'pet' and 'pet' or buff and 'player' or 'target',
+		auraTarget = buff and 'player' or 'target',
 		auraFilter = (buff and 'HELPFUL' or 'HARMFUL') .. (player and '|PLAYER' or '')
 	}
 	setmetatable(ability, Ability)
@@ -471,7 +471,7 @@ function Ability:up()
 end
 
 function Ability:down()
-	return self:remains() <= 0
+	return not self:up()
 end
 
 function Ability:setVelocity(velocity)
@@ -700,9 +700,8 @@ function Ability:refreshAura(guid)
 		self:applyAura(guid)
 		return
 	end
-	local remains = aura.expires - Player.time
 	local duration = self:duration()
-	aura.expires = Player.time + min(duration * 1.3, remains + duration)
+	aura.expires = Player.time + min(duration * 1.3, (aura.expires - Player.time) + duration)
 end
 
 function Ability:removeAura(guid)
@@ -887,7 +886,8 @@ AxeToss.cooldown_duration = 30
 AxeToss.requires_pet = true
 AxeToss.triggers_gcd = false
 AxeToss.player_triggered = true
-local Felstorm = Ability.add(89751, 'pet', true, 89753)
+local Felstorm = Ability.add(89751, true, true, 89753)
+Felstorm.auraTarget = 'pet'
 Felstorm.buff_duration = 5
 Felstorm.cooldown_duration = 30
 Felstorm.tick_interval = 1
@@ -910,7 +910,8 @@ BilescourgeBombers:autoAoe(true)
 local DemonicCalling = Ability.add(205145, true, true, 205146)
 DemonicCalling.buff_duration = 20
 local DemonicConsumption = Ability.add(267215, false, true)
-local DemonicStrength = Ability.add(267171, 'pet', true)
+local DemonicStrength = Ability.add(267171, true, true)
+DemonicStrength.auraTarget = 'pet'
 DemonicStrength.buff_duration = 20
 DemonicStrength.cooldown_duration = 60
 local Doom = Ability.add(603, false, true)
@@ -985,6 +986,8 @@ Cataclysm:autoAoe(true)
 local ChannelDemonfire = Ability.add(196447, false, true)
 ChannelDemonfire.cooldown_duration = 25
 ChannelDemonfire.mana_cost = 1.5
+local Inferno = Ability.add(270545, false, true)
+local InternalCombustion = Ability.add(266134, false, true)
 local SoulFire = Ability.add(6353, false, true)
 SoulFire.cooldown_duration = 20
 SoulFire.mana_cost = 2
@@ -1134,6 +1137,8 @@ Pet.Dreadstalker = SummonedPet.add(98035, 12)
 Pet.Dreadstalker.summon_spell = CallDreadstalkers
 Pet.Felguard = SummonedPet.add(17252, 15)
 Pet.Felguard.summon_spell = GrimoireFelguard
+Pet.Infernal = SummonedPet.add(89, 30)
+Pet.Infernal.summon_spell = SummonInfernal
 Pet.Vilefiend = SummonedPet.add(135816, 15)
 Pet.Vilefiend.summon_spell = SummonVilefiend
 Pet.WildImp = SummonedPet.add(55659, 20)
@@ -1313,12 +1318,6 @@ local function BloodlustActive()
 			return true
 		end
 	end
-end
-
-local function UpdatePetStatus()
-	Player.pet = UnitGUID('pet')
-	Player.pet_alive = (Player.pet and not UnitIsDead('pet') or (Player.ability_casting and Player.ability_casting.pet_family)) and true
-	Player.pet_active = (Player.pet_alive and not Player.pet_stuck or IsFlying()) and true
 end
 
 local function ImpsIn(seconds)
@@ -1558,6 +1557,13 @@ function SummonDemonicTyrant:shardCost()
 		return -5
 	end
 	return self.shard_cost
+end
+
+function DemonicStrength:usable()
+	if Felstorm:up() then
+		return false
+	end
+	return Ability.usable(self)
 end
 
 function SpellLock:usable()
@@ -2592,6 +2598,32 @@ actions+=/chaos_bolt,if=(soul_shard>=4.5-0.2*active_enemies)
 actions+=/conflagrate,if=charges>1
 actions+=/incinerate
 ]]
+	if Havoc:ticking() and Player.enemies < (5 - (Inferno.known and 1 or 0) + (Inferno.known and InternalCombustion.known and 1 or 0)) then
+		local apl = self:havoc()
+		if apl then return apl end
+	end
+	if Cataclysm:usable() then
+		UseCooldown(Cataclysm)
+	end
+	if Player.enemies > 2 then
+		local apl = self:aoe()
+		if apl then return apl end
+	end
+	if Immolate:usable() then
+		if Immolate:refreshable() and (not Cataclysm.known or Cataclysm:cooldown() > Immolate:remains()) then
+			return Immolate
+		end
+		if InternalCombustion.known and ChaosBolt:traveling() and Immolate:remains() < (Immolate:duration() * 0.5) then
+			return Immolate
+		end
+	end
+	self:cds()
+	if ChannelDemonfire:usable() then
+		UseCooldown(ChannelDemonfire)
+	end
+	if Havoc:usable() and Player.enemies > 1 and (Immolate:remains() > (Immolate:duration() * 0.5) or not InternalCombustion.known) and (not SummonInfernal:ready() or not GrimoireOfSupremacy.known or GrimoireOfSupremacy.known and Pet.Infernal:remains() < 10) then
+		UseExtra(Havoc)
+	end
 end
 
 APL[SPEC.DESTRUCTION].aoe = function(self)
@@ -2946,7 +2978,7 @@ end
 
 local function UpdateDisplay()
 	timer.display = 0
-	local dim, text_tl, text_tr = false
+	local dim, text_tl, text_tr
 	if Opt.dimmer then
 		dim = not ((not Player.main) or
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
@@ -3007,7 +3039,9 @@ local function UpdateCombat()
 	Player.mana = min(max(Player.mana, 0), Player.mana_max)
 	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
 	Player.moving = GetUnitSpeed('player') ~= 0
-	UpdatePetStatus()
+	Player.pet = UnitGUID('pet')
+	Player.pet_alive = (Player.pet and not UnitIsDead('pet') or (Player.ability_casting and Player.ability_casting.pet_family)) and true
+	Player.pet_active = (Player.pet_alive and not Player.pet_stuck or IsFlying()) and true
 
 	summonedPets:purge()
 	trackAuras:purge()
@@ -3314,10 +3348,12 @@ local function UpdateTargetInfo()
 	if not guid then
 		Target.guid = nil
 		Target.boss = false
+		Target.stunnable = true
+		Target.classification = 'normal'
 		Target.player = false
-		Target.hostile = true
-		Target.stunnable = false
+		Target.level = UnitLevel('player')
 		Target.healthMax = 0
+		Target.hostile = true
 		local i
 		for i = 1, 15 do
 			Target.healthArray[i] = 0
@@ -3342,10 +3378,12 @@ local function UpdateTargetInfo()
 	end
 	Target.boss = false
 	Target.stunnable = true
+	Target.classification = UnitClassification('target')
+	Target.player = UnitIsPlayer('target')
 	Target.level = UnitLevel('target')
 	Target.healthMax = UnitHealthMax('target')
-	Target.player = UnitIsPlayer('target')
-	if not Target.player then
+	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
+	if not Target.player and Target.classification ~= 'minus' and Target.classification ~= 'normal' then
 		if Target.level == -1 or (Player.instance == 'party' and Target.level >= UnitLevel('player') + 2) then
 			Target.boss = true
 			Target.stunnable = false
@@ -3353,7 +3391,6 @@ local function UpdateTargetInfo()
 			Target.stunnable = false
 		end
 	end
-	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
 	if Target.hostile or Opt.always_on then
 		UpdateTargetHealth()
 		UpdateCombat()
@@ -3498,8 +3535,8 @@ end
 function events:PLAYER_EQUIPMENT_CHANGED()
 	Azerite:update()
 	UpdateAbilityData()
-	Trinket1.itemId = GetInventoryItemID('player', 13)
-	Trinket2.itemId = GetInventoryItemID('player', 14)
+	Trinket1.itemId = GetInventoryItemID('player', 13) or 0
+	Trinket2.itemId = GetInventoryItemID('player', 14) or 0
 	local _, i, equipType, hasCooldown
 	for i = 1, #inventoryItems do
 		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId or 0)
