@@ -2884,15 +2884,31 @@ local function UpdateDraggable()
 	end
 end
 
+local function UpdateScale()
+	doomedPanel:SetSize(64 * Opt.scale.main, 64 * Opt.scale.main)
+	doomedPreviousPanel:SetSize(64 * Opt.scale.previous, 64 * Opt.scale.previous)
+	doomedCooldownPanel:SetSize(64 * Opt.scale.cooldown, 64 * Opt.scale.cooldown)
+	doomedInterruptPanel:SetSize(64 * Opt.scale.interrupt, 64 * Opt.scale.interrupt)
+	doomedExtraPanel:SetSize(64 * Opt.scale.extra, 64 * Opt.scale.extra)
+end
+
+local function UpdateAlpha()
+	doomedPanel:SetAlpha(Opt.alpha)
+	doomedPreviousPanel:SetAlpha(Opt.alpha)
+	doomedCooldownPanel:SetAlpha(Opt.alpha)
+	doomedInterruptPanel:SetAlpha(Opt.alpha)
+	doomedExtraPanel:SetAlpha(Opt.alpha)
+end
+
 local function SnapAllPanels()
 	doomedPreviousPanel:ClearAllPoints()
-	doomedPreviousPanel:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMLEFT', -10, -5)
+	doomedPreviousPanel:SetPoint('TOPRIGHT', doomedPanel, 'BOTTOMLEFT', -3, 40)
 	doomedCooldownPanel:ClearAllPoints()
-	doomedCooldownPanel:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMRIGHT', 10, -5)
+	doomedCooldownPanel:SetPoint('TOPLEFT', doomedPanel, 'BOTTOMRIGHT', 3, 40)
 	doomedInterruptPanel:ClearAllPoints()
-	doomedInterruptPanel:SetPoint('TOPLEFT', doomedPanel, 'TOPRIGHT', 16, 25)
+	doomedInterruptPanel:SetPoint('BOTTOMLEFT', doomedPanel, 'TOPRIGHT', 3, -21)
 	doomedExtraPanel:ClearAllPoints()
-	doomedExtraPanel:SetPoint('TOPRIGHT', doomedPanel, 'TOPLEFT', -16, 25)
+	doomedExtraPanel:SetPoint('BOTTOMRIGHT', doomedPanel, 'TOPLEFT', -3, -21)
 end
 
 local resourceAnchor = {}
@@ -2900,30 +2916,30 @@ local resourceAnchor = {}
 local ResourceFramePoints = {
 	['blizzard'] = {
 		[SPEC.AFFLICTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		},
 		[SPEC.DEMONOLOGY] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		},
 		[SPEC.DESTRUCTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -42 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		}
 	},
 	['kui'] = {
 		[SPEC.AFFLICTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
+			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
 		},
 		[SPEC.DEMONOLOGY] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
+			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
 		},
 		[SPEC.DESTRUCTION] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
+			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
 		}
 	},
 }
@@ -2951,18 +2967,12 @@ local function HookResourceFrame()
 		resourceAnchor.frame = KuiNameplatesPlayerAnchor
 	else
 		resourceAnchor.name = 'blizzard'
-		resourceAnchor.frame = ClassNameplateManaBarFrame
+		resourceAnchor.frame = NamePlateDriverFrame:GetClassNameplateBar()
 	end
-	resourceAnchor.frame:HookScript("OnHide", OnResourceFrameHide)
-	resourceAnchor.frame:HookScript("OnShow", OnResourceFrameShow)
-end
-
-local function UpdateAlpha()
-	doomedPanel:SetAlpha(Opt.alpha)
-	doomedPreviousPanel:SetAlpha(Opt.alpha)
-	doomedCooldownPanel:SetAlpha(Opt.alpha)
-	doomedInterruptPanel:SetAlpha(Opt.alpha)
-	doomedExtraPanel:SetAlpha(Opt.alpha)
+	if resourceAnchor.frame then
+		resourceAnchor.frame:HookScript("OnHide", OnResourceFrameHide)
+		resourceAnchor.frame:HookScript("OnShow", OnResourceFrameShow)
+	end
 end
 
 local function UpdateTargetHealth()
@@ -3147,12 +3157,8 @@ function events:ADDON_LOADED(name)
 		Azerite:initialize()
 		UpdateDraggable()
 		UpdateAlpha()
+		UpdateScale()
 		SnapAllPanels()
-		doomedPanel:SetScale(Opt.scale.main)
-		doomedPreviousPanel:SetScale(Opt.scale.previous)
-		doomedCooldownPanel:SetScale(Opt.scale.cooldown)
-		doomedInterruptPanel:SetScale(Opt.scale.interrupt)
-		doomedExtraPanel:SetScale(Opt.scale.extra)
 	end
 end
 
@@ -3666,35 +3672,35 @@ function SlashCmdList.Doomed(msg, editbox)
 		if startsWith(msg[2], 'prev') then
 			if msg[3] then
 				Opt.scale.previous = tonumber(msg[3]) or 0.7
-				doomedPreviousPanel:SetScale(Opt.scale.previous)
+				UpdateScale()
 			end
 			return Status('Previous ability icon scale', Opt.scale.previous, 'times')
 		end
 		if msg[2] == 'main' then
 			if msg[3] then
 				Opt.scale.main = tonumber(msg[3]) or 1
-				doomedPanel:SetScale(Opt.scale.main)
+				UpdateScale()
 			end
 			return Status('Main ability icon scale', Opt.scale.main, 'times')
 		end
 		if msg[2] == 'cd' then
 			if msg[3] then
 				Opt.scale.cooldown = tonumber(msg[3]) or 0.7
-				doomedCooldownPanel:SetScale(Opt.scale.cooldown)
+				UpdateScale()
 			end
 			return Status('Cooldown ability icon scale', Opt.scale.cooldown, 'times')
 		end
 		if startsWith(msg[2], 'int') then
 			if msg[3] then
 				Opt.scale.interrupt = tonumber(msg[3]) or 0.4
-				doomedInterruptPanel:SetScale(Opt.scale.interrupt)
+				UpdateScale()
 			end
 			return Status('Interrupt ability icon scale', Opt.scale.interrupt, 'times')
 		end
 		if startsWith(msg[2], 'ex') or startsWith(msg[2], 'pet') then
 			if msg[3] then
 				Opt.scale.extra = tonumber(msg[3]) or 0.4
-				doomedExtraPanel:SetScale(Opt.scale.extra)
+				UpdateScale()
 			end
 			return Status('Extra/Pet cooldown ability icon scale', Opt.scale.extra, 'times')
 		end
