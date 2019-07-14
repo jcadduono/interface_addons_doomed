@@ -3040,7 +3040,11 @@ local function UpdateDisplay()
 		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
-	if Player.spec == SPEC.DEMONOLOGY then
+	if Player.spec == SPEC.AFFLICTION then
+		if Opt.tyrant and Player.darkglare_remains > 0 then
+			text_tr = format('%.1fs', Player.darkglare_remains)
+		end
+	elseif Player.spec == SPEC.DEMONOLOGY then
 		if Opt.pet_count then
 			if Opt.pet_count == 'imps' then
 				text_tl = Player.imp_count > 0 and Player.imp_count
@@ -3109,7 +3113,9 @@ local function UpdateCombat()
 		autoAoe:purge()
 	end
 
-	if Player.spec == SPEC.DEMONOLOGY then
+	if Player.spec == SPEC.AFFLICTION then
+		Player.darkglare_remains = Pet.Darkglare:remains()
+	elseif Player.spec == SPEC.DEMONOLOGY then
 		HandOfGuldan:purge()
 		if Opt.pet_count then
 			Player.pet_count = summonedPets:count() + (Player.pet_alive and 1 or 0)
