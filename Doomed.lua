@@ -126,6 +126,9 @@ local Player = {
 	soul_shards = 0,
 	soul_shards_max = 0,
 	previous_gcd = {},-- list of previous GCD abilities
+	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
+		[165581] = true, -- Crest of Pa'ku (Horde)
+	},
 }
 
 -- current target information
@@ -1004,12 +1007,17 @@ Backdraft.duration = 10
 local BalefulInvocation = Ability.add(287059, true, true)
 local CascadingCalamity = Ability.add(275372, true, true, 275378)
 CascadingCalamity.buff_duration = 15
+local DreadfulCalling = Ability.add(278727, true, true)
 local ExplosivePotential = Ability.add(275395, true, true, 275398)
 ExplosivePotential.buff_duration = 15
 local InevitableDemise = Ability.add(273521, true, true, 273522)
 local PandemicInvocation = Ability.add(289364, true, true)
 local ShadowsBite = Ability.add(272944, true, true, 272945)
 ShadowsBite.buff_duration = 8
+-- Heart of Azeroth Essences
+local ConcentratedFlame = Ability.add(295373, false, true, 295368)
+ConcentratedFlame.buff_duration = 6
+ConcentratedFlame.cooldown_duration = 30
 -- Racials
 
 -- Trinket Effects
@@ -1854,19 +1862,24 @@ actions+=/call_action_list,name=cooldowns
 actions+=/drain_soul,interrupt_global=1,chain=1,cycle_targets=1,if=target.time_to_die<=gcd&soul_shard<5
 actions+=/haunt,if=spell_targets.seed_of_corruption_aoe<=2+raid_event.invulnerable.up
 actions+=/summon_darkglare,if=dot.agony.ticking&dot.corruption.ticking&(buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|dot.phantom_singularity.remains)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=gcd|!cooldown.deathbolt.remains|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up)
-actions+=/deathbolt,if=cooldown.summon_darkglare.remains&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up
+actions+=/deathbolt,if=cooldown.summon_darkglare.remains&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up&(!essence.vision_of_perfection.minor&!azerite.dreadful_calling.rank|cooldown.summon_darkglare.remains>30)
+actions+=/the_unbound_force,if=buff.reckless_force.remains
 actions+=/agony,target_if=min:dot.agony.remains,if=remains<=gcd+action.shadow_bolt.execute_time&target.time_to_die>8
+actions+=/memory_of_lucid_dreams,if=time<30
+actions+=/use_item,name=azsharas_font_of_power,if=cooldown.summon_darkglare.remains<10
 actions+=/unstable_affliction,target_if=!contagion&target.time_to_die<=8
 actions+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,cancel_if=ticks_remain<5,if=talent.shadow_embrace.enabled&variable.maintain_se&debuff.shadow_embrace.remains&debuff.shadow_embrace.remains<=gcd*2
 actions+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=talent.shadow_embrace.enabled&variable.maintain_se&debuff.shadow_embrace.remains&debuff.shadow_embrace.remains<=execute_time*2+travel_time&!action.shadow_bolt.in_flight
-actions+=/phantom_singularity,target_if=max:target.time_to_die,if=time>35&target.time_to_die>16*spell_haste
-actions+=/vile_taint,target_if=max:target.time_to_die,if=time>15&target.time_to_die>=10
+actions+=/phantom_singularity,target_if=max:target.time_to_die,if=time>35&target.time_to_die>16*spell_haste&(!essence.vision_of_perfection.minor&!azerite.dreadful_calling.rank|cooldown.summon_darkglare.remains>45|cooldown.summon_darkglare.remains<15*spell_haste)
 actions+=/unstable_affliction,target_if=min:contagion,if=!variable.use_seed&soul_shard=5
 actions+=/seed_of_corruption,if=variable.use_seed&soul_shard=5
 actions+=/call_action_list,name=dots
+actions+=/vile_taint,target_if=max:target.time_to_die,if=time>15&target.time_to_die>=10&(cooldown.summon_darkglare.remains>30|cooldown.summon_darkglare.remains<10&dot.agony.remains>=10&dot.corruption.remains>=10&(dot.siphon_life.remains>=10|!talent.siphon_life.enabled))
+actions+=/use_item,name=azsharas_font_of_power,if=time<=3
 actions+=/phantom_singularity,if=time<=35
 actions+=/vile_taint,if=time<15
-actions+=/dark_soul,if=cooldown.summon_darkglare.remains<10&dot.phantom_singularity.remains|target.time_to_die<20+gcd|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up
+actions+=/guardian_of_azeroth,if=cooldown.summon_darkglare.remains<15&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<30+gcd
+actions+=/dark_soul,if=cooldown.summon_darkglare.remains<10&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<20+gcd|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up
 actions+=/berserking
 actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
@@ -1890,7 +1903,7 @@ actions+=/call_action_list,name=fillers
 	if SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
 		UseCooldown(SummonDarkglare)
 	end
-	if Deathbolt:usable() and not SummonDarkglare:ready() and Player.enemies == 1 then
+	if Deathbolt:usable() and not SummonDarkglare:ready() and Player.enemies == 1 and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
 		return Deathbolt
 	end
 	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
@@ -1907,11 +1920,8 @@ actions+=/call_action_list,name=fillers
 			return DrainSoul
 		end
 	end
-	if PhantomSingularity:usable() and TimeInCombat() > 35 and Target.timeToDie > PhantomSingularity:duration() then
+	if PhantomSingularity:usable() and TimeInCombat() > 35 and Target.timeToDie > PhantomSingularity:duration() and (not DreadfulCalling.known or not between(SummonDarkglare:cooldown(), 15 * Player.haste_factor, 45)) then
 		UseCooldown(PhantomSingularity)
-	end
-	if VileTaint:usable() and TimeInCombat() > 15 and Target.timeToDie >= 10 then
-		UseCooldown(VileTaint)
 	end
 	if Player.soul_shards == 5 then
 		if Player.use_seed then
@@ -1926,13 +1936,16 @@ actions+=/call_action_list,name=fillers
 	end
 	apl = self:dots()
 	if apl then return apl end
+	if VileTaint:usable() and TimeInCombat() > 15 and Target.timeToDie >= 10 and (not between(SummonDarkglare:cooldown(), 10, 30) and Agony:remains() >= 10 and Corruption:remains() >= 10 and (not SiphonLife.known or SiphonLife:remains() >= 10)) then
+		UseCooldown(VileTaint)
+	end
 	if PhantomSingularity:usable() and TimeInCombat() <= 35 then
 		UseCooldown(PhantomSingularity)
 	end
 	if VileTaint:usable() and TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
 	end
-	if DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and PhantomSingularity:up() or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
+	if DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known)) or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
 		UseCooldown(DarkSoulMisery)
 	end
 	apl = self:spenders()
@@ -1943,11 +1956,27 @@ end
 
 APL[SPEC.AFFLICTION].cooldowns = function(self)
 --[[
-actions.cooldowns=potion,if=(talent.dark_soul_misery.enabled&cooldown.summon_darkglare.up&cooldown.dark_soul.up)|cooldown.summon_darkglare.up|target.time_to_die<30
-actions.cooldowns+=/use_items,if=!cooldown.summon_darkglare.up,if=cooldown.summon_darkglare.remains>70|time_to_die<20|((buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=gcd|!cooldown.deathbolt.remains)&!cooldown.summon_darkglare.remains)
+actions.cooldowns=use_item,name=azsharas_font_of_power,if=(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains<4*spell_haste|!cooldown.phantom_singularity.remains)&cooldown.summon_darkglare.remains<15*spell_haste&dot.agony.remains&dot.corruption.remains&(dot.siphon_life.remains|!talent.siphon_life.enabled)
+actions.cooldowns+=/potion,if=(talent.dark_soul_misery.enabled&cooldown.summon_darkglare.up&cooldown.dark_soul.up)|cooldown.summon_darkglare.up|target.time_to_die<30
+actions.cooldowns+=/use_items,if=cooldown.summon_darkglare.remains>70|time_to_die<20|((buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=gcd|!cooldown.deathbolt.remains)&!cooldown.summon_darkglare.remains)
+actions.cooldowns+=/use_item,name=pocketsized_computation_device,if=cooldown.summon_darkglare.remains>=25&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
 actions.cooldowns+=/fireblood,if=!cooldown.summon_darkglare.up
 actions.cooldowns+=/blood_fury,if=!cooldown.summon_darkglare.up
+actions.cooldowns+=/memory_of_lucid_dreams,if=time>30
+actions.cooldowns+=/blood_of_the_enemy,if=pet.darkglare.remains|(!cooldown.deathbolt.remains|!talent.deathbolt.enabled)&cooldown.summon_darkglare.remains>=80&essence.blood_of_the_enemy.rank>1
+actions.cooldowns+=/worldvein_resonance,if=buff.lifeblood.stack<3
+actions.cooldowns+=/ripple_in_space
 ]]
+	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.Darkglare:up() and (not DarkSoulMisery.known or DarkSoulMisery:up())) then
+		UseCooldown(BattlePotionOfIntellect)
+	end
+	if Opt.trinket and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
+		if Trinket1:usable() then
+			UseCooldown(Trinket1)
+		elseif Trinket2:usable() then
+			UseCooldown(Trinket2)
+		end
+	end
 end
 
 APL[SPEC.AFFLICTION].db_refresh = function(self)
@@ -2002,8 +2031,14 @@ actions.fillers+=/shadow_bolt,if=buff.movement.up&buff.nightfall.remains
 actions.fillers+=/agony,if=buff.movement.up&!(talent.siphon_life.enabled&(prev_gcd.1.agony&prev_gcd.2.agony&prev_gcd.3.agony)|prev_gcd.1.agony)
 actions.fillers+=/siphon_life,if=buff.movement.up&!(prev_gcd.1.siphon_life&prev_gcd.2.siphon_life&prev_gcd.3.siphon_life)
 actions.fillers+=/corruption,if=buff.movement.up&!prev_gcd.1.corruption&!talent.absolute_corruption.enabled
-actions.fillers+=/drain_life,if=(buff.inevitable_demise.stack>=40-(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>2)*20&(cooldown.deathbolt.remains>execute_time|!talent.deathbolt.enabled)&(cooldown.phantom_singularity.remains>execute_time|!talent.phantom_singularity.enabled)&(cooldown.dark_soul.remains>execute_time|!talent.dark_soul_misery.enabled)&(cooldown.vile_taint.remains>execute_time|!talent.vile_taint.enabled)&cooldown.summon_darkglare.remains>execute_time+10|buff.inevitable_demise.stack>10&target.time_to_die<=10)
+actions.fillers+=/drain_life,if=buff.inevitable_demise.stack>10&target.time_to_die<=10
+actions.fillers+=/drain_life,if=talent.siphon_life.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=2)&dot.agony.remains>5*spell_haste&dot.corruption.remains>gcd&(dot.siphon_life.remains>gcd|!talent.siphon_life.enabled)&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
+actions.fillers+=/drain_life,if=talent.writhe_in_agony.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=3)-5*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up=2)&dot.agony.remains>5*spell_haste&dot.corruption.remains>gcd&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
+actions.fillers+=/drain_life,if=talent.absolute_corruption.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=4)&dot.agony.remains>5*spell_haste&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
 actions.fillers+=/haunt
+actions.fillers+=/focused_azerite_beam
+actions.fillers+=/purifying_blast
+actions.fillers+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight
 actions.fillers+=/drain_soul,interrupt_global=1,chain=1,interrupt=1,cycle_targets=1,if=target.time_to_die<=gcd
 actions.fillers+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,chain=1,interrupt_if=ticks_remain<5,interrupt_global=1,if=talent.shadow_embrace.enabled&variable.maintain_se&!debuff.shadow_embrace.remains
 actions.fillers+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,chain=1,interrupt_if=ticks_remain<5,interrupt_global=1,if=talent.shadow_embrace.enabled&variable.maintain_se
@@ -2037,8 +2072,19 @@ actions.fillers+=/shadow_bolt
 			return Corruption
 		end
 	end
+	if InevitableDemise.known and DrainLife:usable() then
+		if InevitableDemise:stack() > 10 and Target.timeToDie <= 10 then
+			return DrainLife
+		end
+		if InevitableDemise:stack() >= (50 - 20 * Player.enemies) and Agony:remains() > (5 * Player.haste_factor) and Corruption:remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:remains() > (5 * Player.haste_factor)) and UnstableAffliction:remains() > (5 * Player.haste_factor) then
+			return DrainLife
+		end
+	end
 	if Haunt:usable() then
 		return Haunt
+	end
+	if ConcentratedFlame:usable() and ConcentratedFlame:down() then
+		return ConcentratedFlame
 	end
 	if DrainSoul:usable() then
 		return DrainSoul
@@ -2050,7 +2096,7 @@ end
 
 APL[SPEC.AFFLICTION].spenders = function(self)
 --[[
-actions.spenders=unstable_affliction,if=cooldown.summon_darkglare.remains<=soul_shard*execute_time&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=soul_shard*execute_time)
+actions.spenders=unstable_affliction,if=cooldown.summon_darkglare.remains<=soul_shard*(execute_time+azerite.dreadful_calling.rank)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=soul_shard*execute_time)
 actions.spenders+=/call_action_list,name=fillers,if=(cooldown.summon_darkglare.remains<time_to_shard*(6-soul_shard)|cooldown.summon_darkglare.up)&time_to_die>cooldown.summon_darkglare.remains
 actions.spenders+=/seed_of_corruption,if=variable.use_seed
 actions.spenders+=/unstable_affliction,if=!variable.use_seed&!prev_gcd.1.summon_darkglare&(talent.deathbolt.enabled&cooldown.deathbolt.remains<=execute_time&!azerite.cascading_calamity.enabled|(soul_shard>=5&spell_targets.seed_of_corruption_aoe<2|soul_shard>=2&spell_targets.seed_of_corruption_aoe>=2)&target.time_to_die>4+execute_time&spell_targets.seed_of_corruption_aoe=1|target.time_to_die<=8+execute_time*soul_shard)
@@ -2058,7 +2104,7 @@ actions.spenders+=/unstable_affliction,if=!variable.use_seed&contagion<=cast_tim
 actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!talent.deathbolt.enabled|cooldown.deathbolt.remains>time_to_shard|soul_shard>1)&(!talent.vile_taint.enabled|soul_shard>1)&contagion<=cast_time+variable.padding&(!azerite.cascading_calamity.enabled|buff.cascading_calamity.remains>time_to_shard)
 ]]
 	local ua_ct = UnstableAffliction:castTime()
-	if UnstableAffliction:usable() and SummonDarkglare:cooldown() <= (Player.soul_shards * ua_ct) and (not Deathbolt.known or Deathbolt:cooldown() <= (Player.soul_shards * ua_ct)) then
+	if UnstableAffliction:usable() and SummonDarkglare:cooldown() <= (Player.soul_shards * (ua_ct + DreadfulCalling:azeriteRank())) and (not Deathbolt.known or Deathbolt:cooldown() <= (Player.soul_shards * ua_ct)) then
 		return UnstableAffliction
 	end
 	if SummonDarkglare:ready() and Target.timeToDie > SummonDarkglare:cooldown() then
@@ -3554,6 +3600,9 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 				_, _, hasCooldown = GetInventoryItemCooldown('player', inventoryItems[i].equip_slot)
 			end
 			inventoryItems[i].can_use = hasCooldown == 1
+		end
+		if Player.item_use_blacklist[inventoryItems[i].itemId] then
+			inventoryItems[i].can_use = false
 		end
 	end
 end
