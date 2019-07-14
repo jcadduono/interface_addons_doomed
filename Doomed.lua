@@ -276,7 +276,7 @@ local function SetTargetMode(mode)
 end
 Doomed_SetTargetMode = SetTargetMode
 
-function ToggleTargetMode()
+local function ToggleTargetMode()
 	local mode = targetMode + 1
 	SetTargetMode(mode > #targetModes[Player.spec] and 1 or mode)
 end
@@ -440,7 +440,7 @@ function Ability:usable()
 end
 
 function Ability:remains()
-	if self:traveling() or self:casting() then
+	if self:casting() or self:traveling() then
 		return self:duration()
 	end
 	local _, i, id, expires
@@ -508,6 +508,10 @@ function Ability:ticking()
 		return count
 	end
 	return self:up() and 1 or 0
+end
+
+function Ability:tickTime()
+	return self.hasted_ticks and (Player.haste_factor * self.tick_interval) or self.tick_interval
 end
 
 function Ability:cooldownDuration()
@@ -594,10 +598,6 @@ end
 
 function Ability:castRegen()
 	return Player.mana_regen * self:castTime() - self:cost()
-end
-
-function Ability:tickTime()
-	return self.hasted_ticks and (Player.haste_factor * self.tick_interval) or self.tick_interval
 end
 
 function Ability:wontCapMana(reduction)
