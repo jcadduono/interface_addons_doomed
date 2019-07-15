@@ -1416,7 +1416,7 @@ end
 function UnstableAffliction:next()
 	local i
 	for i = 1, 5 do
-		if Ability.remains(UnstableAffliction[i]) > 0 then
+		if Ability.remains(UnstableAffliction[i]) <= 0 then
 			return UnstableAffliction[i]
 		end
 	end
@@ -1586,6 +1586,13 @@ function AxeToss:usable()
 		return false
 	end
 	return Ability.usable(self)
+end
+
+function CascadingCalamity:remains()
+	if UnstableAffliction:casting() and UnstableAffliction:stack() >= 2 then
+		return self:duration()
+	end
+	return Ability.remains(self)
 end
 
 -- End Ability Modifications
@@ -1885,17 +1892,20 @@ actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
 ]]
 	local apl
+	Player.use_cds = Target.boss or Target.timeToDie > 40
 	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
 	Player.ua_ct = UnstableAffliction:castTime()
 	Player.ua_remains = UnstableAffliction:remains()
+	Player.all_dots_active = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and UnstableAffliction:up() and (not Haunt.known or Haunt:up())
 	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= Player.gcd)) then
 		Player.ua_padding = Player.gcd
 	else
 		Player.ua_padding = ShadowBolt:castTime() * (CascadingCalamity.known and 1 or 0)
 	end
 	Player.maintain_se = (Player.enemies <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Player.enemies > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
-	apl = self:cooldowns()
-	if apl then return apl end
+	if Player.use_cds then
+		self:cooldowns()
+	end
 	if DrainSoul:usable() and Target.timeToDie <= Player.gcd and Player.soul_shards < 5 then
 		return DrainSoul
 	end
@@ -1905,10 +1915,10 @@ actions+=/call_action_list,name=fillers
 	if Haunt:usable() and Player.enemies <= 2 then
 		return Haunt
 	end
-	if SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
+	if Player.use_cds and SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
 		UseCooldown(SummonDarkglare)
 	end
-	if Deathbolt:usable() and not SummonDarkglare:ready() and Player.enemies == 1 and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
+	if Deathbolt:usable() and Player.all_dots_active and Player.enemies == 1 and not SummonDarkglare:ready() and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
 		return Deathbolt
 	end
 	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
@@ -1950,7 +1960,7 @@ actions+=/call_action_list,name=fillers
 	if VileTaint:usable() and TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
 	end
-	if DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known)) or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
+	if Player.use_cds and DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known)) or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
 		UseCooldown(DarkSoulMisery)
 	end
 	apl = self:spenders()
@@ -2060,13 +2070,14 @@ actions.fillers+=/shadow_bolt
 		apl = self:db_refresh()
 		if apl then return apl end
 	end
-	if Deathbolt:usable() and SummonDarkglare:cooldown() >= (30 + Player.gcd) then
+	if Deathbolt:usable() and Player.all_dots_active and (Target.timeToDie < 10 or SummonDarkglare:cooldown() >= (30 + Player.gcd)) then
 		return Deathbolt
 	end
 	if Player.moving then
 		if ShadowBolt:usable() and Nightfall.known and Nightfall:up() then
 			return ShadowBolt
 		end
+--[[
 		if Agony:usable() and not (SiphonLife.known and (Agony:previous() and Agony:previous(2) and Agony:previous(3)) or Agony:previous()) then
 			return Agony
 		end
@@ -2076,6 +2087,7 @@ actions.fillers+=/shadow_bolt
 		if Corruption:usable() and not (AbsoluteCorruption.known or Corruption:previous()) then
 			return Corruption
 		end
+]]
 	end
 	if InevitableDemise.known and DrainLife:usable() then
 		if InevitableDemise:stack() > 10 and Target.timeToDie <= 10 then
