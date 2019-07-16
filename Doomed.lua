@@ -3262,6 +3262,18 @@ function events:ADDON_LOADED(name)
 	end
 end
 
+APL[SPEC.AFFLICTION].combat_event = function(self, eventType, srcGUID, dstGUID, spellId, ability)
+	if srcGUID ~= Player.guid then
+		return
+	end
+	if eventType == 'SPELL_CAST_SUCCESS' then
+		if ability == Agony then
+			ability:refreshAura(dstGUID)
+		end
+		return
+	end
+end
+
 APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, spellId, ability)
 	if ability == FelFirebolt then
 		local pet = summonedPets:find(srcGUID)
