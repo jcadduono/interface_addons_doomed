@@ -3260,13 +3260,6 @@ function events:ADDON_LOADED(name)
 end
 
 APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, spellId, ability)
-	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
-		local pet = summonedPets:find(dstGUID)
-		if pet then
-			pet:removeUnit(dstGUID)
-		end
-		return
-	end
 	if ability == FelFirebolt then
 		local pet = summonedPets:find(srcGUID)
 		if pet then
@@ -3279,16 +3272,12 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 				end
 			end
 		end
+		return
 	end
 	if srcGUID ~= Player.guid then
 		return
 	end
-	if eventType == 'SPELL_SUMMON' then
-		local pet = summonedPets:find(dstGUID)
-		if pet then
-			pet:addUnit(dstGUID)
-		end
-	elseif eventType == 'SPELL_CAST_SUCCESS' then
+	if eventType == 'SPELL_CAST_SUCCESS' then
 		if ability == Implosion then
 			ability:implode()
 		elseif ability == PowerSiphon then
@@ -3297,14 +3286,13 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 		elseif ability == HandOfGuldan then
 			ability:castSuccess()
 		end
+		return
 	end
-	if dstGUID == Player.guid then
-		if ability == DemonicPower then
-			if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
-				summonedPets.empowered_ends = Player.time + 15
-			elseif eventType == 'SPELL_AURA_REMOVED' then
-				summonedPets.empowered_ends = 0
-			end
+	if dstGUID == Player.guid and ability == DemonicPower then
+		if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
+			summonedPets.empowered_ends = Player.time + 15
+		elseif eventType == 'SPELL_AURA_REMOVED' then
+			summonedPets.empowered_ends = 0
 		end
 	end
 end
@@ -3330,6 +3318,11 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		if Opt.auto_aoe then
 			autoAoe:remove(dstGUID)
 		end
+		local pet = summonedPets:find(dstGUID)
+		if pet then
+			pet:removeUnit(dstGUID)
+		end
+		return
 	end
 	if Opt.auto_aoe and (eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED') then
 		if dstGUID == Player.guid or dstGUID == Player.pet then
@@ -3346,6 +3339,14 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 
 	if (srcGUID ~= Player.guid and srcGUID ~= Player.pet) then
+		return
+	end
+
+	if eventType == 'SPELL_SUMMON' then
+		local pet = summonedPets:find(dstGUID)
+		if pet then
+			pet:addUnit(dstGUID)
+		end
 		return
 	end
 
