@@ -2144,6 +2144,9 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 		if (not Deathbolt.known or Player.soul_shards > 1) and (not VileTaint.known or Player.soul_shards > 1) and Player.ua_remains <= (Player.ua_ct + Player.ua_padding) and not CascadingCalamity.known then
 			return UnstableAffliction
 		end
+		if Player.soul_shards >= 4 and Agony:ticking() >= 2 then
+			return UnstableAffliction
+		end
 	end
 end
 
