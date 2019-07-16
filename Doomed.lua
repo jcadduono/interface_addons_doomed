@@ -1002,7 +1002,7 @@ Shadowburn.mana_cost = 1
 Shadowburn.requires_charge = true
 ------ Procs
 local Backdraft = Ability.add(117828, true, true)
-Backdraft.duration = 10
+Backdraft.buff_duration = 10
 -- Azerite Traits
 local BalefulInvocation = Ability.add(287059, true, true)
 local CascadingCalamity = Ability.add(275372, true, true, 275378)
@@ -1018,6 +1018,9 @@ ShadowsBite.buff_duration = 8
 local ConcentratedFlame = Ability.add(295373, false, true, 295368)
 ConcentratedFlame.buff_duration = 6
 ConcentratedFlame.cooldown_duration = 30
+local MemoryOfLucidDreams = Ability.add(298357, true, true)
+MemoryOfLucidDreams.buff_duration = 15
+MemoryOfLucidDreams.cooldown_duration = 120
 -- Racials
 
 -- Trinket Effects
@@ -2216,7 +2219,9 @@ actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_c
 actions+=/summon_demonic_tyrant,if=soul_shard<3|target.time_to_die<20
 actions+=/power_siphon,if=buff.wild_imps.stack>=2&buff.demonic_core.stack<=2&buff.demonic_power.down&spell_targets.implosion<2
 actions+=/doom,if=talent.doom.enabled&refreshable&time_to_die>(dot.doom.remains+30)
-actions+=/hand_of_guldan,if=soul_shard>=5|soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
+actions+=/hand_of_guldan,if=soul_shard>=5
+actions+=/hand_of_guldan,if=(soul_shard>=4|soul_shard>=3&talent.soul_conduit.enabled)&buff.memory_of_lucid_dreams.remains>cast_time
+actions+=/hand_of_guldan,if=soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
 actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
@@ -2304,8 +2309,16 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and DemonicCore:remains() <= HandOfGuldan:castTime() then
 		return Demonbolt
 	end
-	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or Player.soul_shards >= 3 and (DemonicCore:stack() >= 3 or (not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or SummonDemonicTyrant:ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:ready(3))))) then
-		return HandOfGuldan
+	if HandOfGuldan:usable() and Player.soul_shards >= 3 then
+		if Player.soul_shards >= 5 then
+			return HandOfGuldan
+		end
+		if MemoryOfLucidDreams.known and (Player.soul_shards >= 4 or SoulConduit.known) and MemoryOfLucidDreams:remains() > HandOfGuldan:castTime() then
+			return HandOfGuldan
+		end
+		if DemonicCore:stack() >= 3 or (not CallDreadstalkers:ready(4) and (not SummonDemonicTyrant:ready(20) or SummonDemonicTyrant:ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:ready(3))) then
+			return HandOfGuldan
+		end
 	end
 	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
 		return SoulStrike
@@ -2318,13 +2331,17 @@ end
 
 APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 --[[
-actions.build_a_shard=soul_strike,if=soul_shard=4
+actions.build_a_shard=memory_of_lucid_dreams,if=soul_shard<2&!talent.demonic_consumption.enabled
+actions.build_a_shard+=/soul_strike,if=soul_shard=4|soul_shard=3&buff.memory_of_lucid_dreams.up
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard)+action.hand_of_guldan.execute_time)
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&soul_shard<=3&pet.demonic_tyrant.active
 actions.build_a_shard+=/soul_strike
 actions.build_a_shard+=/shadow_bolt
 ]]
-	if SoulStrike:usable() and Player.soul_shards == 4 then
+	if not DemonicConsumption.known and Player.soul_shards < 2 and MemoryOfLucidDreams:usable() then
+		UseCooldown(MemoryOfLucidDreams)
+	end
+	if SoulStrike:usable() and (Player.soul_shards == 4 or (Player.soul_shards == 4 and MemoryOfLucidDreams.known and MemoryOfLucidDreams:up())) then
 		return SoulStrike
 	end
 	if Demonbolt:usable() and DemonicCore:up() then
@@ -2372,6 +2389,7 @@ actions.dcon_prep+=/bilescourge_bombers
 actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
 actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
+actions.dcon_prep+=/memory_of_lucid_dreams
 actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
 actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.stack>=2
 actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
@@ -2428,6 +2446,8 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 			UseCooldown(SummonVilefiend)
 		elseif GrimoireFelguard:usable() then
 			UseCooldown(GrimoireFelguard)
+		elseif MemoryOfLucidDreams:usable() then
+			UseCooldown(MemoryOfLucidDreams)
 		end
 		if HandOfGuldan:usable() then
 			return HandOfGuldan
@@ -2450,6 +2470,7 @@ actions.implosion+=/grimoire_felguard,if=cooldown.summon_demonic_tyrant.remains<
 actions.implosion+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
 actions.implosion+=/summon_demonic_tyrant
 actions.implosion+=/hand_of_guldan,if=soul_shard>=5
+actions.implosion+=/hand_of_guldan,if=(soul_shard>=4|soul_shard>=3&talent.soul_conduit.enabled)&buff.memory_of_lucid_dreams.remains>cast_time
 actions.implosion+=/hand_of_guldan,if=soul_shard>=3&(((prev_gcd.2.hand_of_guldan|buff.wild_imps.stack>=3)&buff.wild_imps.stack<9)|cooldown.summon_demonic_tyrant.remains<=gcd*2|buff.demonic_power.remains>gcd*2)
 actions.implosion+=/demonbolt,if=prev_gcd.1.hand_of_guldan&soul_shard>=1&(buff.wild_imps.stack<=3|prev_gcd.3.hand_of_guldan)&soul_shard<4&buff.demonic_core.up
 actions.implosion+=/summon_vilefiend,if=(cooldown.summon_demonic_tyrant.remains>40&spell_targets.implosion<=2)|cooldown.summon_demonic_tyrant.remains<12
@@ -2474,8 +2495,16 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if SummonDemonicTyrant:usable() then
 		UseCooldown(SummonDemonicTyrant)
 	end
-	if HandOfGuldan:usable() and (Player.soul_shards >= 5 or (Player.soul_shards >= 3 and (((HandOfGuldan:previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:ready(Player.gcd * 2) or DemonicPower:remains() > (Player.gcd * 2)))) then
-		return HandOfGuldan
+	if HandOfGuldan:usable() and Player.soul_shards >= 3 then
+		if Player.soul_shards >= 5 then
+			return HandOfGuldan
+		end
+		if MemoryOfLucidDreams.known and (Player.soul_shards >= 4 or SoulConduit.known) and MemoryOfLucidDreams:remains() > HandOfGuldan:castTime() then
+			return HandOfGuldan
+		end
+		if ((HandOfGuldan:previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:ready(Player.gcd * 2) or DemonicPower:remains() > (Player.gcd * 2) then
+			return HandOfGuldan
+		end
 	end
 	if Demonbolt:usable() and HandOfGuldan:previous(1) and between(Player.soul_shards, 1, 3) and (Player.imp_count <= 3 or HandOfGuldan:previous(3)) and DemonicCore:up() then
 		return Demonbolt
