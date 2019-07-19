@@ -1897,9 +1897,9 @@ actions+=/call_action_list,name=fillers
 	local apl
 	Player.use_cds = Target.boss or Target.timeToDie > 40
 	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
+	Player.use_db = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and (Player.use_seed or Player.soul_shards < 1 or UnstableAffliction:up()) and (not Haunt.known or Haunt:up() or not Haunt:ready())
 	Player.ua_ct = UnstableAffliction:castTime()
 	Player.ua_remains = UnstableAffliction:remains()
-	Player.all_dots_active = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and UnstableAffliction:up() and (not Haunt.known or Haunt:up())
 	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= Player.gcd)) then
 		Player.ua_padding = Player.gcd
 	else
@@ -1912,7 +1912,7 @@ actions+=/call_action_list,name=fillers
 	if DrainSoul:usable() and Target.timeToDie <= Player.gcd and Player.soul_shards < 5 then
 		return DrainSoul
 	end
-	if CascadingCalamity.known and UnstableAffliction:usable() and Player.ua_remains > Player.ua_ct and CascadingCalamity:remains() < Player.ua_ct then
+	if CascadingCalamity.known and UnstableAffliction:usable() and Player.ua_remains > Player.ua_ct and CascadingCalamity:remains() < ShadowBolt:castTime() then
 		return UnstableAffliction
 	end
 	if Haunt:usable() and Player.enemies <= 2 then
@@ -1921,7 +1921,7 @@ actions+=/call_action_list,name=fillers
 	if Player.use_cds and SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
 		UseCooldown(SummonDarkglare)
 	end
-	if Deathbolt:usable() and Player.all_dots_active and Player.enemies == 1 and not SummonDarkglare:ready() and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
+	if Deathbolt:usable() and Player.use_db and Player.enemies == 1 and not SummonDarkglare:ready() and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
 		return Deathbolt
 	end
 	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
@@ -2073,7 +2073,7 @@ actions.fillers+=/shadow_bolt
 		apl = self:db_refresh()
 		if apl then return apl end
 	end
-	if Deathbolt:usable() and Player.all_dots_active and (Target.timeToDie < 10 or SummonDarkglare:cooldown() >= (30 + Player.gcd)) then
+	if Deathbolt:usable() and Player.use_db and (Target.timeToDie < 10 or SummonDarkglare:cooldown() >= (30 + Player.gcd)) then
 		return Deathbolt
 	end
 	if Player.moving then
