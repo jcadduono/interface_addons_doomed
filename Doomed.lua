@@ -1804,6 +1804,13 @@ local APL = {
 }
 
 APL[SPEC.AFFLICTION].main = function(self)
+	Player.use_cds = Target.boss or Target.timeToDie > 40
+	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
+	Player.use_db = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and (Player.use_seed or Player.soul_shards < 1 or UnstableAffliction:up()) and (not Haunt.known or Haunt:up() or not Haunt:ready())
+	Player.ua_ct = UnstableAffliction:castTime()
+	Player.ua_stack = UnstableAffliction:stack()
+	Player.ua_remains = UnstableAffliction:remains()
+
 	if TimeInCombat() == 0 then
 --[[
 actions.precombat=flask
@@ -1895,11 +1902,6 @@ actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
 ]]
 	local apl
-	Player.use_cds = Target.boss or Target.timeToDie > 40
-	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
-	Player.use_db = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and (Player.use_seed or Player.soul_shards < 1 or UnstableAffliction:up()) and (not Haunt.known or Haunt:up() or not Haunt:ready())
-	Player.ua_ct = UnstableAffliction:castTime()
-	Player.ua_remains = UnstableAffliction:remains()
 	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:cooldown() <= Player.gcd)) then
 		Player.ua_padding = Player.gcd
 	else
@@ -1918,7 +1920,7 @@ actions+=/call_action_list,name=fillers
 	if Haunt:usable() and Player.enemies <= 2 then
 		return Haunt
 	end
-	if Player.use_cds and SummonDarkglare:usable() and Agony:up() and Corruption:up() and (UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
+	if Player.use_cds and SummonDarkglare:usable() and Agony:up() and Corruption:up() and (Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:cooldown() <= Player.gcd or Player.enemies > 1) then
 		UseCooldown(SummonDarkglare)
 	end
 	if Deathbolt:usable() and Player.use_db and Player.enemies == 1 and not SummonDarkglare:ready() and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
@@ -1988,7 +1990,7 @@ actions.cooldowns+=/ripple_in_space
 	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.Darkglare:up() and (not DarkSoulMisery.known or DarkSoulMisery:up())) then
 		UseCooldown(BattlePotionOfIntellect)
 	end
-	if Opt.trinket and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((UnstableAffliction:stack() == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
+	if Opt.trinket and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
 		if Trinket1:usable() then
 			UseCooldown(Trinket1)
 		elseif Trinket2:usable() then
@@ -3089,6 +3091,9 @@ local function UpdateDisplay()
 		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
 	end
 	if Player.spec == SPEC.AFFLICTION then
+		if Opt.pet_count then
+			text_tl = Player.ua_stack > 0 and Player.ua_stack
+		end
 		if Opt.tyrant and Player.darkglare_remains > 0 then
 			text_tr = format('%.1fs', Player.darkglare_remains)
 		end
