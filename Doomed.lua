@@ -1018,9 +1018,13 @@ ShadowsBite.buff_duration = 8
 local ConcentratedFlame = Ability.add(295373, false, true, 295368)
 ConcentratedFlame.buff_duration = 6
 ConcentratedFlame.cooldown_duration = 30
+local FocusedAzeriteBeam = Ability.add(295258, false, false)
+FocusedAzeriteBeam.cooldown_duration = 90
 local MemoryOfLucidDreams = Ability.add(298357, true, true)
 MemoryOfLucidDreams.buff_duration = 15
 MemoryOfLucidDreams.cooldown_duration = 120
+local PurifyingBlast = Ability.add(295337, false, true)
+PurifyingBlast.cooldown_duration = 60
 -- Racials
 
 -- Trinket Effects
@@ -2105,6 +2109,12 @@ actions.fillers+=/shadow_bolt
 	if Haunt:usable() then
 		return Haunt
 	end
+	if FocusedAzeriteBeam:usable() and not Player.moving then
+		UseCooldown(FocusedAzeriteBeam)
+	end
+	if PurifyingBlast:usable() then
+		UseCooldown(PurifyingBlast)
+	end
 	if ConcentratedFlame:usable() and ConcentratedFlame:down() then
 		return ConcentratedFlame
 	end
@@ -2238,14 +2248,14 @@ actions+=/call_action_list,name=build_a_shard
 			UseCooldown(Trinket2)
 		end
 	end
-	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.DemonicTyrant:up() and (not NetherPortal.known or not NetherPortal:ready(160))) then
+	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Player.tyrant_remains > 0 and (not NetherPortal.known or not NetherPortal:ready(160))) then
 		UseCooldown(BattlePotionOfIntellect)
 	end
 	if DemonicConsumption.known and SummonDemonicTyrant:ready(5) then
 		local apl = self:dcon_prep()
 		if apl then return apl end
 	end
-	if Pet.DemonicTyrant:up() then
+	if Player.tyrant_remains > 0 then
 		local apl = self:tyrant_active()
 		if apl then return apl end
 	end
@@ -2299,6 +2309,14 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
+	if Player.tyrant_remains == 0 and Player.enemies >= 4 then
+		if FocusedAzeriteBeam:usable() and not Player.moving then
+			UseCooldown(FocusedAzeriteBeam)
+		end
+		if PurifyingBlast:usable() then
+			UseCooldown(PurifyingBlast)
+		end
+	end
 	if HandOfGuldan:usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:previous(1) and SummonDemonicTyrant:ready(2) then
 		return HandOfGuldan
 	end
@@ -2331,6 +2349,15 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and ((SummonDemonicTyrant:ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:ready(22))) or DemonicCore:stack() >= 3 or DemonicCore:remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:up())) then
 		return Demonbolt
 	end
+	if FocusedAzeriteBeam:usable() and not Player.moving and Player.tyrant_remains == 0 then
+		UseCooldown(FocusedAzeriteBeam)
+	end
+	if PurifyingBlast:usable() then
+		UseCooldown(PurifyingBlast)
+	end
+	if ConcentratedFlame:usable() and ConcentratedFlame:down() and Player.tyrant_remains == 0 then
+		return ConcentratedFlame
+	end
 	return self:build_a_shard()
 end
 
@@ -2353,7 +2380,7 @@ actions.build_a_shard+=/shadow_bolt
 		if DemonicCore:remains() <= (ShadowBoltDemo:castTime() * (5 - Player.soul_shards) + HandOfGuldan:castTime()) then
 			return Demonbolt
 		end
-		if Player.soul_shards <= 3 and Pet.DemonicTyrant:up() then
+		if Player.soul_shards <= 3 and Player.tyrant_remains > 0 then
 			return Demonbolt
 		end
 	end
@@ -2371,7 +2398,7 @@ actions.tyrant_active=implosion,if=azerite.explosive_potential.enabled&buff.wild
 actions.tyrant_active+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.wild_imps.stack<3&soul_shard>=3&buff.explosive_potential.remains<execute_time&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan
 ]]
 	if ExplosivePotential.known then
-		if Implosion:usable() and Player.imp_count >= 3 and ExplosivePotential:remains() < Pet.DemonicTyrant:remains() then
+		if Implosion:usable() and Player.imp_count >= 3 and ExplosivePotential:remains() < Player.tyrant_remains then
 			return Implosion
 		end
 		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:remains() < HandOfGuldan:castTime() and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
@@ -2519,6 +2546,15 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	end
 	if BilescourgeBombers:usable() and not SummonDemonicTyrant:ready(9) then
 		UseCooldown(BilescourgeBombers)
+	end
+	if FocusedAzeriteBeam:usable() and not Player.moving then
+		UseCooldown(FocusedAzeriteBeam)
+	end
+	if PurifyingBlast:usable() then
+		UseCooldown(PurifyingBlast)
+	end
+	if ConcentratedFlame:usable() and ConcentratedFlame:down() and Enemies() < 5 then
+		return ConcentratedFlame
 	end
 	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
 		return SoulStrike
