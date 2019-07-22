@@ -1018,13 +1018,15 @@ ShadowsBite.buff_duration = 8
 local ConcentratedFlame = Ability.add(295373, false, true, 295368)
 ConcentratedFlame.buff_duration = 6
 ConcentratedFlame.cooldown_duration = 30
-local FocusedAzeriteBeam = Ability.add(295258, false, false)
+local FocusedAzeriteBeam = Ability.add(295258, false, true)
 FocusedAzeriteBeam.cooldown_duration = 90
 local MemoryOfLucidDreams = Ability.add(298357, true, true)
 MemoryOfLucidDreams.buff_duration = 15
 MemoryOfLucidDreams.cooldown_duration = 120
 local PurifyingBlast = Ability.add(295337, false, true)
 PurifyingBlast.cooldown_duration = 60
+-- PvP talents
+local RotAndDecay = Ability.add(212371, false, true)
 -- Racials
 
 -- Trinket Effects
@@ -1297,6 +1299,10 @@ end
 
 local function ManaDeficit()
 	return Player.mana_max - Player.mana
+end
+
+local function ManaPct()
+	return Player.mana / Player.mana_max * 100
 end
 
 local function ManaTimeToMax()
@@ -2117,6 +2123,17 @@ actions.fillers+=/shadow_bolt
 	end
 	if ConcentratedFlame:usable() and ConcentratedFlame:down() then
 		return ConcentratedFlame
+	end
+	if DrainLife:usable() then
+		if (ManaPct() > 5 and HealthPct() < 20) or (ManaPct() > 20 and HealthPct() < 50) then
+			return DrainLife
+		end
+		if RotAndDecay.known and ManaPct() > (110 - (Player.ua_stack * 20)) then
+			return DrainLife
+		end
+		if not DrainSoul.known and Target.timeToDie < ShadowBolt:castTime() then
+			return DrainLife
+		end
 	end
 	if DrainSoul:usable() then
 		return DrainSoul
@@ -3619,6 +3636,9 @@ local function UpdateAbilityData()
 		pet.known = false
 	end
 
+	if DrainSoul.known then
+		ShadowBolt.known = false
+	end
 	if UnstableAffliction.known then
 		UnstableAffliction[1].known = true
 		UnstableAffliction[2].known = true
