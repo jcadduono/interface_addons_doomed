@@ -2366,7 +2366,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:up() and ((SummonDemonicTyrant:ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:ready(22))) or DemonicCore:stack() >= 3 or DemonicCore:remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:up())) then
 		return Demonbolt
 	end
-	if FocusedAzeriteBeam:usable() and not Player.moving and Player.tyrant_remains == 0 then
+	if FocusedAzeriteBeam:usable() and not Player.moving and Player.tyrant_remains == 0 and (not ExplosivePotential.known or ExplosivePotential:remains() > (1.1 + 3 * Player.haste_factor)) then
 		UseCooldown(FocusedAzeriteBeam)
 	end
 	if PurifyingBlast:usable() then
@@ -2564,7 +2564,7 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() and not SummonDemonicTyrant:ready(9) then
 		UseCooldown(BilescourgeBombers)
 	end
-	if FocusedAzeriteBeam:usable() and not Player.moving then
+	if FocusedAzeriteBeam:usable() and not Player.moving and (not ExplosivePotential.known or ExplosivePotential:remains() > (1.1 + 3 * Player.haste_factor)) then
 		UseCooldown(FocusedAzeriteBeam)
 	end
 	if PurifyingBlast:usable() then
