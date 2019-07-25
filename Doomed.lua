@@ -1684,6 +1684,13 @@ function CascadingCalamity:remains()
 	return Ability.remains(self)
 end
 
+function InevitableDemise:stack()
+	if DrainLife:previous() or DrainLife:channeling() then
+		return 0
+	end
+	return Ability.stack(self)
+end
+
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
