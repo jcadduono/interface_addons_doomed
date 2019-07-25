@@ -397,6 +397,7 @@ function Ability.add(spellId, buff, player, spellId2)
 		cooldown_duration = 0,
 		buff_duration = 0,
 		tick_interval = 0,
+		summon_count = 0,
 		max_range = 40,
 		velocity = 0,
 		last_used = 0,
@@ -1010,21 +1011,83 @@ CascadingCalamity.buff_duration = 15
 local DreadfulCalling = Ability.add(278727, true, true)
 local ExplosivePotential = Ability.add(275395, true, true, 275398)
 ExplosivePotential.buff_duration = 15
-local InevitableDemise = Ability.add(273521, true, true, 273522)
+local InevitableDemise = Ability.add(273521, true, true, 273525)
+InevitableDemise.buff_duration = 20
 local PandemicInvocation = Ability.add(289364, true, true)
 local ShadowsBite = Ability.add(272944, true, true, 272945)
 ShadowsBite.buff_duration = 8
--- Heart of Azeroth Essences
-local ConcentratedFlame = Ability.add(295373, false, true, 295368)
-ConcentratedFlame.buff_duration = 6
+-- Heart of Azeroth
+---- Major Essences
+local ConcentratedFlame = Ability.add(295373, true, true, 295378)
+ConcentratedFlame.buff_duration = 180
 ConcentratedFlame.cooldown_duration = 30
+ConcentratedFlame.requires_charge = true
+ConcentratedFlame.essence_id = 12
+ConcentratedFlame.essence_major = true
+ConcentratedFlame.dot = Ability.add(295368, false, true)
+ConcentratedFlame.dot.buff_duration = 6
+ConcentratedFlame.dot.essence_id = 12
+ConcentratedFlame.dot.essence_major = true
+local GuardianOfAzeroth = Ability.add(295840, false, true)
+GuardianOfAzeroth.cooldown_duration = 180
+GuardianOfAzeroth.essence_id = 14
+GuardianOfAzeroth.essence_major = true
 local FocusedAzeriteBeam = Ability.add(295258, false, true)
 FocusedAzeriteBeam.cooldown_duration = 90
+FocusedAzeriteBeam.essence_id = 5
+FocusedAzeriteBeam.essence_major = true
 local MemoryOfLucidDreams = Ability.add(298357, true, true)
 MemoryOfLucidDreams.buff_duration = 15
 MemoryOfLucidDreams.cooldown_duration = 120
-local PurifyingBlast = Ability.add(295337, false, true)
+MemoryOfLucidDreams.essence_id = 27
+MemoryOfLucidDreams.essence_major = true
+local PurifyingBlast = Ability.add(295337, false, true, 295338)
 PurifyingBlast.cooldown_duration = 60
+PurifyingBlast.essence_id = 6
+PurifyingBlast.essence_major = true
+PurifyingBlast:autoAoe(true)
+local RippleInSpace = Ability.add(302731, true, true)
+RippleInSpace.buff_duration = 2
+RippleInSpace.cooldown_duration = 60
+RippleInSpace.essence_id = 15
+RippleInSpace.essence_major = true
+local TheUnboundForce = Ability.add(298452, false, true)
+TheUnboundForce.cooldown_duration = 45
+TheUnboundForce.essence_id = 28
+TheUnboundForce.essence_major = true
+local VisionOfPerfection = Ability.add(299370, true, true, 303345)
+VisionOfPerfection.buff_duration = 10
+VisionOfPerfection.essence_id = 22
+VisionOfPerfection.essence_major = true
+local WorldveinResonance = Ability.add(295186, true, true)
+WorldveinResonance.cooldown_duration = 60
+WorldveinResonance.essence_id = 4
+WorldveinResonance.essence_major = true
+---- Minor Essences
+local AncientFlame = Ability.add(295367, false, true)
+AncientFlame.buff_duration = 10
+AncientFlame.essence_id = 12
+local CondensedLifeForce = Ability.add(295367, false, true)
+CondensedLifeForce.essence_id = 14
+local FocusedEnergy = Ability.add(295248, true, true)
+FocusedEnergy.buff_duration = 4
+FocusedEnergy.essence_id = 5
+local Lifeblood = Ability.add(295137, true, true)
+Lifeblood.essence_id = 4
+local LucidDreams = Ability.add(298343, true, true)
+LucidDreams.buff_duration = 8
+LucidDreams.essence_id = 27
+local PurificationProtocol = Ability.add(295305, false, true)
+PurificationProtocol.essence_id = 6
+PurificationProtocol:autoAoe()
+local RealityShift = Ability.add(302952, true, true)
+RealityShift.buff_duration = 20
+RealityShift.cooldown_duration = 30
+RealityShift.essence_id = 15
+local RecklessForce = Ability.add(302917, true, true)
+RecklessForce.essence_id = 28
+local StriveForPerfection = Ability.add(299369, true, true)
+StriveForPerfection.essence_id = 22
 -- PvP talents
 local RotAndDecay = Ability.add(212371, false, true)
 -- Racials
@@ -1074,11 +1137,12 @@ function summonedPets:empoweredRemains()
 	return max((self.empowered_ends or 0) - Player.time, 0)
 end
 
-function SummonedPet.add(unitId, duration)
+function SummonedPet.add(unitId, duration, summonSpell)
 	local pet = {
 		unitId = unitId,
 		duration = duration,
 		active_units = {},
+		summon_spell = summonSpell,
 		known = false,
 	}
 	setmetatable(pet, SummonedPet)
@@ -1088,7 +1152,7 @@ end
 
 function SummonedPet:remains()
 	local expires_max, guid, unit = 0
-	if self.summon_spell and self.summon_spell:casting() then
+	if self.summon_spell and self.summon_spell.summon_count > 0 and self.summon_spell:casting() then
 		expires_max = self.duration
 	end
 	for guid, unit in next, self.active_units do
@@ -1146,32 +1210,28 @@ function SummonedPet:removeUnit(guid)
 end
 
 -- Summoned Pets
-Pet.Darkglare = SummonedPet.add(103673, 20)
-Pet.Darkglare.summon_spell = SummonDarkglare
-Pet.DemonicTyrant = SummonedPet.add(135002, 15)
-Pet.DemonicTyrant.summon_spell = SummonDemonicTyrant
-Pet.Dreadstalker = SummonedPet.add(98035, 12)
-Pet.Dreadstalker.summon_spell = CallDreadstalkers
-Pet.Felguard = SummonedPet.add(17252, 15)
-Pet.Felguard.summon_spell = GrimoireFelguard
-Pet.Infernal = SummonedPet.add(89, 30)
-Pet.Infernal.summon_spell = SummonInfernal
-Pet.Vilefiend = SummonedPet.add(135816, 15)
-Pet.Vilefiend.summon_spell = SummonVilefiend
-Pet.WildImp = SummonedPet.add(55659, 20)
+Pet.Darkglare = SummonedPet.add(103673, 20, SummonDarkglare)
+Pet.DemonicTyrant = SummonedPet.add(135002, 15, SummonDemonicTyrant)
+Pet.Dreadstalker = SummonedPet.add(98035, 12, CallDreadstalkers)
+Pet.Felguard = SummonedPet.add(17252, 15, GrimoireFelguard)
+Pet.Infernal = SummonedPet.add(89, 30, SummonInfernal)
+Pet.Vilefiend = SummonedPet.add(135816, 15, SummonVilefiend)
+Pet.WildImp = SummonedPet.add(55659, 20, HandOfGuldan)
 ---- Nether Portal / Inner Demons
-Pet.Bilescourge = SummonedPet.add(136404, 15)
-Pet.Darkhound = SummonedPet.add(136408, 15)
-Pet.EredarBrute = SummonedPet.add(136405, 15)
-Pet.EyeOfGuldan = SummonedPet.add(136401, 15)
-Pet.IllidariSatyr = SummonedPet.add(136398, 15)
-Pet.PrinceMalchezaar = SummonedPet.add(136397, 15)
-Pet.Shivarra = SummonedPet.add(136406, 15)
-Pet.Urzul = SummonedPet.add(136402, 15)
-Pet.ViciousHellhound = SummonedPet.add(136399, 15)
-Pet.VoidTerror = SummonedPet.add(136403, 15)
-Pet.Wrathguard = SummonedPet.add(136407, 15)
-Pet.WildImpID = SummonedPet.add(143622, 20)
+Pet.Bilescourge = SummonedPet.add(136404, 15, NetherPortal)
+Pet.Darkhound = SummonedPet.add(136408, 15, NetherPortal)
+Pet.EredarBrute = SummonedPet.add(136405, 15, NetherPortal)
+Pet.EyeOfGuldan = SummonedPet.add(136401, 15, NetherPortal)
+Pet.IllidariSatyr = SummonedPet.add(136398, 15, NetherPortal)
+Pet.PrinceMalchezaar = SummonedPet.add(136397, 15, NetherPortal)
+Pet.Shivarra = SummonedPet.add(136406, 15, NetherPortal)
+Pet.Urzul = SummonedPet.add(136402, 15, NetherPortal)
+Pet.ViciousHellhound = SummonedPet.add(136399, 15, NetherPortal)
+Pet.VoidTerror = SummonedPet.add(136403, 15, NetherPortal)
+Pet.Wrathguard = SummonedPet.add(136407, 15, NetherPortal)
+Pet.WildImpID = SummonedPet.add(143622, 20, InnerDemons)
+-- Heart of Azeroth
+Pet.GuardianOfAzeroth = SummonedPet.add(152396, 30, GuardianOfAzeroth)
 -- End Summoned Pets
 
 -- Start Inventory Items
@@ -1258,6 +1318,7 @@ Azerite.equip_slots = { 1, 3, 5 } -- Head, Shoulder, Chest
 function Azerite:initialize()
 	self.locations = {}
 	self.traits = {}
+	self.essences = {}
 	local i
 	for i = 1, #self.equip_slots do
 		self.locations[i] = ItemLocation:CreateFromEquipmentSlot(self.equip_slots[i])
@@ -1265,16 +1326,18 @@ function Azerite:initialize()
 end
 
 function Azerite:update()
-	local _, loc, tinfo, tslot, pid, pinfo
+	local _, loc, slot, pid, pinfo
 	for pid in next, self.traits do
 		self.traits[pid] = nil
 	end
+	for pid in next, self.essences do
+		self.essences[pid] = nil
+	end
 	for _, loc in next, self.locations do
 		if GetInventoryItemID('player', loc:GetEquipmentSlot()) and C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItem(loc) then
-			tinfo = C_AzeriteEmpoweredItem.GetAllTierInfo(loc)
-			for _, tslot in next, tinfo do
-				if tslot.azeritePowerIDs then
-					for _, pid in next, tslot.azeritePowerIDs do
+			for _, slot in next, C_AzeriteEmpoweredItem.GetAllTierInfo(loc) do
+				if slot.azeritePowerIDs then
+					for _, pid in next, slot.azeritePowerIDs do
 						if C_AzeriteEmpoweredItem.IsPowerSelected(loc, pid) then
 							self.traits[pid] = 1 + (self.traits[pid] or 0)
 							pinfo = C_AzeriteEmpoweredItem.GetPowerInfo(pid)
@@ -1284,6 +1347,19 @@ function Azerite:update()
 						end
 					end
 				end
+			end
+		end
+	end
+	for _, loc in next, C_AzeriteEssence.GetMilestones() do
+		if loc.slot then
+			pid = C_AzeriteEssence.GetMilestoneEssence(loc.ID)
+			if pid then
+				pinfo = C_AzeriteEssence.GetEssenceInfo(pid)
+				self.essences[pid] = {
+					id = pid,
+					rank = pinfo.rank,
+					major = loc.slot == 0,
+				}
 			end
 		end
 	end
@@ -1905,7 +1981,7 @@ actions+=/vile_taint,target_if=max:target.time_to_die,if=time>15&target.time_to_
 actions+=/use_item,name=azsharas_font_of_power,if=time<=3
 actions+=/phantom_singularity,if=time<=35
 actions+=/vile_taint,if=time<15
-actions+=/guardian_of_azeroth,if=cooldown.summon_darkglare.remains<15&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<30+gcd
+actions+=/guardian_of_azeroth,if=(cooldown.summon_darkglare.remains<15+soul_shard*azerite.dreadful_calling.enabled|(azerite.dreadful_calling.rank|essence.vision_of_perfection.rank)&time>30&target.time_to_die>=210)&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<30+gcd
 actions+=/dark_soul,if=cooldown.summon_darkglare.remains<10&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<20+gcd|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up
 actions+=/berserking
 actions+=/call_action_list,name=spenders
@@ -1935,6 +2011,9 @@ actions+=/call_action_list,name=fillers
 	end
 	if Deathbolt:usable() and Player.use_db and Player.enemies == 1 and not SummonDarkglare:ready() and (not DreadfulCalling.known or SummonDarkglare:cooldown() > 30) then
 		return Deathbolt
+	end
+	if TheUnboundForce:usable() and RecklessForce:up() then
+		return TheUnboundForce
 	end
 	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
 		return Agony
@@ -1974,6 +2053,9 @@ actions+=/call_action_list,name=fillers
 	end
 	if VileTaint:usable() and TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
+	end
+	if GuardianOfAzeroth:usable() and ((SummonDarkglare:ready(15 + (DreadfulCalling.known and Player.soul_shards or 0))) or (((DreadfulCalling.known or VisionOfPerfection.known) and TimeInCombat() > 30 and Target.timeToDie >= 210) and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known))) or Target.timeToDie < (30 + Player.gcd)) then
+		UseCooldown(GuardianOfAzeroth)
 	end
 	if Player.use_cds and DarkSoulMisery:usable() and (SummonDarkglare:cooldown() < 10 and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known)) or Target.timeToDie < 20 + Player.gcd or Player.enemies > 1) then
 		UseCooldown(DarkSoulMisery)
@@ -2121,7 +2203,7 @@ actions.fillers+=/shadow_bolt
 	if PurifyingBlast:usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:usable() and ConcentratedFlame:down() then
+	if ConcentratedFlame:usable() and ConcentratedFlame.dot:down() and not ConcentratedFlame:previous() then
 		return ConcentratedFlame
 	end
 	if DrainLife:usable() then
@@ -2372,7 +2454,7 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if PurifyingBlast:usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:usable() and ConcentratedFlame:down() and Player.tyrant_remains == 0 then
+	if ConcentratedFlame:usable() and ConcentratedFlame.dot:down() and Player.tyrant_remains == 0 then
 		return ConcentratedFlame
 	end
 	return self:build_a_shard()
@@ -2570,7 +2652,7 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if PurifyingBlast:usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:usable() and ConcentratedFlame:down() and Enemies() < 5 then
+	if ConcentratedFlame:usable() and ConcentratedFlame.dot:down() and Enemies() < 5 then
 		return ConcentratedFlame
 	end
 	if SoulStrike:usable() and Player.soul_shards < 5 and DemonicCore:stack() <= 2 then
@@ -3630,10 +3712,28 @@ local function UpdateAbilityData()
 
 	for _, ability in next, abilities.all do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
-		ability.known = (IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) or Azerite.traits[ability.spellId]) and true or false
+		ability.known = false
+		if IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) then
+			ability.known = true
+		elseif Azerite.traits[ability.spellId] then
+			ability.known = true
+		elseif ability.essence_id and Azerite.essences[ability.essence_id] then
+			if ability.essence_major then
+				ability.known = Azerite.essences[ability.essence_id].major
+			else
+				ability.known = true
+			end
+		end
 	end
 	for _, pet in next, summonedPets.all do
 		pet.known = false
+		if pet.summon_spell then
+			if pet.summon_spell.known then
+				pet.known = true
+			elseif pet.summon_spell == NetherPortal and InnerDemons.known then
+				pet.known = true
+			end
+		end
 	end
 
 	if DrainSoul.known then
@@ -3645,27 +3745,6 @@ local function UpdateAbilityData()
 		UnstableAffliction[3].known = true
 		UnstableAffliction[4].known = true
 		UnstableAffliction[5].known = true
-	end
-	DemonicPower.known = SummonDemonicTyrant.known
-	Pet.Darkglare.known = SummonDarkglare.known
-	Pet.DemonicTyrant.known = SummonDemonicTyrant.known
-	Pet.Dreadstalker.known = CallDreadstalkers.known
-	Pet.Felguard.known = GrimoireFelguard.known
-	Pet.Vilefiend.known = SummonVilefiend.known
-	Pet.WildImp.known = HandOfGuldan.known
-	Pet.WildImpID.known = InnerDemons.known
-	if InnerDemons.known or NetherPortal.known then
-		Pet.Bilescourge.known = true
-		Pet.Darkhound.known = true
-		Pet.EredarBrute.known = true
-		Pet.EyeOfGuldan.known = true
-		Pet.IllidariSatyr.known = true
-		Pet.PrinceMalchezaar.known = true
-		Pet.Shivarra.known = true
-		Pet.Urzul.known = true
-		Pet.ViciousHellhound.known = true
-		Pet.VoidTerror.known = true
-		Pet.Wrathguard.known = true
 	end
 	SummonImp.known = SummonImp.known and not SummonFelImp.known
 	SummonFelhunter.known = SummonFelhunter.known and not SummonObserver.known
@@ -3749,6 +3828,11 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 end
 
 function events:PLAYER_PVP_TALENT_UPDATE()
+	UpdateAbilityData()
+end
+
+function events:AZERITE_ESSENCE_UPDATE()
+	Azerite:update()
 	UpdateAbilityData()
 end
 
