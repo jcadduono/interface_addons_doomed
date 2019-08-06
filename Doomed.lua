@@ -1093,7 +1093,10 @@ local RotAndDecay = Ability.add(212371, false, true)
 -- Racials
 
 -- Trinket Effects
-
+local ShiverVenom = Ability.add(301624, false, true) -- Shiver Venom Relic
+ShiverVenom.buff_duration = 20
+ShiverVenom.tick_interval = 4
+ShiverVenom.hasted_ticks = true
 -- End Abilities
 
 -- Start Summoned Pets
@@ -1236,7 +1239,7 @@ Pet.GuardianOfAzeroth = SummonedPet.add(152396, 30, GuardianOfAzeroth)
 
 -- Start Inventory Items
 
-local InventoryItem, inventoryItems = {}, {}
+local InventoryItem, inventoryItems, Trinket = {}, {}, {}
 InventoryItem.__index = InventoryItem
 
 function InventoryItem.add(itemId)
@@ -1308,7 +1311,7 @@ BattlePotionOfIntellect.buff.triggers_gcd = false
 -- Equipment
 local Trinket1 = InventoryItem.add(0)
 local Trinket2 = InventoryItem.add(0)
-local WilfredsSigilOfSuperiorSummoning = InventoryItem.add(132369)
+Trinket.ShiverVenomRelic = InventoryItem.add(168905)
 -- End Inventory Items
 
 -- Start Azerite Trait API
@@ -2116,6 +2119,11 @@ actions.cooldowns+=/ripple_in_space
 	if Player.use_cds and DarkSoulMisery:usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:cooldown() >= 170)) then
 		return UseCooldown(DarkSoulMisery)
 	end
+	if Opt.trinket and Trinket.ShiverVenomRelic:usable() then
+		if ShiverVenom:stack() == 5 or (ShiverVenom:stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:remains() < 2)) then
+			return UseCooldown(Trinket.ShiverVenomRelic)
+		end
+	end
 	if WorldveinResonance:usable() and Lifeblood:stack() < 3 then
 		return UseCooldown(WorldveinResonance)
 	end
@@ -2424,7 +2432,11 @@ actions+=/call_action_list,name=build_a_shard
 			UseCooldown(RippleInSpace)
 		end
 	end
-
+	if Opt.trinket and Trinket.ShiverVenomRelic:usable() then
+		if ShiverVenom:stack() == 5 or (ShiverVenom:stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:remains() < 2)) then
+			UseCooldown(Trinket.ShiverVenomRelic)
+		end
+	end
 	if DemonicConsumption.known and SummonDemonicTyrant:ready(5) then
 		local apl = self:dcon_prep()
 		if apl then return apl end
@@ -2703,7 +2715,7 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if DemonicConsumption.known and BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not WilfredsSigilOfSuperiorSummoning:equipped() then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) then
 		UseCooldown(GrimoireFelguard)
 	end
 	if CallDreadstalkers:usable() and (SummonDemonicTyrant:ready(DemonicCalling:up() and 9 or 11) or not SummonDemonicTyrant:ready(14)) then
@@ -2769,7 +2781,7 @@ actions.nether_portal_active+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) and not WilfredsSigilOfSuperiorSummoning:equipped() then
+	if GrimoireFelguard:usable() and SummonDemonicTyrant:ready(13) then
 		UseCooldown(GrimoireFelguard)
 	end
 	if SummonVilefiend:usable() and (SummonDemonicTyrant:ready(12) or not SummonDemonicTyrant:ready(40)) then
@@ -3885,11 +3897,17 @@ local function UpdateAbilityData()
 end
 
 function events:PLAYER_EQUIPMENT_CHANGED()
-	Azerite:update()
-	UpdateAbilityData()
+	local _, i, equipType, hasCooldown
 	Trinket1.itemId = GetInventoryItemID('player', 13) or 0
 	Trinket2.itemId = GetInventoryItemID('player', 14) or 0
-	local _, i, equipType, hasCooldown
+	for _, i in next, Trinket do -- use custom APL lines for these trinkets
+		if Trinket1.itemId == i.itemId then
+			Trinket1.itemId = 0
+		end
+		if Trinket2.itemId == i.itemId then
+			Trinket2.itemId = 0
+		end
+	end
 	for i = 1, #inventoryItems do
 		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId or 0)
 		inventoryItems[i].can_use = inventoryItems[i].name and true or false
@@ -3905,6 +3923,8 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 			inventoryItems[i].can_use = false
 		end
 	end
+	Azerite:update()
+	UpdateAbilityData()
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
