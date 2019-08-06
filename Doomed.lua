@@ -2392,7 +2392,7 @@ actions+=/call_action_list,name=build_a_shard
 		if Opt.pot and BattlePotionOfIntellect:usable() and (not NetherPortal.known or not NetherPortal:ready(160)) then
 			UseCooldown(BattlePotionOfIntellect)
 		end
-		if Opt.trinket and (Target.timeToDie < 15 or BattlePotionOfIntellect:up()) then
+		if Opt.trinket and (Target.timeToDie < 15 or BattlePotionOfIntellect.buff:up()) then
 			if Trinket1:usable() then
 				UseCooldown(Trinket1)
 			elseif Trinket2:usable() then
