@@ -2231,7 +2231,7 @@ actions.fillers+=/shadow_bolt
 		if InevitableDemise:stack() > 10 and Target.timeToDie <= 10 then
 			return DrainLife
 		end
-		if InevitableDemise:stack() >= (50 - 20 * Player.enemies) and Agony:remains() > (5 * Player.haste_factor) and Corruption:remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:remains() > (5 * Player.haste_factor)) and Player.ua_remains > (5 * Player.haste_factor) then
+		if InevitableDemise:stack() >= min(max(60 - Agony:ticking() * 10, 30), 50) and Agony:remains() > (5 * Player.haste_factor) and Corruption:remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:remains() > (5 * Player.haste_factor)) and Player.ua_remains > (5 * Player.haste_factor) then
 			return DrainLife
 		end
 	end
