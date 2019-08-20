@@ -1902,7 +1902,7 @@ local APL = {
 APL[SPEC.AFFLICTION].main = function(self)
 	Player.use_cds = Target.boss or Target.timeToDie > 40
 	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
-	Player.use_db = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and (Player.use_seed or Player.soul_shards < 1 or UnstableAffliction:up()) and (not Haunt.known or Haunt:up() or not Haunt:ready())
+	Player.use_db = Agony:up() and Corruption:up() and (not SiphonLife.known or SiphonLife:up()) and (not Haunt.known or not Haunt:ready()) and (not PhantomSingularity.known or not PhantomSingularity:ready())
 	Player.ua_ct = UnstableAffliction:castTime()
 	Player.ua_stack = UnstableAffliction:stack()
 	Player.ua_remains = UnstableAffliction:remains()
@@ -2035,7 +2035,7 @@ actions+=/call_action_list,name=fillers
 	if Player.use_cds and MemoryOfLucidDreams:usable() and TimeInCombat() < 30 then
 		UseCooldown(MemoryOfLucidDreams)
 	end
-	if UnstableAffliction:usable() and Target.timeToDie <= 8 then
+	if UnstableAffliction:usable() and Target.timeToDie <= 8 and Player.ua_stack < 5 then
 		return UnstableAffliction
 	end
 	if ShadowEmbrace.known and Player.maintain_se and ShadowEmbrace:up() then
@@ -2201,12 +2201,14 @@ actions.fillers+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=tal
 actions.fillers+=/shadow_bolt
 ]]
 	local apl
-	if Deathbolt.known and Deathbolt:cooldown() <= (Player.gcd * 4) and Player.enemies < 3 and SummonDarkglare:cooldown() >= (30 + Player.gcd + Deathbolt:cooldown()) then
-		if UnstableAffliction:usable() and not UnstableAffliction:previous() and Deathbolt:cooldown() <= Player.ua_ct then
+	if Deathbolt.known and Deathbolt:ready(Player.gcd * 4) and Player.enemies < 3 and SummonDarkglare:cooldown() >= (30 + Player.gcd + Deathbolt:cooldown()) then
+		if UnstableAffliction:usable() and not UnstableAffliction:previous() and Deathbolt:cooldown() <= Player.ua_ct and Player.ua_stack < 5 then
 			return UnstableAffliction
 		end
-		apl = self:db_refresh()
-		if apl then return apl end
+		if not Deathbolt:ready() or Player.ua_stack <= 1 then
+			apl = self:db_refresh()
+			if apl then return apl end
+		end
 	end
 	if Deathbolt:usable() and Player.use_db and (Target.timeToDie < 10 or SummonDarkglare:cooldown() >= (30 + Player.gcd)) then
 		return Deathbolt
@@ -2228,7 +2230,7 @@ actions.fillers+=/shadow_bolt
 ]]
 	end
 	if InevitableDemise.known and DrainLife:usable() then
-		if InevitableDemise:stack() > 10 and Target.timeToDie <= 10 then
+		if InevitableDemise:stack() > 10 and Target.timeToDie <= 5 then
 			return DrainLife
 		end
 		if InevitableDemise:stack() >= min(max(60 - Agony:ticking() * 10, 30), 50) and Agony:remains() > (5 * Player.haste_factor) and Corruption:remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:remains() > (5 * Player.haste_factor)) and Player.ua_remains > (5 * Player.haste_factor) then
@@ -2248,7 +2250,7 @@ actions.fillers+=/shadow_bolt
 		return ConcentratedFlame
 	end
 	if DrainLife:usable() then
-		if (ManaPct() > 5 and HealthPct() < 20) or (ManaPct() > 20 and HealthPct() < 50) then
+		if (ManaPct() > 5 and HealthPct() < 20) or (ManaPct() > 20 and HealthPct() < 40) then
 			return DrainLife
 		end
 		if RotAndDecay.known and ManaPct() > (110 - (Player.ua_stack * 20)) then
@@ -2275,7 +2277,7 @@ actions.spenders+=/unstable_affliction,if=!variable.use_seed&!prev_gcd.1.summon_
 actions.spenders+=/unstable_affliction,if=!variable.use_seed&contagion<=cast_time+variable.padding
 actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!talent.deathbolt.enabled|cooldown.deathbolt.remains>time_to_shard|soul_shard>1)&(!talent.vile_taint.enabled|soul_shard>1)&contagion<=cast_time+variable.padding&(!azerite.cascading_calamity.enabled|buff.cascading_calamity.remains>time_to_shard)
 ]]
-	if UnstableAffliction:usable() and SummonDarkglare:cooldown() <= (Player.soul_shards * (Player.ua_ct + DreadfulCalling:azeriteRank())) and (not Deathbolt.known or Deathbolt:cooldown() <= (Player.soul_shards * Player.ua_ct)) and (SowTheSeeds.known or PhantomSingularity:remains() or VileTaint:remains()) then
+	if UnstableAffliction:usable() and Player.ua_stack < 5 and SummonDarkglare:cooldown() <= (Player.soul_shards * (Player.ua_ct + DreadfulCalling:azeriteRank())) and (not Deathbolt.known or Deathbolt:cooldown() <= (Player.soul_shards * Player.ua_ct)) and (SowTheSeeds.known or PhantomSingularity:remains() or VileTaint:remains()) then
 		return UnstableAffliction
 	end
 	if (SummonDarkglare:ready(5 - Player.soul_shards) or Player.darkglare_remains > 0) and Target.timeToDie > SummonDarkglare:cooldown() then
@@ -2287,7 +2289,7 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 			return SeedOfCorruption
 		end
 	elseif UnstableAffliction:usable() then
-		if not SummonDarkglare:previous() and (Deathbolt.known and Deathbolt:cooldown() <= Player.ua_ct and not CascadingCalamity.known or (Player.soul_shards >= 5 and Player.enemies < 2 or Player.soul_shards >= 2 and Player.enemies >= 2) and Target.timeToDie > (4 + Player.ua_ct) and Player.enemies  == 1 or Target.timeToDie <= (8 + Player.ua_ct * Player.soul_shards)) then
+		if Player.ua_stack < 5 and not SummonDarkglare:previous() and (Deathbolt.known and Deathbolt:cooldown() <= Player.ua_ct and not CascadingCalamity.known or (Player.soul_shards >= 5 and Player.enemies < 2 or Player.soul_shards >= 2 and Player.enemies >= 2) and Target.timeToDie > (4 + Player.ua_ct) and Player.enemies  == 1 or Target.timeToDie <= (8 + Player.ua_ct * Player.soul_shards)) then
 			return UnstableAffliction
 		end
 		if Player.ua_remains <= (Player.ua_ct + Player.ua_padding) then
