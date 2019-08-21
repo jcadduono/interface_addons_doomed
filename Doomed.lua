@@ -2011,6 +2011,11 @@ actions+=/call_action_list,name=fillers
 	if Player.use_cds then
 		self:cooldowns()
 	end
+	if Opt.trinket and Trinket.ShiverVenomRelic:usable() then
+		if ShiverVenom:stack() == 5 or (ShiverVenom:stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:remains() < 2)) then
+			UseCooldown(Trinket.ShiverVenomRelic)
+		end
+	end
 	if DrainSoul:usable() and Target.timeToDie <= Player.gcd and Player.soul_shards < 5 then
 		return DrainSoul
 	end
@@ -2106,23 +2111,18 @@ actions.cooldowns+=/ripple_in_space
 	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.Darkglare:up() and (not DarkSoulMisery.known or DarkSoulMisery:up())) then
 		return UseCooldown(BattlePotionOfIntellect)
 	end
-	if Player.use_cds and Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:ready()) and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or not Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
+	if Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:ready()) and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or not Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
 		if Trinket1:usable() then
 			return UseCooldown(Trinket1)
 		elseif Trinket2:usable() then
 			return UseCooldown(Trinket2)
 		end
 	end
-	if Player.use_cds and MemoryOfLucidDreams:usable() and TimeInCombat() > 30 then
+	if MemoryOfLucidDreams:usable() and TimeInCombat() > 30 then
 		return UseCooldown(MemoryOfLucidDreams)
 	end
-	if Player.use_cds and DarkSoulMisery:usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:cooldown() >= 170)) then
+	if DarkSoulMisery:usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:cooldown() >= 170)) then
 		return UseCooldown(DarkSoulMisery)
-	end
-	if Opt.trinket and Trinket.ShiverVenomRelic:usable() then
-		if ShiverVenom:stack() == 5 or (ShiverVenom:stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:remains() < 2)) then
-			return UseCooldown(Trinket.ShiverVenomRelic)
-		end
 	end
 	if WorldveinResonance:usable() and Lifeblood:stack() < 3 then
 		return UseCooldown(WorldveinResonance)
