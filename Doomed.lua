@@ -821,12 +821,17 @@ APL.main = function(self)
 		UseExtra(DemonArmor)
 	end
 	if Player:TimeInCombat() == 0 then
-
+		if Player:ManaPct() < 80 and Player:HealthPct() > 20 then
+			UseCooldown(LifeTap)
+		end
 	else
 
 	end
 	if Nightfall.known and ShadowTrance:up() and ShadowBolt:usable() then
 		return ShadowBolt
+	end
+	if Player:ManaPct() < 20 and Player:HealthPct() > 50 then
+		UseCooldown(LifeTap)
 	end
 end
 
@@ -1497,6 +1502,8 @@ function events:PLAYER_ENTERING_WORLD()
 	Player.guid = UnitGUID('player')
 	UpdateAbilityData()
 	events:PLAYER_EQUIPMENT_CHANGED()
+	events:UNIT_HEALTH_FREQUENT('player')
+	events:UNIT_POWER_FREQUENT('player', 'MANA')
 end
 
 doomedPanel.button:SetScript('OnClick', function(self, button, down)
