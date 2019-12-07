@@ -117,6 +117,7 @@ local Player = {
 	ctime = 0,
 	combat_start = 0,
 	spec = 0,
+	target_mode = 0,
 	gcd = 1.5,
 	health = 0,
 	health_max = 0,
@@ -242,9 +243,10 @@ doomedExtraPanel.border = doomedExtraPanel:CreateTexture(nil, 'ARTWORK')
 doomedExtraPanel.border:SetAllPoints(doomedExtraPanel)
 doomedExtraPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
 
--- Start Auto AoE
+-- Start AoE
 
-local targetModes = {
+Player.target_mode = 0
+Player.target_modes = {
 	[SPEC.NONE] = {
 		{1, ''}
 	},
@@ -270,26 +272,30 @@ local targetModes = {
 }
 
 local function SetTargetMode(mode)
-	if mode == targetMode then
+	if mode == Player.target_mode then
 		return
 	end
-	targetMode = min(mode, #targetModes[Player.spec])
-	Player.enemies = targetModes[Player.spec][targetMode][1]
-	doomedPanel.text.br:SetText(targetModes[Player.spec][targetMode][2])
+	Player.target_mode = min(mode, #Player.target_modes[Player.spec])
+	Player.enemies = Player.target_modes[Player.spec][Player.target_mode][1]
+	doomedPanel.text.br:SetText(Player.target_modes[Player.spec][Player.target_mode][2])
 end
 Doomed_SetTargetMode = SetTargetMode
 
 local function ToggleTargetMode()
-	local mode = targetMode + 1
-	SetTargetMode(mode > #targetModes[Player.spec] and 1 or mode)
+	local mode = Player.target_mode + 1
+	SetTargetMode(mode > #Player.target_modes[Player.spec] and 1 or mode)
 end
 Doomed_ToggleTargetMode = ToggleTargetMode
 
 local function ToggleTargetModeReverse()
-	local mode = targetMode - 1
-	SetTargetMode(mode < 1 and #targetModes[Player.spec] or mode)
+	local mode = Player.target_mode - 1
+	SetTargetMode(mode < 1 and #Player.target_modes[Player.spec] or mode)
 end
 Doomed_ToggleTargetModeReverse = ToggleTargetModeReverse
+
+-- End AoE
+
+-- Start Auto AoE
 
 local autoAoe = {
 	targets = {},
@@ -341,8 +347,8 @@ function autoAoe:update()
 		return
 	end
 	Player.enemies = count
-	for i = #targetModes[Player.spec], 1, -1 do
-		if count >= targetModes[Player.spec][i][1] then
+	for i = #Player.target_modes[Player.spec], 1, -1 do
+		if count >= Player.target_modes[Player.spec][i][1] then
 			SetTargetMode(i)
 			Player.enemies = count
 			return
@@ -1303,11 +1309,11 @@ end
 local Healthstone = InventoryItem.add(5512)
 Healthstone.created_by = CreateHealthstone
 Healthstone.max_charges = 3
-local FlaskOfEndlessFathoms = InventoryItem.add(152693)
-FlaskOfEndlessFathoms.buff = Ability.add(251837, true, true)
-local BattlePotionOfIntellect = InventoryItem.add(163222)
-BattlePotionOfIntellect.buff = Ability.add(279151, true, true)
-BattlePotionOfIntellect.buff.triggers_gcd = false
+local GreaterFlaskOfEndlessFathoms = InventoryItem.add(168652)
+GreaterFlaskOfEndlessFathoms.buff = Ability.add(298837, true, true)
+local PotionOfUnbridledFury = InventoryItem.add(169299)
+PotionOfUnbridledFury.buff = Ability.add(300714, true, true)
+PotionOfUnbridledFury.buff.triggers_gcd = false
 -- Equipment
 local Trinket1 = InventoryItem.add(0)
 local Trinket2 = InventoryItem.add(0)
@@ -1370,36 +1376,36 @@ end
 
 -- End Azerite Trait API
 
--- Start Helpful Functions
+-- Start Player API
 
-local function HealthPct()
-	return Player.health / Player.health_max * 100
+function Player:HealthPct()
+	return self.health / self.health_max * 100
 end
 
-local function ManaDeficit()
-	return Player.mana_max - Player.mana
+function Player:ManaDeficit()
+	return self.mana_max - self.mana
 end
 
-local function ManaPct()
-	return Player.mana / Player.mana_max * 100
+function Player:ManaPct()
+	return self.mana / self.mana_max * 100
 end
 
-local function ManaTimeToMax()
-	local deficit = Player.mana_max - Player.mana
+function Player:ManaTimeToMax()
+	local deficit = self.mana_max - self.mana
 	if deficit <= 0 then
 		return 0
 	end
-	return deficit / Player.mana_regen
+	return deficit / self.mana_regen
 end
 
-local function TimeInCombat()
-	if Player.combat_start > 0 then
-		return Player.time - Player.combat_start
+function Player:TimeInCombat()
+	if self.combat_start > 0 then
+		return self.time - self.combat_start
 	end
 	return 0
 end
 
-local function BloodlustActive()
+function Player:BloodlustActive()
 	local _, i, id
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
@@ -1420,25 +1426,25 @@ local function BloodlustActive()
 	end
 end
 
-local function ImpsIn(seconds)
+function Player:ImpsIn(seconds)
 	local count, guid, unit = 0
 	for guid, unit in next, Pet.WildImp.active_units do
-		if Pet.WildImp:unitRemains(unit) > (Player.execute_remains + seconds) then
+		if Pet.WildImp:unitRemains(unit) > (self.execute_remains + seconds) then
 			count = count + 1
 		end
 	end
 	for guid, unit in next, HandOfGuldan.imp_pool do
-		if (unit - Player.time) < (Player.execute_remains + seconds) then
+		if (unit - self.time) < (self.execute_remains + seconds) then
 			count = count + 1
 		end
 	end
 	if Pet.WildImpID.known then
 		for guid, unit in next, Pet.WildImpID.active_units do
-			if Pet.WildImpID:unitRemains(unit) > (Player.execute_remains + seconds) then
+			if Pet.WildImpID:unitRemains(unit) > (self.execute_remains + seconds) then
 				count = count + 1
 			end
 		end
-		if InnerDemons.next_imp and (InnerDemons.next_imp - Player.time) < (Player.execute_remains + seconds) then
+		if InnerDemons.next_imp and (InnerDemons.next_imp - self.time) < (self.execute_remains + seconds) then
 			count = count + 1
 		end
 	end
@@ -1454,7 +1460,17 @@ local function ImpsIn(seconds)
 	return count
 end
 
--- End Helpful Functions
+function Player:InArenaOrBattleground()
+	return self.instance == 'arena' or self.instance == 'pvp'
+end
+
+function Player:UpdatePet()
+	self.pet = UnitGUID('pet')
+	self.pet_alive = (self.pet and not UnitIsDead('pet') or (self.ability_casting and self.ability_casting.pet_family)) and true
+	self.pet_active = (self.pet_alive and not self.pet_stuck or IsFlying()) and true
+end
+
+-- End Player API
 
 -- Start Ability Modifications
 
@@ -1907,7 +1923,7 @@ APL[SPEC.AFFLICTION].main = function(self)
 	Player.ua_stack = UnstableAffliction:stack()
 	Player.ua_remains = UnstableAffliction:remains()
 
-	if TimeInCombat() == 0 then
+	if Player:TimeInCombat() == 0 then
 --[[
 actions.precombat=flask
 actions.precombat+=/food
@@ -1935,12 +1951,12 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 		elseif not Player.pet_active then
 			return SummonImp
 		end
-		if Opt.pot and Target.boss then
-			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
-				UseCooldown(FlaskOfEndlessFathoms)
+		if Opt.pot and not Player:InArenaOrBattleground() then
+			if GreaterFlaskOfEndlessFathoms:usable() and GreaterFlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(GreaterFlaskOfEndlessFathoms)
 			end
-			if BattlePotionOfIntellect:usable() then
-				UseCooldown(BattlePotionOfIntellect)
+			if Target.boss and PotionOfUnbridledFury:usable() then
+				UseCooldown(PotionOfUnbridledFury)
 			end
 		end
 		if Player.enemies >= 3 and SeedOfCorruption:usable() and SeedOfCorruption:down() then
@@ -2037,7 +2053,7 @@ actions+=/call_action_list,name=fillers
 	if Agony:usable() and Agony:remains() <= Player.gcd + ShadowBolt:castTime() and Target.timeToDie > 8 then
 		return Agony
 	end
-	if Player.use_cds and MemoryOfLucidDreams:usable() and TimeInCombat() < 30 then
+	if Player.use_cds and MemoryOfLucidDreams:usable() and Player:TimeInCombat() < 30 then
 		UseCooldown(MemoryOfLucidDreams)
 	end
 	if UnstableAffliction:usable() and Target.timeToDie <= 8 and Player.ua_stack < 5 then
@@ -2051,7 +2067,7 @@ actions+=/call_action_list,name=fillers
 			return DrainSoul
 		end
 	end
-	if PhantomSingularity:usable() and TimeInCombat() > 35 and Target.timeToDie > (16 * Player.haste_factor) and (not StriveForPerfection.known and not DreadfulCalling.known or SummonDarkglare:cooldown() > (45 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0)) or SummonDarkglare:cooldown() < (15 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0))) then
+	if PhantomSingularity:usable() and Player:TimeInCombat() > 35 and Target.timeToDie > (16 * Player.haste_factor) and (not StriveForPerfection.known and not DreadfulCalling.known or SummonDarkglare:cooldown() > (45 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0)) or SummonDarkglare:cooldown() < (15 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0))) then
 		UseCooldown(PhantomSingularity)
 	end
 	if Player.soul_shards == 5 then
@@ -2067,16 +2083,16 @@ actions+=/call_action_list,name=fillers
 	end
 	apl = self:dots()
 	if apl then return apl end
-	if VileTaint:usable() and TimeInCombat() > 15 and Target.timeToDie >= 10 and (not between(SummonDarkglare:cooldown(), 10, 30) and Agony:remains() >= 10 and Corruption:remains() >= 10 and (not SiphonLife.known or SiphonLife:remains() >= 10)) then
+	if VileTaint:usable() and Player:TimeInCombat() > 15 and Target.timeToDie >= 10 and (not between(SummonDarkglare:cooldown(), 10, 30) and Agony:remains() >= 10 and Corruption:remains() >= 10 and (not SiphonLife.known or SiphonLife:remains() >= 10)) then
 		UseCooldown(VileTaint)
 	end
-	if PhantomSingularity:usable() and TimeInCombat() <= 35 then
+	if PhantomSingularity:usable() and Player:TimeInCombat() <= 35 then
 		UseCooldown(PhantomSingularity)
 	end
-	if VileTaint:usable() and TimeInCombat() < 15 then
+	if VileTaint:usable() and Player:TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
 	end
-	if GuardianOfAzeroth:usable() and ((SummonDarkglare:ready(15 + (DreadfulCalling.known and Player.soul_shards or 0))) or (((DreadfulCalling.known or StriveForPerfection.known) and TimeInCombat() > 30 and Target.timeToDie >= 210) and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known))) or Target.timeToDie < (30 + Player.gcd)) then
+	if GuardianOfAzeroth:usable() and ((SummonDarkglare:ready(15 + (DreadfulCalling.known and Player.soul_shards or 0))) or (((DreadfulCalling.known or StriveForPerfection.known) and Player:TimeInCombat() > 30 and Target.timeToDie >= 210) and (PhantomSingularity:up() or VileTaint:up() or (not PhantomSingularity.known and not VileTaint.known))) or Target.timeToDie < (30 + Player.gcd)) then
 		UseCooldown(GuardianOfAzeroth)
 	end
 	if Player.use_cds and DarkSoulMisery:usable() and SummonDarkglare:cooldown() < (15 + (DreadfulCalling.known and Player.soul_shards or 0)) and (PhantomSingularity:up() or VileTaint:up()) then
@@ -2108,8 +2124,10 @@ actions.cooldowns+=/use_item,name=vial_of_storms,if=(cooldown.summon_darkglare.r
 actions.cooldowns+=/worldvein_resonance,if=buff.lifeblood.stack<3
 actions.cooldowns+=/ripple_in_space
 ]]
-	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (Target.timeToDie < 30 or Pet.Darkglare:up() and (not DarkSoulMisery.known or DarkSoulMisery:up())) then
-		return UseCooldown(BattlePotionOfIntellect)
+	if Opt.pot and Target.boss and not Player:InArenaOrBattleground() then
+		if PotionOfUnbridledFury:usable() and (Target.timeToDie < 30 or Pet.Darkglare:up() and (not DarkSoulMisery.known or DarkSoulMisery:up())) then
+			return UseCooldown(PotionOfUnbridledFury)
+		end
 	end
 	if Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:ready()) and (SummonDarkglare:cooldown() > 70 or Target.timeToDie < 20 or ((Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:up()) and (not Deathbolt.known or not Deathbolt:ready(Player.gcd)) and (SummonDarkglare:ready() or Pet.Darkglare:up()))) then
 		if Trinket1:usable() then
@@ -2118,7 +2136,7 @@ actions.cooldowns+=/ripple_in_space
 			return UseCooldown(Trinket2)
 		end
 	end
-	if MemoryOfLucidDreams:usable() and TimeInCombat() > 30 then
+	if MemoryOfLucidDreams:usable() and Player:TimeInCombat() > 30 then
 		return UseCooldown(MemoryOfLucidDreams)
 	end
 	if DarkSoulMisery:usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:cooldown() >= 170)) then
@@ -2250,10 +2268,10 @@ actions.fillers+=/shadow_bolt
 		return ConcentratedFlame
 	end
 	if DrainLife:usable() then
-		if (ManaPct() > 5 and HealthPct() < 20) or (ManaPct() > 20 and HealthPct() < 40) then
+		if (Player:ManaPct() > 5 and Player:HealthPct() < 20) or (Player:ManaPct() > 20 and Player:HealthPct() < 40) then
 			return DrainLife
 		end
-		if RotAndDecay.known and ManaPct() > (110 - (Player.ua_stack * 20)) then
+		if RotAndDecay.known and Player:ManaPct() > (110 - (Player.ua_stack * 20)) then
 			return DrainLife
 		end
 		if not DrainSoul.known and Target.timeToDie < ShadowBolt:castTime() then
@@ -2305,7 +2323,7 @@ actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!t
 end
 
 APL[SPEC.DEMONOLOGY].main = function(self)
-	if TimeInCombat() == 0 then
+	if Player:TimeInCombat() == 0 then
 --[[
 actions.precombat=flask
 actions.precombat+=/food
@@ -2326,12 +2344,12 @@ actions.precombat+=/demonbolt
 				return SummonWrathguard
 			end
 		end
-		if Opt.pot and Target.boss then
-			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
-				UseCooldown(FlaskOfEndlessFathoms)
+		if Opt.pot and not Player:InArenaOrBattleground() then
+			if GreaterFlaskOfEndlessFathoms:usable() and GreaterFlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(GreaterFlaskOfEndlessFathoms)
 			end
-			if BattlePotionOfIntellect:usable() then
-				UseCooldown(BattlePotionOfIntellect)
+			if Target.boss and PotionOfUnbridledFury:usable() then
+				UseCooldown(PotionOfUnbridledFury)
 			end
 		end
 		if Player.soul_shards < 5 and Player.imp_count < 6 and not (Demonbolt:casting() or ShadowBoltDemo:casting()) then
@@ -2399,10 +2417,10 @@ actions+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.con
 actions+=/call_action_list,name=build_a_shard
 ]]
 	if Target.boss and Target.timeToDie < 30 then
-		if Opt.pot and BattlePotionOfIntellect:usable() and (not NetherPortal.known or not NetherPortal:ready(160)) then
-			UseCooldown(BattlePotionOfIntellect)
+		if Opt.pot and not Player:InArenaOrBattleground() and PotionOfUnbridledFury:usable() and (not NetherPortal.known or not NetherPortal:ready(160)) then
+			UseCooldown(PotionOfUnbridledFury)
 		end
-		if Opt.trinket and (Target.timeToDie < 15 or BattlePotionOfIntellect.buff:up()) then
+		if Opt.trinket and (Target.timeToDie < 15 or PotionOfUnbridledFury.buff:up()) then
 			if Trinket1:usable() then
 				UseCooldown(Trinket1)
 			elseif Trinket2:usable() then
@@ -2417,8 +2435,8 @@ actions+=/call_action_list,name=build_a_shard
 		end
 	end
 	if Player.tyrant_remains > 0 and (not VisionOfPerfection.known or not DemonicConsumption.known or SummonDemonicTyrant:cooldown() >= 85) then
-		if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() and (not NetherPortal.known or not NetherPortal:ready(160)) then
-			UseCooldown(BattlePotionOfIntellect)
+		if Opt.pot and Target.boss and not Player:InArenaOrBattleground() and PotionOfUnbridledFury:usable() and (not NetherPortal.known or not NetherPortal:ready(160)) then
+			UseCooldown(PotionOfUnbridledFury)
 		end
 		if Opt.trinket then
 			if Trinket1:usable() then
@@ -2447,7 +2465,7 @@ actions+=/call_action_list,name=build_a_shard
 		local apl = self:tyrant_active()
 		if apl then return apl end
 	end
-	if ExplosivePotential.known and HandOfGuldan:usable() and TimeInCombat() < 5 and Player.soul_shards >= 3 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
+	if ExplosivePotential.known and HandOfGuldan:usable() and Player:TimeInCombat() < 5 and Player.soul_shards >= 3 and ExplosivePotential:down() and Player.imp_count < 3 and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
 		return HandOfGuldan
 	end
 	if Demonbolt:usable() and Player.soul_shards <= 3 and DemonicCore:stack() == 4 then
@@ -2462,7 +2480,7 @@ actions+=/call_action_list,name=build_a_shard
 	if Doom:usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:down() then
 		return Doom
 	end
-	if BilescourgeBombers:usable() and ExplosivePotential.known and NetherPortal.known and TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:up() then
+	if BilescourgeBombers:usable() and ExplosivePotential.known and NetherPortal.known and Player:TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:up() then
 		UseCooldown(BilescourgeBombers)
 	end
 	if DemonicStrength:usable() and (Player.enemies == 1 or DemonicPower:up() or Player.imp_count < 6) then
@@ -2629,10 +2647,10 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 		end
 		if Player.tyrant_available_power >= 200 then
 			local imps_idle = not (Pet.WildImp:casting() or Pet.WildImpID:casting())
-			if HandOfGuldan:usable() and imps_idle and (Player.soul_shards >= 2 or Player.tyrant_available_power >= 250) and ImpsIn(hog_ct + SummonDemonicTyrant:castTime()) >= (Player.imp_count - 2) then
+			if HandOfGuldan:usable() and imps_idle and (Player.soul_shards >= 2 or Player.tyrant_available_power >= 250) and Player:ImpsIn(hog_ct + SummonDemonicTyrant:castTime()) >= (Player.imp_count - 2) then
 				return HandOfGuldan
 			end
-			if (HandOfGuldan:previous(1) and (HandOfGuldan:previous(2) or imps_idle)) or (Player.tyrant_available_power >= 280 and imps_idle and ImpsIn(SummonDemonicTyrant:castTime()) >= Player.imp_count) then
+			if (HandOfGuldan:previous(1) and (HandOfGuldan:previous(2) or imps_idle)) or (Player.tyrant_available_power >= 280 and imps_idle and Player:ImpsIn(SummonDemonicTyrant:castTime()) >= Player.imp_count) then
 				UseCooldown(SummonDemonicTyrant)
 			end
 		end
@@ -2652,7 +2670,7 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 		return CallDreadstalkers
 	end
 	if ExplosivePotential.known and ExplosivePotential:remains() < 6 then
-		if Implosion:usable() and Player.imp_count >= 3 and (Player.soul_shards >= 3 or ImpsIn(ShadowBoltDemo:castTime()) < 3) then
+		if Implosion:usable() and Player.imp_count >= 3 and (Player.soul_shards >= 3 or Player:ImpsIn(ShadowBoltDemo:castTime()) < 3) then
 			return Implosion
 		end
 		if HandOfGuldan:usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:down() and not (HandOfGuldan:previous(1) or HandOfGuldan:previous(2)) then
@@ -2825,7 +2843,7 @@ actions.nether_portal_building+=/call_action_list,name=build_a_shard
 	if NetherPortal:usable() and Player.soul_shards >= 5 then
 		UseCooldown(NetherPortal)
 	end
-	if TimeInCombat() >= 30 then
+	if Player:TimeInCombat() >= 30 then
 		if CallDreadstalkers:usable() then
 			return CallDreadstalkers
 		end
@@ -2845,7 +2863,7 @@ actions.nether_portal_building+=/call_action_list,name=build_a_shard
 end
 
 APL[SPEC.DESTRUCTION].main = function(self)
-	if TimeInCombat() == 0 then
+	if Player:TimeInCombat() == 0 then
 --[[
 actions.precombat=flask
 actions.precombat+=/food
@@ -2871,12 +2889,12 @@ actions.precombat+=/incinerate,if=!talent.soul_fire.enabled
 		elseif not Player.pet_active then
 			return SummonImp
 		end
-		if Opt.pot and Target.boss then
-			if FlaskOfEndlessFathoms:usable() and FlaskOfEndlessFathoms.buff:remains() < 300 then
-				UseCooldown(FlaskOfEndlessFathoms)
+		if Opt.pot and not Player:InArenaOrBattleground() then
+			if GreaterFlaskOfEndlessFathoms:usable() and GreaterFlaskOfEndlessFathoms.buff:remains() < 300 then
+				UseCooldown(GreaterFlaskOfEndlessFathoms)
 			end
-			if BattlePotionOfIntellect:usable() then
-				UseCooldown(BattlePotionOfIntellect)
+			if Target.boss and PotionOfUnbridledFury:usable() then
+				UseCooldown(PotionOfUnbridledFury)
 			end
 		end
 		if Player.soul_shards < 5 and not (SoulFire:casting() or Incinerate:casting()) then
@@ -3394,9 +3412,7 @@ local function UpdateCombat()
 	Player.mana = min(max(Player.mana, 0), Player.mana_max)
 	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
 	Player.moving = GetUnitSpeed('player') ~= 0
-	Player.pet = UnitGUID('pet')
-	Player.pet_alive = (Player.pet and not UnitIsDead('pet') or (Player.ability_casting and Player.ability_casting.pet_family)) and true
-	Player.pet_active = (Player.pet_alive and not Player.pet_stuck or IsFlying()) and true
+	Player:UpdatePet()
 
 	summonedPets:purge()
 	trackAuras:purge()
@@ -3494,11 +3510,11 @@ function events:ADDON_LOADED(name)
 	if name == 'Doomed' then
 		Opt = Doomed
 		if not Opt.frequency then
-			print('It looks like this is your first time running Doomed, why don\'t you take some time to familiarize yourself with the commands?')
-			print('Type |cFFFFD000/doom|r for a list of commands.')
+			print('It looks like this is your first time running ' .. name .. ', why don\'t you take some time to familiarize yourself with the commands?')
+			print('Type |cFFFFD000' .. SLASH_Doomed1 .. '|r for a list of commands.')
 		end
 		if UnitLevel('player') < 110 then
-			print('[|cFFFFD000Warning|r] Doomed is not designed for players under level 110, and almost certainly will not operate properly!')
+			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 110, and almost certainly will not operate properly!')
 		end
 		InitializeOpts()
 		Azerite:initialize()
@@ -3687,7 +3703,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	if Opt.auto_aoe then
 		if eventType == 'SPELL_MISSED' and (missType == 'EVADE' or missType == 'IMMUNE') then
 			autoAoe:remove(dstGUID)
-		elseif ability.auto_aoe and eventType == ability.auto_aoe.trigger then
+		elseif ability.auto_aoe and (eventType == ability.auto_aoe.trigger or ability.auto_aoe.trigger == 'SPELL_AURA_APPLIED' and eventType == 'SPELL_AURA_REFRESH') then
 			ability:recordTargetHit(dstGUID)
 		end
 	end
@@ -4179,7 +4195,7 @@ function SlashCmdList.Doomed(msg, editbox)
 		if msg[2] then
 			Opt.dimmer = msg[2] == 'on'
 		end
-		return Status('Dim main ability icon when you don\'t have enough mana to use it', Opt.dimmer)
+		return Status('Dim main ability icon when you don\'t have enough resources to use it', Opt.dimmer)
 	end
 	if msg[1] == 'miss' then
 		if msg[2] then
@@ -4190,7 +4206,7 @@ function SlashCmdList.Doomed(msg, editbox)
 	if msg[1] == 'aoe' then
 		if msg[2] then
 			Opt.aoe = msg[2] == 'on'
-			Doomed_SetTargetMode(1)
+			SetTargetMode(1)
 			UpdateDraggable()
 		end
 		return Status('Allow clicking main ability icon to toggle amount of targets (disables moving)', Opt.aoe)
@@ -4286,14 +4302,14 @@ function SlashCmdList.Doomed(msg, editbox)
 		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the Doomed UI to the Blizzard combat resources frame',
 		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000glow|r - adjust the scale of the Doomed UI icons',
 		'alpha |cFFFFD000[percent]|r - adjust the transparency of the Doomed UI icons',
-		'frequency |cFFFFD000[number]|r - set the calculation frequency (default is every 0.05 seconds)',
+		'frequency |cFFFFD000[number]|r - set the calculation frequency (default is every 0.2 seconds)',
 		'glow |cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000blizzard|r |cFF00C000on|r/|cFFC00000off|r - glowing ability buttons on action bars',
 		'glow color |cFFF000000.0-1.0|r |cFF00FF000.1-1.0|r |cFF0000FF0.0-1.0|r - adjust the color of the ability button glow',
 		'previous |cFF00C000on|r/|cFFC00000off|r - previous ability icon',
 		'always |cFF00C000on|r/|cFFC00000off|r - show the Doomed UI without a target',
 		'cd |cFF00C000on|r/|cFFC00000off|r - use Doomed for cooldown management',
 		'swipe |cFF00C000on|r/|cFFC00000off|r - show spell casting swipe animation on main ability icon',
-		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough mana to use it',
+		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough resources to use it',
 		'miss |cFF00C000on|r/|cFFC00000off|r - red border around previous ability when it fails to hit',
 		'aoe |cFF00C000on|r/|cFFC00000off|r - allow clicking main ability icon to toggle amount of targets (disables moving)',
 		'bossonly |cFF00C000on|r/|cFFC00000off|r - only use cooldowns on bosses',
