@@ -1359,7 +1359,7 @@ function Azerite:update()
 			end
 		end
 	end
-	for _, loc in next, C_AzeriteEssence.GetMilestones() do
+	for _, loc in next, C_AzeriteEssence.GetMilestones() or {} do
 		if loc.slot then
 			pid = C_AzeriteEssence.GetMilestoneEssence(loc.ID)
 			if pid then
