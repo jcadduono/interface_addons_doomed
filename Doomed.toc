@@ -1,7 +1,7 @@
-## Interface: 80205
+## Interface: 80300
 ## Title: Doomed
 ## Notes: Doomed is an addon for warlocks that simplifies gameplay and maximizes DPS by doing all the decision making for you
 ## Author: jcadduono @ curseforge.com or Spy#1955 @ BattleTag
 ## SavedVariablesPerCharacter: Doomed
-## Version: 8.2.5-1
+## Version: 8.3.0-1
 Doomed.lua
