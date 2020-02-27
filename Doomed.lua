@@ -168,16 +168,24 @@ doomedPanel.text = CreateFrame('Frame', nil, doomedPanel)
 doomedPanel.text:SetAllPoints(doomedPanel)
 doomedPanel.text.tl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
 doomedPanel.text.tl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.tl:SetPoint('TOPLEFT', doomedPanel, 'TOPLEFT', 3, -3)
+doomedPanel.text.tl:SetPoint('TOPLEFT', doomedPanel, 'TOPLEFT', 2.5, -3)
+doomedPanel.text.tl:SetJustifyH('LEFT')
+doomedPanel.text.tl:SetJustifyV('TOP')
 doomedPanel.text.tr = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
 doomedPanel.text.tr:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.tr:SetPoint('TOPRIGHT', doomedPanel, 'TOPRIGHT', -1.5, -3)
-doomedPanel.text.br = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.br:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.br:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMRIGHT', -1.5, 3)
+doomedPanel.text.tr:SetPoint('TOPRIGHT', doomedPanel, 'TOPRIGHT', -2.5, -3)
+doomedPanel.text.tr:SetJustifyH('RIGHT')
+doomedPanel.text.tr:SetJustifyV('TOP')
 doomedPanel.text.bl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
 doomedPanel.text.bl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.bl:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMLEFT', -3, 3)
+doomedPanel.text.bl:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMLEFT', 2.5, 3)
+doomedPanel.text.bl:SetJustifyH('LEFT')
+doomedPanel.text.bl:SetJustifyV('BOTTOM')
+doomedPanel.text.br = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
+doomedPanel.text.br:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
+doomedPanel.text.br:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMRIGHT', -2.5, 3)
+doomedPanel.text.br:SetJustifyH('RIGHT')
+doomedPanel.text.br:SetJustifyV('BOTTOM')
 doomedPanel.button = CreateFrame('Button', nil, doomedPanel)
 doomedPanel.button:SetAllPoints(doomedPanel)
 doomedPanel.button:RegisterForClicks('LeftButtonDown', 'RightButtonDown', 'MiddleButtonDown')
@@ -890,6 +898,7 @@ SummonDemonicTyrant.buff_duration = 15
 SummonDemonicTyrant.cooldown_duration = 90
 SummonDemonicTyrant.mana_cost = 2
 SummonDemonicTyrant.summon_count = 1
+SummonDemonicTyrant.summoning = false
 ------ Pet Abilities
 local AxeToss = Ability.add(89766, false, true, 119914)
 AxeToss.cooldown_duration = 30
@@ -1717,10 +1726,18 @@ end
 function Pet.DemonicTyrant:addUnit(guid)
 	local unit = SummonedPet.addUnit(self, guid)
 	unit.power = 0
-	if DemonicConsumption.known then
-		self:consumption(unit)
+	if SummonDemonicTyrant.summoning then
+		unit.full = true
+		if DemonicConsumption.known then
+			self:consumption(unit)
+		end
+		self:empowerLesser(15)
+		SummonDemonicTyrant.summoning = false
+	elseif VisionOfPerfection.known then
+		unit.full = false
+		unit.expires = Player.time + (self.duration * 0.35)
+		self:empowerLesser(4)
 	end
-	self:empowerLesser()
 	return unit
 end
 
@@ -1742,13 +1759,13 @@ function Pet.DemonicTyrant:consumption(unit)
 	end
 end
 
-function Pet.DemonicTyrant:empowerLesser()
+function Pet.DemonicTyrant:empowerLesser(seconds)
 	local _, pet, guid, unit
 	for _, pet in next, summonedPets.known do
 		if pet ~= self then
 			for guid, unit in next, pet.active_units do
 				if unit.expires > Player.time then
-					unit.expires = unit.expires + 15
+					unit.expires = unit.expires + seconds
 				end
 			end
 		end
@@ -1758,7 +1775,9 @@ end
 function Pet.DemonicTyrant:power()
 	local _, unit
 	for _, unit in next, self.active_units do
-		return unit.power
+		if unit.power > 0 then
+			return unit.power
+		end
 	end
 	return 0
 end
@@ -3366,14 +3385,29 @@ local function UpdateDisplay()
 			end
 		end
 		if Opt.tyrant then
-			if Player.tyrant_remains > 0 then
-				if Player.tyrant_power > 0 and Player.tyrant_remains > 5 then
-					text_tr = Player.tyrant_power .. '%'
-				else
-					text_tr = format('%.1fs', Player.tyrant_remains)
+			if DemonicConsumption.known and (Player.tyrant_cd < 5 or SummonDemonicTyrant:casting()) then
+				text_tr = format('%d%%\n', Player.tyrant_available_power)
+			else
+				text_tr = ''
+			end
+			local _, unit, remains
+			for _, unit in next, Pet.DemonicTyrant.active_units do
+				if unit.full then
+					remains = unit.expires - Player.time
+					if unit.power > 0 and remains > 5 then
+						text_tr = format('%s%d%%\n', text_tr, unit.power)
+					elseif remains > 0 then
+						text_tr = format('%s%.1fs\n', text_tr, remains)
+					end
 				end
-			elseif DemonicConsumption.known and Player.tyrant_available_power > 0 and (Player.tyrant_cd < 5 or Player.ability_casting == SummonDemonicTyrant) then
-				text_tr = Player.tyrant_available_power .. '%'
+			end
+			for _, unit in next, Pet.DemonicTyrant.active_units do
+				if not unit.full then
+					remains = unit.expires - Player.time
+					if remains > 0 then
+						text_tr = format('%s%.1fs\n', text_tr, remains)
+					end
+				end
 			end
 		end
 	end
@@ -3563,6 +3597,8 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 			ability:sacrifice()
 		elseif ability == HandOfGuldan then
 			ability:castSuccess()
+		elseif ability == SummonDemonicTyrant then
+			ability.summoning = true
 		end
 		return
 	end
@@ -3836,7 +3872,9 @@ local function UpdateAbilityData()
 	for _, ability in next, abilities.all do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = false
-		if IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) then
+		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.spellId2 and C_LevelLink.IsSpellLocked(ability.spellId2)) then
+			-- spell is locked, do not mark as known
+		elseif IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) then
 			ability.known = true
 		elseif Azerite.traits[ability.spellId] then
 			ability.known = true
