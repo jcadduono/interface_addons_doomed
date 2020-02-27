@@ -2391,6 +2391,9 @@ actions.cooldowns+=/ripple_in_space
 	if DarkSoulMisery:Usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:Cooldown() >= 170)) then
 		return UseCooldown(DarkSoulMisery)
 	end
+	if BloodOfTheEnemy:Usable() and (Pet.Darkglare:Up() or (not Deathbolt.known or Deathbolt:Ready()) and not SummonDarkglare:Ready(80)) then
+		return UseCooldown(BloodOfTheEnemy)
+	end
 	if WorldveinResonance:Usable() and Lifeblood:Stack() < 3 then
 		return UseCooldown(WorldveinResonance)
 	end
@@ -2456,8 +2459,9 @@ actions.fillers+=/drain_life,if=talent.siphon_life.enabled&buff.inevitable_demis
 actions.fillers+=/drain_life,if=talent.writhe_in_agony.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=3)-5*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up=2)&dot.agony.remains>5*spell_haste&dot.corruption.remains>gcd&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
 actions.fillers+=/drain_life,if=talent.absolute_corruption.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=4)&dot.agony.remains>5*spell_haste&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
 actions.fillers+=/haunt
-actions.fillers+=/focused_azerite_beam,if=!talent.haunt.enabled|cooldown.haunt.remains>1.1+3*spell_haste
+actions.fillers+=/focused_azerite_beam,if=!talent.haunt.enabled|cooldown.haunt.remains>4.5*spell_haste
 actions.fillers+=/purifying_blast
+actions.fillers+=/reaping_flames
 actions.fillers+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight
 actions.fillers+=/drain_soul,interrupt_global=1,chain=1,interrupt=1,cycle_targets=1,if=target.time_to_die<=gcd
 actions.fillers+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,chain=1,interrupt_if=ticks_remain<5,interrupt_global=1,if=talent.shadow_embrace.enabled&variable.maintain_se&!debuff.shadow_embrace.remains
@@ -2507,13 +2511,16 @@ actions.fillers+=/shadow_bolt
 	if Haunt:Usable() then
 		return Haunt
 	end
-	if FocusedAzeriteBeam:Usable() and not Player.moving and (not Haunt.known or Haunt:Cooldown() > (1.1 + 3 * Player.haste_factor)) then
+	if FocusedAzeriteBeam:Usable() and not Player.moving and (not Haunt.known or Haunt:Cooldown() > (4.5 * Player.haste_factor)) then
 		UseCooldown(FocusedAzeriteBeam)
 	end
 	if PurifyingBlast:Usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and not ConcentratedFlame:Previous() then
+	if ReapingFlames:Usable() then
+		UseCooldown(ReapingFlames)
+	end
+	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() then
 		return ConcentratedFlame
 	end
 	if DrainLife:Usable() then
@@ -2649,6 +2656,7 @@ actions+=/guardian_of_azeroth,if=cooldown.summon_demonic_tyrant.remains<=15|targ
 actions+=/grimoire_felguard,if=(target.time_to_die>120|target.time_to_die<cooldown.summon_demonic_tyrant.remains+15|cooldown.summon_demonic_tyrant.remains<13)
 actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
 actions+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
+actions+=/the_unbound_force,if=buff.reckless_force.react
 actions+=/bilescourge_bombers
 actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_consumption.enabled)&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
 actions+=/summon_demonic_tyrant,if=soul_shard<3|target.time_to_die<20
@@ -2659,10 +2667,11 @@ actions+=/hand_of_guldan,if=(soul_shard>=4|soul_shard>=3&talent.soul_conduit.ena
 actions+=/hand_of_guldan,if=soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
 actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
-actions+=/focused_azerite_beam,if=!pet.demonic_tyrant.active
+actions+=/focused_azerite_beam,if=!pet.demonic_tyrant.active&(!azerite.explosive_potential.enabled|buff.explosive_potential.remains>4.5*spell_haste)
 actions+=/purifying_blast
 actions+=/blood_of_the_enemy
-actions+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight&!pet.demonic_tyrant.active&(!azerite.explosive_potential.rank|buff.explosive_potential.remains>1.1+3*spell_haste)
+actions+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight&!pet.demonic_tyrant.active
+actions+=/reaping_flames,if=!pet.demonic_tyrant.active
 actions+=/call_action_list,name=build_a_shard
 ]]
 	if Target.boss and Target.timeToDie < 30 then
@@ -2764,6 +2773,9 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
 		return CallDreadstalkers
 	end
+	if TheUnboundForce:Usable() and RecklessForce:Up() then
+		UseCooldown(TheUnboundForce)
+	end
 	if BilescourgeBombers:Usable() then
 		UseCooldown(BilescourgeBombers)
 	end
@@ -2807,14 +2819,22 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:Usable() and Player.soul_shards <= 3 and DemonicCore:Up() and ((SummonDemonicTyrant:Ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:Ready(22))) or DemonicCore:Stack() >= 3 or DemonicCore:Remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:Up())) then
 		return Demonbolt
 	end
-	if FocusedAzeriteBeam:Usable() and not Player.moving and Player.tyrant_remains == 0 and (not ExplosivePotential.known or ExplosivePotential:Remains() > (1.1 + 3 * Player.haste_factor)) then
+	if FocusedAzeriteBeam:Usable() and Player.tyrant_remains == 0 and (not ExplosivePotential.known or ExplosivePotential:Remains() > (4.5 * Player.haste_factor)) then
 		UseCooldown(FocusedAzeriteBeam)
 	end
 	if PurifyingBlast:Usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and Player.tyrant_remains == 0 and not ConcentratedFlame:Previous() then
-		return ConcentratedFlame
+	if BloodOfTheEnemy:Usable() then
+		UseCooldown(BloodOfTheEnemy)
+	end
+	if Player.tyrant_remains == 0 then
+		if ReapingFlames:Usable() then
+			return UseCooldown(ReapingFlames)
+		end
+		if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() then
+			return ConcentratedFlame
+		end
 	end
 	return self:build_a_shard()
 end
@@ -3013,13 +3033,16 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	if BilescourgeBombers:Usable() and not SummonDemonicTyrant:Ready(9) then
 		UseCooldown(BilescourgeBombers)
 	end
-	if FocusedAzeriteBeam:Usable() and not Player.moving and (not ExplosivePotential.known or ExplosivePotential:Remains() > (1.1 + 3 * Player.haste_factor)) then
+	if FocusedAzeriteBeam:Usable() and (not ExplosivePotential.known or ExplosivePotential:Remains() > (4.5 * Player.haste_factor)) then
 		UseCooldown(FocusedAzeriteBeam)
 	end
 	if PurifyingBlast:Usable() then
 		UseCooldown(PurifyingBlast)
 	end
-	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and not ConcentratedFlame:Previous() and Enemies() < 5 then
+	if BloodOfTheEnemy:Usable() then
+		UseCooldown(BloodOfTheEnemy)
+	end
+	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and Player.enemies < 5 then
 		return ConcentratedFlame
 	end
 	if SoulStrike:Usable() and Player.soul_shards < 5 and DemonicCore:Stack() <= 2 then
