@@ -2539,7 +2539,7 @@ actions.fillers+=/shadow_bolt
 		if (Player:ManaPct() > 5 and Player:HealthPct() < 20) or (Player:ManaPct() > 20 and Player:HealthPct() < 40) then
 			return DrainLife
 		end
-		if RotAndDecay.known and Player:ManaPct() > (110 - (Player.ua_stack * 20)) then
+		if RotAndDecay.known and Player:ManaPct() > (120 - (Player.ua_stack * 20)) then
 			return DrainLife
 		end
 		if not DrainSoul.known and Target.timeToDie < ShadowBolt:CastTime() then
