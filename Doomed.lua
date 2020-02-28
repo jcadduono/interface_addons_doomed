@@ -3587,7 +3587,7 @@ function UI:UpdateDisplay()
 			end
 		end
 		if Opt.tyrant then
-			if DemonicConsumption.known and (Player.tyrant_cd < 5 or SummonDemonicTyrant:Casting()) then
+			if DemonicConsumption.known and Player.tyrant_available_power > 0 and (Player.tyrant_cd < 5 or SummonDemonicTyrant:Casting()) then
 				text_tr = format('%d%%\n', Player.tyrant_available_power)
 			else
 				text_tr = ''
