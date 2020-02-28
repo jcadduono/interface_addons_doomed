@@ -829,6 +829,7 @@ local SummonDarkglare = Ability:Add(205180, false, true)
 SummonDarkglare.mana_cost = 2
 SummonDarkglare.cooldown_duration = 180
 SummonDarkglare.summon_count = 1
+SummonDarkglare.summoning = false
 local UnstableAffliction = Ability:Add(30108, false, true)
 UnstableAffliction.shard_cost = 1
 UnstableAffliction.buff_duration = 8
@@ -1950,6 +1951,19 @@ end
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
+
+function Pet.Darkglare:AddUnit(guid)
+	local unit = SummonedPet.AddUnit(self, guid)
+	unit.power = 0
+	if SummonDarkglare.summoning then
+		unit.full = true
+		SummonDarkglare.summoning = false
+	elseif VisionOfPerfection.known then
+		unit.full = false
+		unit.expires = Player.time + (self.duration * 0.35)
+	end
+	return unit
+end
 
 function Pet.DemonicTyrant:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
@@ -3575,8 +3589,15 @@ function UI:UpdateDisplay()
 		if Opt.pet_count then
 			text_tl = Player.ua_stack > 0 and Player.ua_stack
 		end
-		if Opt.tyrant and Player.darkglare_remains > 0 then
-			text_tr = format('%.1fs', Player.darkglare_remains)
+		if Opt.tyrant then
+			local _, unit, remains
+			text_tr = ''
+			for _, unit in next, Pet.Darkglare.active_units do
+				remains = unit.expires - Player.time
+				if remains > 0 then
+					text_tr = format('%s%.1fs\n', text_tr, remains)
+				end
+			end
 		end
 	elseif Player.spec == SPEC.DEMONOLOGY then
 		if Opt.pet_count then
@@ -3786,7 +3807,7 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 			ability:Sacrifice()
 		elseif ability == HandOfGuldan then
 			ability:CastSuccess()
-		elseif ability == SummonDemonicTyrant then
+		elseif ability == SummonDemonicTyrant or ability == SummonDarkglare then
 			ability.summoning = true
 		end
 		return
