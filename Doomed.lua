@@ -1770,18 +1770,18 @@ function UnstableAffliction:Next()
 	return UnstableAffliction:Lowest()
 end
 
-UnstableAffliction[1].remains = function(self)
+UnstableAffliction[1].Remains = function(self)
 	if UnstableAffliction:Casting() and UnstableAffliction:Next() == self then
 		return UnstableAffliction:Duration()
 	end
 	return Ability.Remains(self)
 end
-UnstableAffliction[2].remains = UnstableAffliction[1].remains
-UnstableAffliction[3].remains = UnstableAffliction[1].remains
-UnstableAffliction[4].remains = UnstableAffliction[1].remains
-UnstableAffliction[5].remains = UnstableAffliction[1].remains
+UnstableAffliction[2].Remains = UnstableAffliction[1].Remains
+UnstableAffliction[3].Remains = UnstableAffliction[1].Remains
+UnstableAffliction[4].Remains = UnstableAffliction[1].Remains
+UnstableAffliction[5].Remains = UnstableAffliction[1].Remains
 
-local function SummonPetUp(self)
+SummonImp.Up = function(self)
 	if self:Casting() then
 		return true
 	end
@@ -1790,17 +1790,15 @@ local function SummonPetUp(self)
 	end
 	return UnitCreatureFamily('pet') == self.pet_family
 end
-
-SummonImp.up = SummonPetUp
-SummonFelImp.up = SummonPetUp
-SummonFelhunter.up = SummonPetUp
-SummonObserver.up = SummonPetUp
-SummonVoidwalker.up = SummonPetUp
-SummonVoidlord.up = SummonPetUp
-SummonSuccubus.up = SummonPetUp
-SummonShivarra.up = SummonPetUp
-SummonFelguard.up = SummonPetUp
-SummonWrathguard.up = SummonPetUp
+SummonFelImp.Up = SummonImp.Up
+SummonFelhunter.Up = SummonImp.Up
+SummonObserver.Up = SummonImp.Up
+SummonVoidwalker.Up = SummonImp.Up
+SummonVoidlord.Up = SummonImp.Up
+SummonSuccubus.Up = SummonImp.Up
+SummonShivarra.Up = SummonImp.Up
+SummonFelguard.Up = SummonImp.Up
+SummonWrathguard.Up = SummonImp.Up
 
 function HandOfGuldan:ShardCost()
 	return min(max(Player.soul_shards, 1), 3)
@@ -2064,7 +2062,7 @@ function Pet.WildImp:UnitRemains(unit)
 	end
 	return max(remains, 0)
 end
-Pet.WildImpID.unitRemains = Pet.WildImp.unitRemains
+Pet.WildImpID.UnitRemains = Pet.WildImp.UnitRemains
 
 function Pet.WildImp:Count()
 	if DemonicConsumption.known and SummonDemonicTyrant:Casting() then
@@ -2106,7 +2104,7 @@ function Pet.WildImp:Remains()
 	end
 	return SummonedPet.Remains(self)
 end
-Pet.WildImpID.remains = Pet.WildImp.remains
+Pet.WildImpID.Remains = Pet.WildImp.Remains
 
 function Pet.WildImp:Casting()
 	if Player.combat_start == 0 then
@@ -2120,12 +2118,12 @@ function Pet.WildImp:Casting()
 	end
 	return false
 end
-Pet.WildImpID.casting = Pet.WildImp.casting
+Pet.WildImpID.Casting = Pet.WildImp.Casting
 
 function Pet.WildImp:CastStart(unit)
 	unit.cast_end = Player.time + FelFirebolt:CastTime()
 end
-Pet.WildImpID.castStart = Pet.WildImp.castStart
+Pet.WildImpID.CastStart = Pet.WildImp.CastStart
 
 function Pet.WildImp:CastSuccess(unit)
 	if not summonedPets:Empowered() then
@@ -2137,7 +2135,7 @@ function Pet.WildImp:CastSuccess(unit)
 	end
 	unit.cast_end = 0
 end
-Pet.WildImpID.castSuccess = Pet.WildImp.castSuccess
+Pet.WildImpID.CastSuccess = Pet.WildImp.CastSuccess
 
 -- End Summoned Pet Modifications
 
