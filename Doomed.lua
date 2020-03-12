@@ -1179,12 +1179,12 @@ function summonedPets:Count()
 	return count
 end
 
-function summonedPets:Empowered()
-	return Player.time < (self.empowered_ends or 0)
+function summonedPets:EmpoweredRemains()
+	return max(0, (self.empowered_ends or 0) - Player.time)
 end
 
-function summonedPets:EmpoweredRemains()
-	return max((self.empowered_ends or 0) - Player.time, 0)
+function summonedPets:Empowered()
+	return self:EmpoweredRemains() > 0
 end
 
 function SummonedPet:Add(unitId, duration, summonSpell)
@@ -1584,6 +1584,7 @@ function Player:UpdateAbilities()
 		UnstableAffliction[4].known = true
 		UnstableAffliction[5].known = true
 	end
+	DemonicPower.known = SummonDemonicTyrant.known
 	SummonImp.known = SummonImp.known and not SummonFelImp.known
 	SummonFelhunter.known = SummonFelhunter.known and not SummonObserver.known
 	SummonVoidwalker.known = SummonVoidwalker.known and not SummonVoidlord.known
@@ -1881,6 +1882,20 @@ function DemonicPower:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function DemonicPower:Ends()
+	local _, i, id, expires
+	for i = 1, 40 do
+		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
+		if not id then
+			break
+		end
+		if id == self.spellId then
+			return max(0, Player.time + (expires - Player.ctime))
+		end
+	end
+	return 0
 end
 
 --[[
@@ -3814,7 +3829,7 @@ APL[SPEC.DEMONOLOGY].combat_event = function(self, eventType, srcGUID, dstGUID, 
 	end
 	if dstGUID == Player.guid and ability == DemonicPower then
 		if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
-			summonedPets.empowered_ends = Player.time + 15
+			summonedPets.empowered_ends = DemonicPower:Ends()
 		elseif eventType == 'SPELL_AURA_REMOVED' then
 			summonedPets.empowered_ends = 0
 		end
