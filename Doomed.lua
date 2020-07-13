@@ -137,6 +137,7 @@ local Player = {
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
 		[165581] = true, -- Crest of Pa'ku (Horde)
+		[174044] = true, -- Humming Black Dragonscale (parachute)
 	},
 }
 
@@ -327,6 +328,7 @@ local autoAoe = {
 	blacklist = {},
 	ignored_units = {
 		[120651] = true, -- Explosives (Mythic+ affix)
+		[161895] = true, -- Thing From Beyond (40+ Corruption)
 	},
 }
 
