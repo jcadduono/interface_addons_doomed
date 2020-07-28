@@ -414,7 +414,8 @@ local abilities = {
 
 function Ability:Add(spellId, buff, player, spellId2)
 	local ability = {
-		spellId = spellId,
+		spellIds = type(spellId) == 'table' and spellId or { spellId },
+		spellId = 0,
 		spellId2 = spellId2,
 		name = false,
 		icon = false,
@@ -1040,7 +1041,7 @@ Shadowburn.requires_charge = true
 local Backdraft = Ability:Add(117828, true, true)
 Backdraft.buff_duration = 10
 -- Heart of Azeroth
--- Azerite Traits
+---- Azerite Traits
 local BalefulInvocation = Ability:Add(287059, true, true)
 local CascadingCalamity = Ability:Add(275372, true, true, 275378)
 CascadingCalamity.buff_duration = 15
@@ -1053,12 +1054,13 @@ local PandemicInvocation = Ability:Add(289364, true, true)
 local ShadowsBite = Ability:Add(272944, true, true, 272945)
 ShadowsBite.buff_duration = 8
 ---- Major Essences
-local BloodOfTheEnemy = Ability:Add(298277, false, true)
+local BloodOfTheEnemy = Ability:Add({297108, 298273, 298277} , false, true)
 BloodOfTheEnemy.buff_duration = 10
 BloodOfTheEnemy.cooldown_duration = 120
 BloodOfTheEnemy.essence_id = 23
 BloodOfTheEnemy.essence_major = true
-local ConcentratedFlame = Ability:Add(295373, true, true, 295378)
+BloodOfTheEnemy:AutoAoe(true)
+local ConcentratedFlame = Ability:Add({295373, 299349, 299353}, true, true, 295378)
 ConcentratedFlame.buff_duration = 180
 ConcentratedFlame.cooldown_duration = 30
 ConcentratedFlame.requires_charge = true
@@ -1070,42 +1072,43 @@ ConcentratedFlame.dot.buff_duration = 6
 ConcentratedFlame.dot.tick_interval = 2
 ConcentratedFlame.dot.essence_id = 12
 ConcentratedFlame.dot.essence_major = true
-local GuardianOfAzeroth = Ability:Add(295840, false, true)
+local GuardianOfAzeroth = Ability:Add({295840, 299355, 299358}, false, true)
 GuardianOfAzeroth.cooldown_duration = 180
 GuardianOfAzeroth.essence_id = 14
 GuardianOfAzeroth.essence_major = true
-local FocusedAzeriteBeam = Ability:Add(295258, false, true)
+local FocusedAzeriteBeam = Ability:Add({295258, 299336, 299338}, false, true)
 FocusedAzeriteBeam.cooldown_duration = 90
 FocusedAzeriteBeam.essence_id = 5
 FocusedAzeriteBeam.essence_major = true
-local MemoryOfLucidDreams = Ability:Add(298357, true, true)
+FocusedAzeriteBeam:AutoAoe()
+local MemoryOfLucidDreams = Ability:Add({298357, 299372, 299374}, true, true)
 MemoryOfLucidDreams.buff_duration = 15
 MemoryOfLucidDreams.cooldown_duration = 120
 MemoryOfLucidDreams.essence_id = 27
 MemoryOfLucidDreams.essence_major = true
-local PurifyingBlast = Ability:Add(295337, false, true, 295338)
+local PurifyingBlast = Ability:Add({295337, 299345, 299347}, false, true, 295338)
 PurifyingBlast.cooldown_duration = 60
 PurifyingBlast.essence_id = 6
 PurifyingBlast.essence_major = true
 PurifyingBlast:AutoAoe(true)
-local ReapingFlames = Ability:Add(310690, false, true) -- 311195
+local ReapingFlames = Ability:Add({310690, 311194, 311195}, false, true)
 ReapingFlames.cooldown_duration = 45
 ReapingFlames.essence_id = 35
 ReapingFlames.essence_major = true
-local RippleInSpace = Ability:Add(302731, true, true)
+local RippleInSpace = Ability:Add({302731, 302982, 302983}, true, true)
 RippleInSpace.buff_duration = 2
 RippleInSpace.cooldown_duration = 60
 RippleInSpace.essence_id = 15
 RippleInSpace.essence_major = true
-local TheUnboundForce = Ability:Add(298452, false, true)
+local TheUnboundForce = Ability:Add({298452, 299376,299378}, false, true)
 TheUnboundForce.cooldown_duration = 45
 TheUnboundForce.essence_id = 28
 TheUnboundForce.essence_major = true
-local VisionOfPerfection = Ability:Add(299370, true, true, 303345)
+local VisionOfPerfection = Ability:Add({296325, 299368, 299370}, true, true, 303345)
 VisionOfPerfection.buff_duration = 10
 VisionOfPerfection.essence_id = 22
 VisionOfPerfection.essence_major = true
-local WorldveinResonance = Ability:Add(295186, true, true)
+local WorldveinResonance = Ability:Add({295186, 298628, 299334}, true, true)
 WorldveinResonance.cooldown_duration = 60
 WorldveinResonance.essence_id = 4
 WorldveinResonance.essence_major = true
@@ -1386,6 +1389,7 @@ function Azerite:Update()
 		self.essences[pid] = nil
 	end
 	if UnitEffectiveLevel('player') < 110 then
+		--print('disabling azerite, player is effectively level', UnitEffectiveLevel('player'))
 		return -- disable all Azerite/Essences for players scaled under 110
 	end
 	for _, loc in next, self.locations do
@@ -1546,17 +1550,19 @@ function Player:UpdateAbilities()
 	Player.mana_max = UnitPowerMax('player', 0)
 	Player.soul_shards_max = UnitPowerMax('player', 7)
 
-	local _, ability, pet
+	local _, ability, spellId, pet
 
 	for _, ability in next, abilities.all do
-		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = false
-		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.spellId2 and C_LevelLink.IsSpellLocked(ability.spellId2)) then
-			-- spell is locked, do not mark as known
-		elseif IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) then
-			ability.known = true
-		elseif Azerite.traits[ability.spellId] then
-			ability.known = true
+		for _, spellId in next, ability.spellIds do
+			ability.spellId, ability.name, _, ability.icon = spellId, GetSpellInfo(spellId)
+			if IsPlayerSpell(spellId) or Azerite.traits[spellId] then
+				ability.known = true
+				break
+			end
+		end
+		if C_LevelLink.IsSpellLocked(ability.spellId) then
+			ability.known = false -- spell is locked, do not mark as known
 		elseif ability.essence_id and Azerite.essences[ability.essence_id] then
 			if ability.essence_major then
 				ability.known = Azerite.essences[ability.essence_id].major
@@ -1565,6 +1571,7 @@ function Player:UpdateAbilities()
 			end
 		end
 	end
+
 	for _, pet in next, summonedPets.all do
 		pet.known = false
 		if pet.summon_spell then
@@ -3549,7 +3556,7 @@ function UI.OnResourceFrameHide()
 end
 
 function UI.OnResourceFrameShow()
-	if Opt.snap then
+	if Opt.snap and UI.anchor.points then
 		local p = UI.anchor.points[Player.spec][Opt.snap]
 		doomedPanel:ClearAllPoints()
 		doomedPanel:SetPoint(p[1], UI.anchor.frame, p[2], p[3], p[4])
@@ -3860,7 +3867,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			Player.last_swing_taken = Player.time
 		end
 		if Opt.auto_aoe then
-			if (dstGUID == Player.guid or dstGUID == Player.pet) then
+			if dstGUID == Player.guid or dstGUID == Player.pet then
 				autoAoe:Add(srcGUID, true)
 			elseif (srcGUID == Player.guid or srcGUID == Player.pet) and not (missType == 'EVADE' or missType == 'IMMUNE') then
 				autoAoe:Add(dstGUID, true)
@@ -3909,6 +3916,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	   eventType == 'SPELL_CAST_FAILED' or
 	   eventType == 'SPELL_AURA_REMOVED' or
 	   eventType == 'SPELL_DAMAGE' or
+	   eventType == 'SPELL_ABSORBED' or
 	   eventType == 'SPELL_PERIODIC_DAMAGE' or
 	   eventType == 'SPELL_MISSED' or
 	   eventType == 'SPELL_AURA_APPLIED' or
@@ -3970,7 +3978,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			ability:RecordTargetHit(dstGUID)
 		end
 	end
-	if eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
+	if eventType == 'SPELL_ABSORBED' or eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
 		if ability.travel_start and ability.travel_start[dstGUID] then
 			ability.travel_start[dstGUID] = nil
 		end
