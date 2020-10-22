@@ -1388,10 +1388,6 @@ function Azerite:Update()
 	for pid in next, self.essences do
 		self.essences[pid] = nil
 	end
-	if UnitEffectiveLevel('player') < 110 then
-		--print('disabling azerite, player is effectively level', UnitEffectiveLevel('player'))
-		return -- disable all Azerite/Essences for players scaled under 110
-	end
 	for _, loc in next, self.locations do
 		if GetInventoryItemID('player', loc:GetEquipmentSlot()) and C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItem(loc) then
 			for _, slot in next, C_AzeriteEmpoweredItem.GetAllTierInfo(loc) do
@@ -1529,11 +1525,11 @@ function Player:ImpsIn(seconds)
 		end
 	end
 	if HandOfGuldan:Casting() then
-		if HandOfGuldan.cast_shards >= 3 and seconds > 2.0 then
+		if HandOfGuldan.cast_shards >= 3 and seconds > 0.5 then
 			count = count + 3
-		elseif HandOfGuldan.cast_shards >= 2 and seconds > 1.6 then
+		elseif HandOfGuldan.cast_shards >= 2 and seconds > 0.4 then
 			count = count + 2
-		elseif HandOfGuldan.cast_shards >= 1 and seconds > 1.2 then
+		elseif HandOfGuldan.cast_shards >= 1 and seconds > 0.3 then
 			count = count + 1
 		end
 	end
@@ -1819,13 +1815,13 @@ HandOfGuldan.imp_pool = {}
 
 function HandOfGuldan:CastSuccess()
 	if self.cast_shards >= 1 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.2
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.3
 	end
 	if self.cast_shards >= 2 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.6
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.4
 	end
 	if self.cast_shards >= 3 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 2.0
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.5
 	end
 end
 
@@ -3771,8 +3767,8 @@ function events:ADDON_LOADED(name)
 			print('It looks like this is your first time running ' .. name .. ', why don\'t you take some time to familiarize yourself with the commands?')
 			print('Type |cFFFFD000' .. SLASH_Doomed1 .. '|r for a list of commands.')
 		end
-		if UnitLevel('player') < 110 then
-			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 110, and almost certainly will not operate properly!')
+		if UnitLevel('player') < 10 then
+			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 		InitOpts()
 		Azerite:Init()
