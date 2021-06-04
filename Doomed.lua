@@ -1,7 +1,9 @@
+local ADDON = 'Doomed'
 if select(2, UnitClass('player')) ~= 'WARLOCK' then
-	DisableAddOn('Doomed')
+	DisableAddOn(ADDON)
 	return
 end
+local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
 
 -- copy heavily accessed global functions into local scope for performance
 local GetSpellCooldown = _G.GetSpellCooldown
@@ -28,7 +30,7 @@ Doomed = {}
 local Opt
 
 SLASH_Doomed1, SLASH_Doomed2 = '/doomed', '/doom'
-BINDING_HEADER_DOOMED = 'Doomed'
+BINDING_HEADER_DOOMED = ADDON
 
 local function InitOpts()
 	local function SetDefaults(t, ref)
@@ -86,6 +88,7 @@ local function InitOpts()
 		aoe = false,
 		auto_aoe = false,
 		auto_aoe_ttl = 10,
+		cd_ttd = 8,
 		pot = false,
 		trinket = true,
 		healthstone = true,
@@ -133,25 +136,23 @@ local Player = {
 	mana_regen = 0,
 	soul_shards = 0,
 	soul_shards_max = 0,
+	moving = false,
+	movement_speed = 100,
 	last_swing_taken = 0,
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
-		[165581] = true, -- Crest of Pa'ku (Horde)
-		[174044] = true, -- Humming Black Dragonscale (parachute)
 	},
+	dot_count = 0,
 }
 
 -- current target information
 local Target = {
 	boss = false,
 	guid = 0,
-	healthArray = {},
+	health_array = {},
 	hostile = false,
 	estimated_range = 30,
 }
-
--- Azerite trait API access
-local Azerite = {}
 
 local doomedPanel = CreateFrame('Frame', 'doomedPanel', UIParent)
 doomedPanel:SetPoint('CENTER', 0, -169)
@@ -164,7 +165,7 @@ doomedPanel.icon:SetAllPoints(doomedPanel)
 doomedPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 doomedPanel.border = doomedPanel:CreateTexture(nil, 'ARTWORK')
 doomedPanel.border:SetAllPoints(doomedPanel)
-doomedPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+doomedPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 doomedPanel.border:Hide()
 doomedPanel.dimmer = doomedPanel:CreateTexture(nil, 'BORDER')
 doomedPanel.dimmer:SetAllPoints(doomedPanel)
@@ -211,7 +212,7 @@ doomedPreviousPanel.icon:SetAllPoints(doomedPreviousPanel)
 doomedPreviousPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 doomedPreviousPanel.border = doomedPreviousPanel:CreateTexture(nil, 'ARTWORK')
 doomedPreviousPanel.border:SetAllPoints(doomedPreviousPanel)
-doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+doomedPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 local doomedCooldownPanel = CreateFrame('Frame', 'doomedCooldownPanel', UIParent)
 doomedCooldownPanel:SetSize(64, 64)
 doomedCooldownPanel:SetFrameStrata('BACKGROUND')
@@ -225,7 +226,7 @@ doomedCooldownPanel.icon:SetAllPoints(doomedCooldownPanel)
 doomedCooldownPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 doomedCooldownPanel.border = doomedCooldownPanel:CreateTexture(nil, 'ARTWORK')
 doomedCooldownPanel.border:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+doomedCooldownPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 doomedCooldownPanel.cd = CreateFrame('Cooldown', nil, doomedCooldownPanel, 'CooldownFrameTemplate')
 doomedCooldownPanel.cd:SetAllPoints(doomedCooldownPanel)
 local doomedInterruptPanel = CreateFrame('Frame', 'doomedInterruptPanel', UIParent)
@@ -241,7 +242,7 @@ doomedInterruptPanel.icon:SetAllPoints(doomedInterruptPanel)
 doomedInterruptPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 doomedInterruptPanel.border = doomedInterruptPanel:CreateTexture(nil, 'ARTWORK')
 doomedInterruptPanel.border:SetAllPoints(doomedInterruptPanel)
-doomedInterruptPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+doomedInterruptPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 doomedInterruptPanel.cast = CreateFrame('Cooldown', nil, doomedInterruptPanel, 'CooldownFrameTemplate')
 doomedInterruptPanel.cast:SetAllPoints(doomedInterruptPanel)
 doomedInterruptPanel.cast:SetDrawBling(false)
@@ -258,7 +259,7 @@ doomedExtraPanel.icon:SetAllPoints(doomedExtraPanel)
 doomedExtraPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 doomedExtraPanel.border = doomedExtraPanel:CreateTexture(nil, 'ARTWORK')
 doomedExtraPanel.border:SetAllPoints(doomedExtraPanel)
-doomedExtraPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+doomedExtraPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 
 -- Start AoE
 
@@ -328,7 +329,6 @@ local autoAoe = {
 	blacklist = {},
 	ignored_units = {
 		[120651] = true, -- Explosives (Mythic+ affix)
-		[161895] = true, -- Thing From Beyond (40+ Corruption)
 	},
 }
 
@@ -458,7 +458,7 @@ function Ability:Ready(seconds)
 	return self:Cooldown() <= (seconds or 0)
 end
 
-function Ability:Usable()
+function Ability:Usable(seconds)
 	if not self.known then
 		return false
 	end
@@ -474,7 +474,7 @@ function Ability:Usable()
 	if self.requires_charge and self:Charges() == 0 then
 		return false
 	end
-	return self:Ready()
+	return self:Ready(seconds)
 end
 
 function Ability:Remains()
@@ -486,8 +486,7 @@ function Ability:Remains()
 		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
 			return 0
-		end
-		if self:Match(id) then
+		elseif self:Match(id) then
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
@@ -504,12 +503,12 @@ function Ability:Refreshable()
 	return self:Down()
 end
 
-function Ability:Up()
-	return self:Remains() > 0
+function Ability:Up(condition)
+	return self:Remains(condition) > 0
 end
 
-function Ability:Down()
-	return not self:Up()
+function Ability:Down(condition)
+	return self:Remains(condition) <= 0
 end
 
 function Ability:SetVelocity(velocity)
@@ -573,8 +572,7 @@ function Ability:Stack()
 		_, _, count, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
 			return 0
-		end
-		if self:Match(id) then
+		elseif self:Match(id) then
 			return (expires == 0 or expires - Player.ctime > Player.execute_remains) and count or 0
 		end
 	end
@@ -638,10 +636,6 @@ function Ability:CastRegen()
 	return Player.mana_regen * self:CastTime() - self:Cost()
 end
 
-function Ability:WontCapMana(reduction)
-	return (Player.mana + self:CastRegen()) < (Player.mana_max - (reduction or 5))
-end
-
 function Ability:Previous(n)
 	local i = n or 1
 	if Player.ability_casting then
@@ -651,10 +645,6 @@ function Ability:Previous(n)
 		i = i - 1
 	end
 	return Player.previous_gcd[i] == self
-end
-
-function Ability:AzeriteRank()
-	return Azerite.traits[self.spellId] or 0
 end
 
 function Ability:AutoAoe(removeUnaffected, trigger)
@@ -818,6 +808,9 @@ Corruption.buff_duration = 14
 Corruption.tick_interval = 2
 Corruption.hasted_ticks = true
 Corruption:TrackAuras()
+local MaleficRapture = Ability:Add(324536, false, true)
+MaleficRapture.shard_cost = 1
+MaleficRapture:AutoAoe(false)
 local SeedOfCorruption = Ability:Add(27243, false, true, 27285)
 SeedOfCorruption.shard_cost = 1
 SeedOfCorruption.buff_duration = 12
@@ -833,27 +826,17 @@ SummonDarkglare.mana_cost = 2
 SummonDarkglare.cooldown_duration = 180
 SummonDarkglare.summon_count = 1
 SummonDarkglare.summoning = false
-local UnstableAffliction = Ability:Add(30108, false, true)
-UnstableAffliction.shard_cost = 1
-UnstableAffliction.buff_duration = 8
+local UnstableAffliction = Ability:Add(316099, false, true)
+UnstableAffliction.buff_duration = 16
 UnstableAffliction.tick_interval = 2
-UnstableAffliction.hasted_duration = true
 UnstableAffliction.hasted_ticks = true
-UnstableAffliction[1] = Ability:Add(233490, false, true)
-UnstableAffliction[2] = Ability:Add(233496, false, true)
-UnstableAffliction[3] = Ability:Add(233497, false, true)
-UnstableAffliction[4] = Ability:Add(233498, false, true)
-UnstableAffliction[5] = Ability:Add(233499, false, true)
+UnstableAffliction:TrackAuras()
 ------ Talents
 local AbsoluteCorruption = Ability:Add(196103, false, true)
 local CreepingDeath = Ability:Add(264000, false, true)
 local DarkSoulMisery = Ability:Add(113860, true, true)
 DarkSoulMisery.buff_duration = 20
 DarkSoulMisery.cooldown_duration = 120
-local Deathbolt = Ability:Add(264106, false, true)
-Deathbolt.mana_cost = 2
-Deathbolt.cooldown_duration = 30
-Deathbolt:SetVelocity(35)
 local DrainSoul = Ability:Add(198590, false, true)
 DrainSoul.mana_cost = 1
 DrainSoul.buff_duration = 5
@@ -865,6 +848,8 @@ Haunt.mana_cost = 2
 Haunt.buff_duration = 15
 Haunt.cooldown_duration = 15
 Haunt:SetVelocity(40)
+local InevitableDemise = Ability:Add(334319, true, true, 334320)
+InevitableDemise.buff_duration = 20
 local Nightfall = Ability:Add(108558, false, true, 264571)
 Nightfall.buff_duration = 12
 local PhantomSingularity = Ability:Add(205179, false, true, 205246)
@@ -874,6 +859,7 @@ PhantomSingularity.tick_interval = 2
 PhantomSingularity.hasted_duration = true
 PhantomSingularity.hasted_ticks = true
 PhantomSingularity:AutoAoe(false, 'periodic')
+PhantomSingularity:TrackAuras()
 local ShadowEmbrace = Ability:Add(32388, false, true, 32390)
 ShadowEmbrace.buff_duration = 10
 local Shadowfury = Ability:Add(30283, false, true)
@@ -892,6 +878,7 @@ VileTaint.cooldown_duration = 20
 VileTaint.tick_interval = 2
 VileTaint.hasted_ticks = true
 VileTaint:AutoAoe(true)
+VileTaint:TrackAuras()
 local WritheInAgony = Ability:Add(196102, false, true)
 ---- Demonology
 ------ Base Abilities
@@ -1040,115 +1027,23 @@ Shadowburn.requires_charge = true
 ------ Procs
 local Backdraft = Ability:Add(117828, true, true)
 Backdraft.buff_duration = 10
--- Heart of Azeroth
----- Azerite Traits
-local BalefulInvocation = Ability:Add(287059, true, true)
-local CascadingCalamity = Ability:Add(275372, true, true, 275378)
-CascadingCalamity.buff_duration = 15
-local DreadfulCalling = Ability:Add(278727, true, true)
-local ExplosivePotential = Ability:Add(275395, true, true, 275398)
-ExplosivePotential.buff_duration = 15
-local InevitableDemise = Ability:Add(273521, true, true, 273525)
-InevitableDemise.buff_duration = 20
-local PandemicInvocation = Ability:Add(289364, true, true)
-local ShadowsBite = Ability:Add(272944, true, true, 272945)
-ShadowsBite.buff_duration = 8
----- Major Essences
-local BloodOfTheEnemy = Ability:Add({297108, 298273, 298277} , false, true)
-BloodOfTheEnemy.buff_duration = 10
-BloodOfTheEnemy.cooldown_duration = 120
-BloodOfTheEnemy.essence_id = 23
-BloodOfTheEnemy.essence_major = true
-BloodOfTheEnemy:AutoAoe(true)
-local ConcentratedFlame = Ability:Add({295373, 299349, 299353}, true, true, 295378)
-ConcentratedFlame.buff_duration = 180
-ConcentratedFlame.cooldown_duration = 30
-ConcentratedFlame.requires_charge = true
-ConcentratedFlame.essence_id = 12
-ConcentratedFlame.essence_major = true
-ConcentratedFlame:SetVelocity(40)
-ConcentratedFlame.dot = Ability:Add(295368, false, true)
-ConcentratedFlame.dot.buff_duration = 6
-ConcentratedFlame.dot.tick_interval = 2
-ConcentratedFlame.dot.essence_id = 12
-ConcentratedFlame.dot.essence_major = true
-local GuardianOfAzeroth = Ability:Add({295840, 299355, 299358}, false, true)
-GuardianOfAzeroth.cooldown_duration = 180
-GuardianOfAzeroth.essence_id = 14
-GuardianOfAzeroth.essence_major = true
-local FocusedAzeriteBeam = Ability:Add({295258, 299336, 299338}, false, true)
-FocusedAzeriteBeam.cooldown_duration = 90
-FocusedAzeriteBeam.essence_id = 5
-FocusedAzeriteBeam.essence_major = true
-FocusedAzeriteBeam:AutoAoe()
-local MemoryOfLucidDreams = Ability:Add({298357, 299372, 299374}, true, true)
-MemoryOfLucidDreams.buff_duration = 15
-MemoryOfLucidDreams.cooldown_duration = 120
-MemoryOfLucidDreams.essence_id = 27
-MemoryOfLucidDreams.essence_major = true
-local PurifyingBlast = Ability:Add({295337, 299345, 299347}, false, true, 295338)
-PurifyingBlast.cooldown_duration = 60
-PurifyingBlast.essence_id = 6
-PurifyingBlast.essence_major = true
-PurifyingBlast:AutoAoe(true)
-local ReapingFlames = Ability:Add({310690, 311194, 311195}, false, true)
-ReapingFlames.cooldown_duration = 45
-ReapingFlames.essence_id = 35
-ReapingFlames.essence_major = true
-local RippleInSpace = Ability:Add({302731, 302982, 302983}, true, true)
-RippleInSpace.buff_duration = 2
-RippleInSpace.cooldown_duration = 60
-RippleInSpace.essence_id = 15
-RippleInSpace.essence_major = true
-local TheUnboundForce = Ability:Add({298452, 299376,299378}, false, true)
-TheUnboundForce.cooldown_duration = 45
-TheUnboundForce.essence_id = 28
-TheUnboundForce.essence_major = true
-local VisionOfPerfection = Ability:Add({296325, 299368, 299370}, true, true, 303345)
-VisionOfPerfection.buff_duration = 10
-VisionOfPerfection.essence_id = 22
-VisionOfPerfection.essence_major = true
-local WorldveinResonance = Ability:Add({295186, 298628, 299334}, true, true)
-WorldveinResonance.cooldown_duration = 60
-WorldveinResonance.essence_id = 4
-WorldveinResonance.essence_major = true
----- Minor Essences
-local AncientFlame = Ability:Add(295367, false, true)
-AncientFlame.buff_duration = 10
-AncientFlame.essence_id = 12
-local CondensedLifeForce = Ability:Add(295367, false, true)
-CondensedLifeForce.essence_id = 14
-local FocusedEnergy = Ability:Add(295248, true, true)
-FocusedEnergy.buff_duration = 4
-FocusedEnergy.essence_id = 5
-local Lifeblood = Ability:Add(295137, true, true)
-Lifeblood.essence_id = 4
-local LucidDreams = Ability:Add(298343, true, true)
-LucidDreams.buff_duration = 8
-LucidDreams.essence_id = 27
-local PurificationProtocol = Ability:Add(295305, false, true)
-PurificationProtocol.essence_id = 6
-PurificationProtocol:AutoAoe()
-local RealityShift = Ability:Add(302952, true, true)
-RealityShift.buff_duration = 20
-RealityShift.cooldown_duration = 30
-RealityShift.essence_id = 15
-local RecklessForce = Ability:Add(302932, true, true)
-RecklessForce.buff_duration = 3
-RecklessForce.essence_id = 28
-RecklessForce.counter = Ability:Add(302917, true, true)
-RecklessForce.counter.essence_id = 28
-local StriveForPerfection = Ability:Add(299369, true, true)
-StriveForPerfection.essence_id = 22
 -- PvP talents
 local RotAndDecay = Ability:Add(212371, false, true)
 -- Racials
 
+-- Covenant abilities
+local SoulRot = Ability:Add(325640, false, true)
+SoulRot.buff_duration = 8
+SoulRot.cooldown_duration = 60
+SoulRot.mana_cost = 0.5
+-- Soulbind conduits
+
+-- Legendary effects
+local ImplosivePotential = Ability:Add(337135, false, true, 337139)
+ImplosivePotential.buff_duration = 8
+ImplosivePotential.bonus_id = 7033
 -- Trinket Effects
-local ShiverVenom = Ability:Add(301624, false, true) -- Shiver Venom Relic
-ShiverVenom.buff_duration = 20
-ShiverVenom.tick_interval = 4
-ShiverVenom.hasted_ticks = true
+
 -- End Abilities
 
 -- Start Summoned Pets
@@ -1285,8 +1180,6 @@ Pet.ViciousHellhound = SummonedPet:Add(136399, 15, NetherPortal)
 Pet.VoidTerror = SummonedPet:Add(136403, 15, NetherPortal)
 Pet.Wrathguard = SummonedPet:Add(136407, 15, NetherPortal)
 Pet.WildImpID = SummonedPet:Add(143622, 20, InnerDemons)
--- Heart of Azeroth
-Pet.GuardianOfAzeroth = SummonedPet:Add(152396, 30, GuardianOfAzeroth)
 -- End Summoned Pets
 
 -- Start Inventory Items
@@ -1363,65 +1256,7 @@ PotionOfUnbridledFury.buff.triggers_gcd = false
 -- Equipment
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
-Trinket.ShiverVenomRelic = InventoryItem:Add(168905)
 -- End Inventory Items
-
--- Start Azerite Trait API
-
-Azerite.equip_slots = { 1, 3, 5 } -- Head, Shoulder, Chest
-
-function Azerite:Init()
-	self.locations = {}
-	self.traits = {}
-	self.essences = {}
-	local i
-	for i = 1, #self.equip_slots do
-		self.locations[i] = ItemLocation:CreateFromEquipmentSlot(self.equip_slots[i])
-	end
-end
-
-function Azerite:Update()
-	local _, loc, slot, pid, pinfo
-	for pid in next, self.traits do
-		self.traits[pid] = nil
-	end
-	for pid in next, self.essences do
-		self.essences[pid] = nil
-	end
-	for _, loc in next, self.locations do
-		if GetInventoryItemID('player', loc:GetEquipmentSlot()) and C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItem(loc) then
-			for _, slot in next, C_AzeriteEmpoweredItem.GetAllTierInfo(loc) do
-				if slot.azeritePowerIDs then
-					for _, pid in next, slot.azeritePowerIDs do
-						if C_AzeriteEmpoweredItem.IsPowerSelected(loc, pid) then
-							self.traits[pid] = 1 + (self.traits[pid] or 0)
-							pinfo = C_AzeriteEmpoweredItem.GetPowerInfo(pid)
-							if pinfo and pinfo.spellID then
-								--print('Azerite found:', pinfo.azeritePowerID, GetSpellInfo(pinfo.spellID))
-								self.traits[pinfo.spellID] = self.traits[pid]
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-	for _, loc in next, C_AzeriteEssence.GetMilestones() or {} do
-		if loc.slot then
-			pid = C_AzeriteEssence.GetMilestoneEssence(loc.ID)
-			if pid then
-				pinfo = C_AzeriteEssence.GetEssenceInfo(pid)
-				self.essences[pid] = {
-					id = pid,
-					rank = pinfo.rank,
-					major = loc.slot == 0,
-				}
-			end
-		end
-	end
-end
-
--- End Azerite Trait API
 
 -- Start Player API
 
@@ -1468,7 +1303,9 @@ function Player:BloodlustActive()
 	local _, i, id
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
-		if (
+		if not id then
+			return false
+		elseif (
 			id == 2825 or   -- Bloodlust (Horde Shaman)
 			id == 32182 or  -- Heroism (Alliance Shaman)
 			id == 80353 or  -- Time Warp (Mage)
@@ -1493,6 +1330,24 @@ function Player:Equipped(itemID, slot)
 	for i = 1, 19 do
 		if GetInventoryItemID('player', i) == itemID then
 			return true, i
+		end
+	end
+	return false
+end
+
+function Player:BonusIdEquipped(bonusId)
+	local i, id, link, item
+	for i = 1, 19 do
+		link = GetInventoryItemLink('player', i)
+		if link then
+			item = link:match('Hitem:%d+:([%d:]+)')
+			if item then
+				for id in item:gmatch('(%d+)') do
+					if tonumber(id) == bonusId then
+						return true
+					end
+				end
+			end
 		end
 	end
 	return false
@@ -1546,24 +1401,30 @@ function Player:UpdateAbilities()
 	Player.mana_max = UnitPowerMax('player', 0)
 	Player.soul_shards_max = UnitPowerMax('player', 7)
 
-	local _, ability, spellId, pet
+	local _, ability, spellId, node, pet
 
 	for _, ability in next, abilities.all do
 		ability.known = false
 		for _, spellId in next, ability.spellIds do
 			ability.spellId, ability.name, _, ability.icon = spellId, GetSpellInfo(spellId)
-			if IsPlayerSpell(spellId) or Azerite.traits[spellId] then
+			if IsPlayerSpell(spellId) then
 				ability.known = true
 				break
 			end
 		end
 		if C_LevelLink.IsSpellLocked(ability.spellId) then
 			ability.known = false -- spell is locked, do not mark as known
-		elseif ability.essence_id and Azerite.essences[ability.essence_id] then
-			if ability.essence_major then
-				ability.known = Azerite.essences[ability.essence_id].major
-			else
-				ability.known = true
+		end
+		if ability.bonus_id then -- used for checking Legendary crafted effects
+			ability.known = self:BonusIdEquipped(ability.bonus_id)
+		end
+		if ability.conduit_id then
+			node = C_Soulbinds.FindNodeIDActuallyInstalled(C_Soulbinds.GetActiveSoulbindID(), ability.conduit_id)
+			if node then
+				node = C_Soulbinds.GetNode(node)
+				if node and node.state == 3 then
+					ability.known = true
+				end
 			end
 		end
 	end
@@ -1581,13 +1442,6 @@ function Player:UpdateAbilities()
 
 	if DrainSoul.known then
 		ShadowBolt.known = false
-	end
-	if UnstableAffliction.known then
-		UnstableAffliction[1].known = true
-		UnstableAffliction[2].known = true
-		UnstableAffliction[3].known = true
-		UnstableAffliction[4].known = true
-		UnstableAffliction[5].known = true
 	end
 	DemonicPower.known = SummonDemonicTyrant.known
 	SummonImp.known = SummonImp.known and not SummonFelImp.known
@@ -1643,11 +1497,11 @@ function Target:UpdateHealth()
 	timer.health = 0
 	self.health = UnitHealth('target')
 	self.health_max = UnitHealthMax('target')
-	table.remove(self.healthArray, 1)
-	self.healthArray[25] = self.health
-	self.timeToDieMax = self.health / Player.health_max * 15
+	table.remove(self.health_array, 1)
+	self.health_array[25] = self.health
+	self.timeToDieMax = self.health / Player.health_max * 40
 	self.healthPercentage = self.health_max > 0 and (self.health / self.health_max * 100) or 100
-	self.healthLostPerSec = (self.healthArray[1] - self.health) / 5
+	self.healthLostPerSec = (self.health_array[1] - self.health) / 5
 	self.timeToDie = self.healthLostPerSec > 0 and min(self.timeToDieMax, self.health / self.healthLostPerSec) or self.timeToDieMax
 end
 
@@ -1667,7 +1521,7 @@ function Target:Update()
 		self.hostile = true
 		local i
 		for i = 1, 25 do
-			self.healthArray[i] = 0
+			self.health_array[i] = 0
 		end
 		self:UpdateHealth()
 		if Opt.always_on then
@@ -1684,7 +1538,7 @@ function Target:Update()
 		self.guid = guid
 		local i
 		for i = 1, 25 do
-			self.healthArray[i] = UnitHealth('target')
+			self.health_array[i] = UnitHealth('target')
 		end
 	end
 	self.boss = false
@@ -1713,13 +1567,6 @@ end
 
 -- Start Ability Modifications
 
-function ConcentratedFlame.dot:Remains()
-	if ConcentratedFlame:Traveling() then
-		return self:Duration()
-	end
-	return Ability.Remains(self)
-end
-
 function Implosion:Usable()
 	return Player.imp_count > 0 and Ability.Usable(self)
 end
@@ -1729,64 +1576,11 @@ function PowerSiphon:Usable()
 end
 
 function Corruption:Remains()
-	if SeedOfCorruption:Up() or SeedOfCorruption:Previous() then
+	if SeedOfCorruption:Ticking() > 0 or SeedOfCorruption:Previous() then
 		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
-
-function UnstableAffliction:Stack()
-	return (
-		(UnstableAffliction[1]:Up() and 1 or 0) +
-		(UnstableAffliction[2]:Up() and 1 or 0) +
-		(UnstableAffliction[3]:Up() and 1 or 0) +
-		(UnstableAffliction[4]:Up() and 1 or 0) +
-		(UnstableAffliction[5]:Up() and 1 or 0))
-end
-
-function UnstableAffliction:Remains()
-	return max(UnstableAffliction[1]:Remains(), UnstableAffliction[2]:Remains(), UnstableAffliction[3]:Remains(), UnstableAffliction[4]:Remains(), UnstableAffliction[5]:Remains())
-end
-
-function UnstableAffliction:Lowest()
-	local ua = UnstableAffliction[1]
-	local lowest = Ability.Remains(ua)
-	local remains, i
-	for i = 2, 5 do
-		remains = Ability.Remains(ua)
-		if remains > 0 and remains < lowest then
-			ua = UnstableAffliction[i]
-			lowest = remains
-		end
-	end
-	return ua, lowest
-end
-
-function UnstableAffliction:LowestRemains()
-	local _, remains = UnstableAffliction:Lowest()
-	return remains
-end
-
-function UnstableAffliction:Next()
-	local i
-	for i = 1, 5 do
-		if Ability.Remains(UnstableAffliction[i]) <= 0 then
-			return UnstableAffliction[i]
-		end
-	end
-	return UnstableAffliction:Lowest()
-end
-
-UnstableAffliction[1].Remains = function(self)
-	if UnstableAffliction:Casting() and UnstableAffliction:Next() == self then
-		return UnstableAffliction:Duration()
-	end
-	return Ability.Remains(self)
-end
-UnstableAffliction[2].Remains = UnstableAffliction[1].Remains
-UnstableAffliction[3].Remains = UnstableAffliction[1].Remains
-UnstableAffliction[4].Remains = UnstableAffliction[1].Remains
-UnstableAffliction[5].Remains = UnstableAffliction[1].Remains
 
 SummonImp.Up = function(self)
 	if self:Casting() then
@@ -1954,13 +1748,6 @@ function AxeToss:Usable()
 	return Ability.Usable(self)
 end
 
-function CascadingCalamity:Remains()
-	if UnstableAffliction:Casting() and UnstableAffliction:Stack() >= 2 then
-		return self:Duration()
-	end
-	return Ability.Remains(self)
-end
-
 function InevitableDemise:Stack()
 	if DrainLife:Previous() or DrainLife:Channeling() then
 		return 0
@@ -1978,9 +1765,6 @@ function Pet.Darkglare:AddUnit(guid)
 	if SummonDarkglare.summoning then
 		unit.full = true
 		SummonDarkglare.summoning = false
-	elseif VisionOfPerfection.known then
-		unit.full = false
-		unit.expires = Player.time + (self.duration * 0.35)
 	end
 	return unit
 end
@@ -1995,10 +1779,6 @@ function Pet.DemonicTyrant:AddUnit(guid)
 		end
 		self:EmpowerLesser(15)
 		SummonDemonicTyrant.summoning = false
-	elseif VisionOfPerfection.known then
-		unit.full = false
-		unit.expires = Player.time + (self.duration * 0.35)
-		self:EmpowerLesser(4)
 	end
 	return unit
 end
@@ -2197,12 +1977,9 @@ local APL = {
 }
 
 APL[SPEC.AFFLICTION].main = function(self)
-	Player.use_cds = Target.boss or Target.timeToDie > 40
+	Player.use_cds = Target.boss or Target.timeToDie > Opt.cd_ttd or (SoulRot.known and SoulRot:Ticking() > 0) or (DarkSoulMisery.known and DarkSoulMisery:Up()) or SummonDarkglare:Up()
 	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
-	Player.use_db = Agony:Up() and Corruption:Up() and (not SiphonLife.known or SiphonLife:Up()) and (not Haunt.known or not Haunt:Ready()) and (not PhantomSingularity.known or not PhantomSingularity:Ready())
-	Player.ua_ct = UnstableAffliction:CastTime()
-	Player.ua_stack = UnstableAffliction:Stack()
-	Player.ua_remains = UnstableAffliction:Remains()
+	Player.dot_count = Agony:Ticking() + Corruption:Ticking() + UnstableAffliction:Ticking() + (SiphonLife.known and SiphonLife:Ticking() or 0) + (PhantomSingularity.known and PhantomSingularity:Ticking() or 0) + (VileTaint.known and VileTaint:Ticking() or 0)
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -2265,18 +2042,13 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 	end
 --[[
 actions=variable,name=use_seed,value=talent.sow_the_seeds.enabled&spell_targets.seed_of_corruption_aoe>=3+raid_event.invulnerable.up|talent.siphon_life.enabled&spell_targets.seed_of_corruption>=5+raid_event.invulnerable.up|spell_targets.seed_of_corruption>=8+raid_event.invulnerable.up
-actions+=/variable,name=padding,op=set,value=action.shadow_bolt.execute_time*azerite.cascading_calamity.enabled
-actions+=/variable,name=padding,op=reset,value=gcd,if=azerite.cascading_calamity.enabled&(talent.drain_soul.enabled|talent.deathbolt.enabled&cooldown.deathbolt.remains<=gcd)
+actions+=/variable,name=padding,op=set,value=0
 actions+=/variable,name=maintain_se,value=spell_targets.seed_of_corruption_aoe<=1+talent.writhe_in_agony.enabled+talent.absolute_corruption.enabled*2+(talent.writhe_in_agony.enabled&talent.sow_the_seeds.enabled&spell_targets.seed_of_corruption_aoe>2)+(talent.siphon_life.enabled&!talent.creeping_death.enabled&!talent.drain_soul.enabled)+raid_event.invulnerable.up
 actions+=/call_action_list,name=cooldowns
 actions+=/drain_soul,interrupt_global=1,chain=1,cycle_targets=1,if=target.time_to_die<=gcd&soul_shard<5
-actions+=/unstable_affliction,if=azerite.cascading_calamity.enabled&contagion>cast_time&buff.cascading_calamity.remains<cast_time
 actions+=/haunt,if=spell_targets.seed_of_corruption_aoe<=2+raid_event.invulnerable.up
-actions+=/summon_darkglare,if=dot.agony.ticking&dot.corruption.ticking&(buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|dot.phantom_singularity.remains)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=gcd|!cooldown.deathbolt.remains|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up)
-actions+=/deathbolt,if=cooldown.summon_darkglare.remains&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up&(!essence.vision_of_perfection.minor&!azerite.dreadful_calling.rank|cooldown.summon_darkglare.remains>30)
-actions+=/the_unbound_force,if=buff.reckless_force.remains
+actions+=/summon_darkglare,if=dot.agony.ticking&dot.corruption.ticking&(buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|dot.phantom_singularity.remains)
 actions+=/agony,target_if=min:dot.agony.remains,if=remains<=gcd+action.shadow_bolt.execute_time&target.time_to_die>8
-actions+=/memory_of_lucid_dreams,if=time<30
 # Temporary fix to make sure azshara's font doesn't break darkglare usage.
 actions+=/agony,line_cd=30,if=time>30&cooldown.summon_darkglare.remains<=15&equipped.169314
 actions+=/corruption,line_cd=30,if=time>30&cooldown.summon_darkglare.remains<=15&equipped.169314&!talent.absolute_corruption.enabled&(talent.siphon_life.enabled|spell_targets.seed_of_corruption_aoe>1&spell_targets.seed_of_corruption_aoe<=3)
@@ -2284,7 +2056,7 @@ actions+=/siphon_life,line_cd=30,if=time>30&cooldown.summon_darkglare.remains<=1
 actions+=/unstable_affliction,target_if=!contagion&target.time_to_die<=8
 actions+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,cancel_if=ticks_remain<5,if=talent.shadow_embrace.enabled&variable.maintain_se&debuff.shadow_embrace.remains&debuff.shadow_embrace.remains<=gcd*2
 actions+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=talent.shadow_embrace.enabled&variable.maintain_se&debuff.shadow_embrace.remains&debuff.shadow_embrace.remains<=execute_time*2+travel_time&!action.shadow_bolt.in_flight
-actions+=/phantom_singularity,target_if=max:target.time_to_die,if=time>35&target.time_to_die>16*spell_haste&(!essence.vision_of_perfection.minor&!azerite.dreadful_calling.rank|cooldown.summon_darkglare.remains>45+soul_shard*azerite.dreadful_calling.rank|cooldown.summon_darkglare.remains<15*spell_haste+soul_shard*azerite.dreadful_calling.rank)
+actions+=/phantom_singularity,target_if=max:target.time_to_die,if=time>35&target.time_to_die>16*spell_haste
 actions+=/unstable_affliction,target_if=min:contagion,if=!variable.use_seed&soul_shard=5
 actions+=/seed_of_corruption,if=variable.use_seed&soul_shard=5
 actions+=/call_action_list,name=dots
@@ -2292,52 +2064,29 @@ actions+=/vile_taint,target_if=max:target.time_to_die,if=time>15&target.time_to_
 actions+=/use_item,name=azsharas_font_of_power,if=time<=3
 actions+=/phantom_singularity,if=time<=35
 actions+=/vile_taint,if=time<15
-actions+=/guardian_of_azeroth,if=(cooldown.summon_darkglare.remains<15+soul_shard*azerite.dreadful_calling.enabled|(azerite.dreadful_calling.rank|essence.vision_of_perfection.rank)&time>30&target.time_to_die>=210)&(dot.phantom_singularity.remains|dot.vile_taint.remains|!talent.phantom_singularity.enabled&!talent.vile_taint.enabled)|target.time_to_die<30+gcd
-actions+=/dark_soul,if=cooldown.summon_darkglare.remains<15+soul_shard*azerite.dreadful_calling.enabled&(dot.phantom_singularity.remains|dot.vile_taint.remains)
+actions+=/dark_soul,if=cooldown.summon_darkglare.remains<15&(dot.phantom_singularity.remains|dot.vile_taint.remains)
 actions+=/berserking
 actions+=/call_action_list,name=spenders
 actions+=/call_action_list,name=fillers
 ]]
 	local apl
-	if CascadingCalamity.known and (DrainSoul.known or (Deathbolt.known and Deathbolt:Cooldown() <= Player.gcd)) then
-		Player.ua_padding = Player.gcd
-	else
-		Player.ua_padding = ShadowBolt:CastTime() * (CascadingCalamity.known and 1 or 0)
-	end
 	Player.maintain_se = (Player.enemies <= 1 and 1 or 0) + (WritheInAgony.known and 1 or 0) + (AbsoluteCorruption.known and 2 or 0) + (WritheInAgony.known and SowTheSeeds.known and Player.enemies > 2 and 1 or 0) + (SiphonLife.known and not CreepingDeath.known and not DrainSoul.known and 1 or 0)
 	if Player.use_cds then
 		self:cooldowns()
 	end
-	if Opt.trinket and Trinket.ShiverVenomRelic:Usable() then
-		if ShiverVenom:Stack() == 5 or (ShiverVenom:Stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:Remains() < 2)) then
-			UseCooldown(Trinket.ShiverVenomRelic)
-		end
-	end
 	if DrainSoul:Usable() and Target.timeToDie <= Player.gcd and Player.soul_shards < 5 then
 		return DrainSoul
-	end
-	if CascadingCalamity.known and UnstableAffliction:Usable() and Player.ua_remains > Player.ua_ct and CascadingCalamity:Remains() < ShadowBolt:CastTime() then
-		return UnstableAffliction
 	end
 	if Haunt:Usable() and Player.enemies <= 2 then
 		return Haunt
 	end
-	if Player.use_cds and SummonDarkglare:Usable() and Agony:Up() and Corruption:Up() and (Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:Up()) and (not Deathbolt.known or Deathbolt:Cooldown() <= Player.gcd or Player.enemies > 1) then
+	if Player.use_cds and SummonDarkglare:Usable() and Agony:Up() and Corruption:Up() and UnstableAffliction:Up() and (not PhantomSingularity.known or PhantomSingularity:Up()) and (not SoulRot.known or SoulRot:Up()) then
 		UseCooldown(SummonDarkglare)
-	end
-	if Deathbolt:Usable() and Player.use_db and Player.enemies == 1 and not SummonDarkglare:Ready() and (not StriveForPerfection.known or not DreadfulCalling.known or SummonDarkglare:Cooldown() > 30) then
-		return Deathbolt
-	end
-	if TheUnboundForce:Usable() and RecklessForce:Up() then
-		return TheUnboundForce
 	end
 	if Agony:Usable() and Agony:Remains() <= Player.gcd + ShadowBolt:CastTime() and Target.timeToDie > 8 then
 		return Agony
 	end
-	if Player.use_cds and MemoryOfLucidDreams:Usable() and Player:TimeInCombat() < 30 then
-		UseCooldown(MemoryOfLucidDreams)
-	end
-	if UnstableAffliction:Usable() and Target.timeToDie <= 8 and Player.ua_stack < 5 then
+	if UnstableAffliction:Usable() and Target.timeToDie <= 8 and UnstableAffliction:Down() then
 		return UnstableAffliction
 	end
 	if ShadowEmbrace.known and Player.maintain_se and ShadowEmbrace:Up() then
@@ -2345,10 +2094,10 @@ actions+=/call_action_list,name=fillers
 			return DrainSoul
 		end
 		if ShadowBolt:Usable() and ShadowEmbrace:Remains() <= (ShadowBolt:CastTime() * 2 + ShadowBolt:TravelTime()) and not ShadowBolt:Traveling() then
-			return DrainSoul
+			return ShadowBolt
 		end
 	end
-	if PhantomSingularity:Usable() and Player:TimeInCombat() > 35 and Target.timeToDie > (16 * Player.haste_factor) and (not StriveForPerfection.known and not DreadfulCalling.known or SummonDarkglare:Cooldown() > (45 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0)) or SummonDarkglare:Cooldown() < (15 * Player.haste_factor + (DreadfulCalling.known and Player.soul_shards or 0))) then
+	if PhantomSingularity:Usable() and Player:TimeInCombat() > 35 and Target.timeToDie > (16 * Player.haste_factor) then
 		UseCooldown(PhantomSingularity)
 	end
 	if Player.soul_shards == 5 then
@@ -2357,8 +2106,8 @@ actions+=/call_action_list,name=fillers
 				return SeedOfCorruption
 			end
 		else
-			if UnstableAffliction:Usable() then
-				return UnstableAffliction
+			if MaleficRapture:Usable() and Player.dot_count >= 2 then
+				return MaleficRapture
 			end
 		end
 	end
@@ -2373,11 +2122,11 @@ actions+=/call_action_list,name=fillers
 	if VileTaint:Usable() and Player:TimeInCombat() < 15 then
 		UseCooldown(VileTaint)
 	end
-	if GuardianOfAzeroth:Usable() and ((SummonDarkglare:Ready(15 + (DreadfulCalling.known and Player.soul_shards or 0))) or (((DreadfulCalling.known or StriveForPerfection.known) and Player:TimeInCombat() > 30 and Target.timeToDie >= 210) and (PhantomSingularity:Up() or VileTaint:Up() or (not PhantomSingularity.known and not VileTaint.known))) or Target.timeToDie < (30 + Player.gcd)) then
-		UseCooldown(GuardianOfAzeroth)
-	end
-	if Player.use_cds and DarkSoulMisery:Usable() and SummonDarkglare:Cooldown() < (15 + (DreadfulCalling.known and Player.soul_shards or 0)) and (PhantomSingularity:Up() or VileTaint:Up()) then
+	if Player.use_cds and DarkSoulMisery:Usable() and SummonDarkglare:Cooldown() < 15 and (PhantomSingularity:Up() or VileTaint:Up()) then
 		UseCooldown(DarkSoulMisery)
+	end
+	if SoulRot:Usable() and (SummonDarkglare:Ready(5) or not SummonDarkglare:Ready(50)) then
+		UseCooldown(SoulRot)
 	end
 	apl = self:spenders()
 	if apl then return apl end
@@ -2387,101 +2136,56 @@ end
 
 APL[SPEC.AFFLICTION].cooldowns = function(self)
 --[[
-actions.cooldowns=use_item,name=azsharas_font_of_power,if=(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains<4*spell_haste|!cooldown.phantom_singularity.remains)&cooldown.summon_darkglare.remains<19*spell_haste+soul_shard*azerite.dreadful_calling.rank&dot.agony.remains&dot.corruption.remains&(dot.siphon_life.remains|!talent.siphon_life.enabled)
 actions.cooldowns+=/potion,if=(talent.dark_soul_misery.enabled&cooldown.summon_darkglare.up&cooldown.dark_soul.up)|cooldown.summon_darkglare.up|target.time_to_die<30
-actions.cooldowns+=/use_items,if=cooldown.summon_darkglare.remains>70|time_to_die<20|((buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=gcd|!cooldown.deathbolt.remains)&!cooldown.summon_darkglare.remains)
+actions.cooldowns+=/use_items,if=cooldown.summon_darkglare.remains>70|time_to_die<20|((buff.active_uas.stack=5|soul_shard=0)&(!talent.phantom_singularity.enabled|cooldown.phantom_singularity.remains)&!cooldown.summon_darkglare.remains)
 actions.cooldowns+=/fireblood,if=!cooldown.summon_darkglare.up
 actions.cooldowns+=/blood_fury,if=!cooldown.summon_darkglare.up
-actions.cooldowns+=/memory_of_lucid_dreams,if=time>30
 actions.cooldowns+=/dark_soul,if=target.time_to_die<20+gcd|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up|talent.sow_the_seeds.enabled&cooldown.summon_darkglare.remains>=cooldown.summon_darkglare.duration-10
-actions.cooldowns+=/blood_of_the_enemy,if=pet.darkglare.remains|(!cooldown.deathbolt.remains|!talent.deathbolt.enabled)&cooldown.summon_darkglare.remains>=80&essence.blood_of_the_enemy.rank>1
-# Use damaging on-use trinkets more or less on cooldown, so long as the ICD they incur won't effect any other trinkets usage during cooldowns.
-actions.cooldowns+=/use_item,name=pocketsized_computation_device,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/use_item,name=rotcrusted_voodoo_doll,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/use_item,name=shiver_venom_relic,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/use_item,name=aquipotent_nautilus,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/use_item,name=tidestorm_codex,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/use_item,name=vial_of_storms,if=(cooldown.summon_darkglare.remains>=25|target.time_to_die<=30)&(cooldown.deathbolt.remains|!talent.deathbolt.enabled)
-actions.cooldowns+=/worldvein_resonance,if=buff.lifeblood.stack<3
-actions.cooldowns+=/ripple_in_space
 ]]
 	if Opt.pot and Target.boss and not Player:InArenaOrBattleground() then
 		if PotionOfUnbridledFury:Usable() and (Target.timeToDie < 30 or Pet.Darkglare:Up() and (not DarkSoulMisery.known or DarkSoulMisery:Up())) then
 			return UseCooldown(PotionOfUnbridledFury)
 		end
 	end
-	if Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:Ready()) and (SummonDarkglare:Cooldown() > 70 or Target.timeToDie < 20 or ((Player.ua_stack == 5 or Player.soul_shards == 0) and (not PhantomSingularity.known or PhantomSingularity:Up()) and (not Deathbolt.known or not Deathbolt:Ready(Player.gcd)) and (SummonDarkglare:Ready() or Pet.Darkglare:Up()))) then
+	if Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:Ready()) and (SummonDarkglare:Cooldown() > 70 or Target.timeToDie < 20 or (UnstableAffliction:Up() and (not PhantomSingularity.known or PhantomSingularity:Up()) and (SummonDarkglare:Ready() or Pet.Darkglare:Up()))) then
 		if Trinket1:Usable() then
 			return UseCooldown(Trinket1)
 		elseif Trinket2:Usable() then
 			return UseCooldown(Trinket2)
 		end
 	end
-	if MemoryOfLucidDreams:Usable() and Player:TimeInCombat() > 30 then
-		return UseCooldown(MemoryOfLucidDreams)
-	end
 	if DarkSoulMisery:Usable() and (Target.timeToDie < 20 + Player.gcd or Player.enemies > 1 or (SowTheSeeds.known and SummonDarkglare:Cooldown() >= 170)) then
 		return UseCooldown(DarkSoulMisery)
-	end
-	if BloodOfTheEnemy:Usable() and (Pet.Darkglare:Up() or (not Deathbolt.known or Deathbolt:Ready()) and not SummonDarkglare:Ready(80)) then
-		return UseCooldown(BloodOfTheEnemy)
-	end
-	if WorldveinResonance:Usable() and Lifeblood:Stack() < 3 then
-		return UseCooldown(WorldveinResonance)
-	end
-	if RippleInSpace:Usable() then
-		return UseCooldown(RippleInSpace)
-	end
-end
-
-APL[SPEC.AFFLICTION].db_refresh = function(self)
---[[
-actions.db_refresh=siphon_life,line_cd=15,if=(dot.siphon_life.remains%dot.siphon_life.duration)<=(dot.agony.remains%dot.agony.duration)&(dot.siphon_life.remains%dot.siphon_life.duration)<=(dot.corruption.remains%dot.corruption.duration)&dot.siphon_life.remains<dot.siphon_life.duration*1.3
-actions.db_refresh+=/agony,line_cd=15,if=(dot.agony.remains%dot.agony.duration)<=(dot.corruption.remains%dot.corruption.duration)&(dot.agony.remains%dot.agony.duration)<=(dot.siphon_life.remains%dot.siphon_life.duration)&dot.agony.remains<dot.agony.duration*1.3
-actions.db_refresh+=/corruption,line_cd=15,if=(dot.corruption.remains%dot.corruption.duration)<=(dot.agony.remains%dot.agony.duration)&(dot.corruption.remains%dot.corruption.duration)<=(dot.siphon_life.remains%dot.siphon_life.duration)&dot.corruption.remains<dot.corruption.duration*1.3
-]]
-	local siphon_rd = SiphonLife.known and (SiphonLife:Remains() / SiphonLife:Duration()) or 1.3
-	local agony_rd = Agony:Remains() / Agony:Duration()
-	local corruption_rd = Corruption:Remains() / Corruption:Duration()
-	if SiphonLife:Usable() and siphon_rd < 0.8 and siphon_rd <= agony_rd and siphon_rd <= corruption_rd then
-		return SiphonLife
-	end
-	if Agony:Usable() and agony_rd < 0.8 and agony_rd <= corruption_rd and agony_rd <= siphon_rd then
-		return Agony
-	end
-	if Corruption:Usable() and corruption_rd < 0.8 and corruption_rd <= agony_rd and corruption_rd <= siphon_rd then
-		return Corruption
 	end
 end
 
 APL[SPEC.AFFLICTION].dots = function(self)
 --[[
 actions.dots=seed_of_corruption,if=dot.corruption.remains<=action.seed_of_corruption.cast_time+time_to_shard+4.2*(1-talent.creeping_death.enabled*0.15)&spell_targets.seed_of_corruption_aoe>=3+raid_event.invulnerable.up+talent.writhe_in_agony.enabled&!dot.seed_of_corruption.remains&!action.seed_of_corruption.in_flight
-actions.dots+=/agony,target_if=min:remains,if=talent.creeping_death.enabled&active_dot.agony<6&target.time_to_die>10&(remains<=gcd|cooldown.summon_darkglare.remains>10&(remains<5|!azerite.pandemic_invocation.rank&refreshable))
-actions.dots+=/agony,target_if=min:remains,if=!talent.creeping_death.enabled&active_dot.agony<8&target.time_to_die>10&(remains<=gcd|cooldown.summon_darkglare.remains>10&(remains<5|!azerite.pandemic_invocation.rank&refreshable))
+actions.dots+=/agony,target_if=min:remains,if=talent.creeping_death.enabled&active_dot.agony<6&target.time_to_die>10&(remains<=gcd|cooldown.summon_darkglare.remains>10&(remains<5|refreshable))
+actions.dots+=/agony,target_if=min:remains,if=!talent.creeping_death.enabled&active_dot.agony<8&target.time_to_die>10&(remains<=gcd|cooldown.summon_darkglare.remains>10&(remains<5|refreshable))
 actions.dots+=/siphon_life,target_if=min:remains,if=(active_dot.siphon_life<8-talent.creeping_death.enabled-spell_targets.sow_the_seeds_aoe)&target.time_to_die>10&refreshable&(!remains&spell_targets.seed_of_corruption_aoe=1|cooldown.summon_darkglare.remains>soul_shard*action.unstable_affliction.execute_time)
 actions.dots+=/corruption,cycle_targets=1,if=spell_targets.seed_of_corruption_aoe<3+raid_event.invulnerable.up+talent.writhe_in_agony.enabled&(remains<=gcd|cooldown.summon_darkglare.remains>10&refreshable)&target.time_to_die>10
 ]]
-	if Player.enemies >= 3 and SeedOfCorruption:Usable() and Corruption:Remains() < (SeedOfCorruption:CastTime() + (Corruption:Duration() * 0.3)) and not (SeedOfCorruption:Up() or SeedOfCorruption:Ticking() > 0) then
+	if Player.enemies >= 3 and SeedOfCorruption:Usable() and Corruption:Remains() < (SeedOfCorruption:CastTime() + (Corruption:Duration() * 0.3)) and SeedOfCorruption:Ticking() == 0 then
 		return SeedOfCorruption
 	end
-	if Agony:Usable() and (Agony:Ticking() < (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:Remains() <= Player.gcd or SummonDarkglare:Cooldown() > 10 and (Agony:Remains() < 5 or not PandemicInvocation.known and Agony:Refreshable()))) then
+	if Agony:Usable() and (Agony:Ticking() < (CreepingDeath.known and 6 or 8) and Target.timeToDie > 10 and (Agony:Remains() <= Player.gcd or SummonDarkglare:Cooldown() > 10 and (Agony:Remains() < 5 or Agony:Refreshable()))) then
 		return Agony
-	end
-	if SiphonLife:Usable() and (SiphonLife:Ticking() < (8 - (CreepingDeath.known and 1 or 0) - Player.enemies)) and Target.timeToDie > 10 and SiphonLife:Refreshable() and (SiphonLife:Down() and Player.enemies == 1 or SummonDarkglare:Cooldown() > (Player.soul_shards * Player.ua_ct)) then
-		return SiphonLife
 	end
 	if Corruption:Usable() and Player.enemies < (3 + (WritheInAgony.known and 1 or 0)) and (Corruption:Remains() <= Player.gcd or SummonDarkglare:Cooldown() > 10 and Corruption:Refreshable()) and Target.timeToDie > 10 then
 		return Corruption
+	end
+	if UnstableAffliction:Usable() and (UnstableAffliction:Up() or UnstableAffliction:Ticking() == 0) and UnstableAffliction:Refreshable() and Target.timeToDie > UnstableAffliction:Remains() then
+		return UnstableAffliction
+	end
+	if SiphonLife:Usable() and (SiphonLife:Ticking() < (8 - (CreepingDeath.known and 1 or 0) - Player.enemies)) and Target.timeToDie > 10 and SiphonLife:Refreshable() then
+		return SiphonLife
 	end
 end
 
 APL[SPEC.AFFLICTION].fillers = function(self)
 --[[
-actions.fillers=unstable_affliction,line_cd=15,if=cooldown.deathbolt.remains<=gcd*2&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up&cooldown.summon_darkglare.remains>20
-actions.fillers+=/call_action_list,name=db_refresh,if=talent.deathbolt.enabled&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up&(dot.agony.remains<dot.agony.duration*0.75|dot.corruption.remains<dot.corruption.duration*0.75|dot.siphon_life.remains<dot.siphon_life.duration*0.75)&cooldown.deathbolt.remains<=action.agony.gcd*4&cooldown.summon_darkglare.remains>20
-actions.fillers+=/call_action_list,name=db_refresh,if=talent.deathbolt.enabled&spell_targets.seed_of_corruption_aoe=1+raid_event.invulnerable.up&cooldown.summon_darkglare.remains<=soul_shard*action.agony.gcd+action.agony.gcd*3&(dot.agony.remains<dot.agony.duration*1|dot.corruption.remains<dot.corruption.duration*1|dot.siphon_life.remains<dot.siphon_life.duration*1)
-actions.fillers+=/deathbolt,if=cooldown.summon_darkglare.remains>=30+gcd|cooldown.summon_darkglare.remains>140
 actions.fillers+=/shadow_bolt,if=buff.movement.up&buff.nightfall.remains
 actions.fillers+=/agony,if=buff.movement.up&!(talent.siphon_life.enabled&(prev_gcd.1.agony&prev_gcd.2.agony&prev_gcd.3.agony)|prev_gcd.1.agony)
 actions.fillers+=/siphon_life,if=buff.movement.up&!(prev_gcd.1.siphon_life&prev_gcd.2.siphon_life&prev_gcd.3.siphon_life)
@@ -2491,10 +2195,6 @@ actions.fillers+=/drain_life,if=talent.siphon_life.enabled&buff.inevitable_demis
 actions.fillers+=/drain_life,if=talent.writhe_in_agony.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=3)-5*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up=2)&dot.agony.remains>5*spell_haste&dot.corruption.remains>gcd&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
 actions.fillers+=/drain_life,if=talent.absolute_corruption.enabled&buff.inevitable_demise.stack>=50-20*(spell_targets.seed_of_corruption_aoe-raid_event.invulnerable.up>=4)&dot.agony.remains>5*spell_haste&(debuff.haunt.remains>5*spell_haste|!talent.haunt.enabled)&contagion>5*spell_haste
 actions.fillers+=/haunt
-actions.fillers+=/focused_azerite_beam,if=!talent.haunt.enabled|cooldown.haunt.remains>4.5*spell_haste
-actions.fillers+=/purifying_blast
-actions.fillers+=/reaping_flames
-actions.fillers+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight
 actions.fillers+=/drain_soul,interrupt_global=1,chain=1,interrupt=1,cycle_targets=1,if=target.time_to_die<=gcd
 actions.fillers+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,chain=1,interrupt_if=ticks_remain<5,interrupt_global=1,if=talent.shadow_embrace.enabled&variable.maintain_se&!debuff.shadow_embrace.remains
 actions.fillers+=/drain_soul,target_if=min:debuff.shadow_embrace.remains,chain=1,interrupt_if=ticks_remain<5,interrupt_global=1,if=talent.shadow_embrace.enabled&variable.maintain_se
@@ -2504,18 +2204,6 @@ actions.fillers+=/shadow_bolt,target_if=min:debuff.shadow_embrace.remains,if=tal
 actions.fillers+=/shadow_bolt
 ]]
 	local apl
-	if Deathbolt.known and Deathbolt:Ready(Player.gcd * 4) and Player.enemies < 3 and SummonDarkglare:Cooldown() >= (30 + Player.gcd + Deathbolt:Cooldown()) then
-		if UnstableAffliction:Usable() and not UnstableAffliction:Previous() and Deathbolt:Cooldown() <= Player.ua_ct and Player.ua_stack < 5 then
-			return UnstableAffliction
-		end
-		if not Deathbolt:Ready() or Player.ua_stack <= 1 then
-			apl = self:db_refresh()
-			if apl then return apl end
-		end
-	end
-	if Deathbolt:Usable() and Player.use_db and (Target.timeToDie < 10 or SummonDarkglare:Cooldown() >= (30 + Player.gcd)) then
-		return Deathbolt
-	end
 	if Player.moving then
 		if ShadowBolt:Usable() and Nightfall.known and Nightfall:Up() then
 			return ShadowBolt
@@ -2536,30 +2224,18 @@ actions.fillers+=/shadow_bolt
 		if InevitableDemise:Stack() > 10 and Target.timeToDie <= 5 then
 			return DrainLife
 		end
-		if InevitableDemise:Stack() >= min(max(60 - Agony:Ticking() * 10, 30), 50) and Agony:Remains() > (5 * Player.haste_factor) and Corruption:Remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:Remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:Remains() > (5 * Player.haste_factor)) and Player.ua_remains > (5 * Player.haste_factor) then
+		if InevitableDemise:Stack() >= min(max(60 - Agony:Ticking() * 10, 30), 50) and Agony:Remains() > (5 * Player.haste_factor) and Corruption:Remains() > (5 * Player.haste_factor) and (not SiphonLife.known or SiphonLife:Remains() > (5 * Player.haste_factor)) and (not Haunt.known or Haunt:Remains() > (5 * Player.haste_factor)) and UnstableAffliction:Remains() > (5 * Player.haste_factor) then
 			return DrainLife
 		end
 	end
 	if Haunt:Usable() then
 		return Haunt
 	end
-	if FocusedAzeriteBeam:Usable() and not Player.moving and (not Haunt.known or Haunt:Cooldown() > (4.5 * Player.haste_factor)) then
-		UseCooldown(FocusedAzeriteBeam)
-	end
-	if PurifyingBlast:Usable() then
-		UseCooldown(PurifyingBlast)
-	end
-	if ReapingFlames:Usable() then
-		UseCooldown(ReapingFlames)
-	end
-	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() then
-		return ConcentratedFlame
-	end
 	if DrainLife:Usable() then
 		if (Player:ManaPct() > 5 and Player:HealthPct() < 20) or (Player:ManaPct() > 20 and Player:HealthPct() < 40) then
 			return DrainLife
 		end
-		if RotAndDecay.known and Player:ManaPct() > (120 - (Player.ua_stack * 20)) then
+		if RotAndDecay.known and Player:ManaPct() > 50 and UnstableAffliction:Up() and Corruption:Remains() > 3 and Agony:Remains() > 3 and (not DrainSoul.known or Target.healthPercentage > 20) then
 			return DrainLife
 		end
 		if not DrainSoul.known and Target.timeToDie < ShadowBolt:CastTime() then
@@ -2576,36 +2252,25 @@ end
 
 APL[SPEC.AFFLICTION].spenders = function(self)
 --[[
-actions.spenders=unstable_affliction,if=cooldown.summon_darkglare.remains<=soul_shard*(execute_time+azerite.dreadful_calling.rank)&(!talent.deathbolt.enabled|cooldown.deathbolt.remains<=soul_shard*execute_time)&(talent.sow_the_seeds.enabled|dot.phantom_singularity.remains|dot.vile_taint.remains)
 actions.spenders+=/call_action_list,name=fillers,if=(cooldown.summon_darkglare.remains<time_to_shard*(5-soul_shard)|cooldown.summon_darkglare.up)&time_to_die>cooldown.summon_darkglare.remains
 actions.spenders+=/seed_of_corruption,if=variable.use_seed
-actions.spenders+=/unstable_affliction,if=!variable.use_seed&!prev_gcd.1.summon_darkglare&(talent.deathbolt.enabled&cooldown.deathbolt.remains<=execute_time&!azerite.cascading_calamity.enabled|(soul_shard>=5&spell_targets.seed_of_corruption_aoe<2|soul_shard>=2&spell_targets.seed_of_corruption_aoe>=2)&target.time_to_die>4+execute_time&spell_targets.seed_of_corruption_aoe=1|target.time_to_die<=8+execute_time*soul_shard)
-actions.spenders+=/unstable_affliction,if=!variable.use_seed&contagion<=cast_time+variable.padding
-actions.spenders+=/unstable_affliction,cycle_targets=1,if=!variable.use_seed&(!talent.deathbolt.enabled|cooldown.deathbolt.remains>time_to_shard|soul_shard>1)&(!talent.vile_taint.enabled|soul_shard>1)&contagion<=cast_time+variable.padding&(!azerite.cascading_calamity.enabled|buff.cascading_calamity.remains>time_to_shard)
 ]]
-	if UnstableAffliction:Usable() and Player.ua_stack < 5 and SummonDarkglare:Cooldown() <= (Player.soul_shards * (Player.ua_ct + DreadfulCalling:AzeriteRank())) and (not Deathbolt.known or Deathbolt:Cooldown() <= (Player.soul_shards * Player.ua_ct)) and (SowTheSeeds.known or PhantomSingularity:Remains() or VileTaint:Remains()) then
-		return UnstableAffliction
-	end
-	if (SummonDarkglare:Ready(5 - Player.soul_shards) or Player.darkglare_remains > 0) and Target.timeToDie > SummonDarkglare:Cooldown() then
+	if Player.use_cds and (SummonDarkglare:Ready(5 - Player.soul_shards) or Player.darkglare_remains > 0) and Target.timeToDie > SummonDarkglare:Cooldown() then
 		local apl = self:fillers()
 		if apl then return apl end
 	end
-	if Player.use_seed then
-		if SeedOfCorruption:Usable() then
-			return SeedOfCorruption
+	if Player.use_seed and SeedOfCorruption:Usable() then
+		return SeedOfCorruption
+	end
+	if MaleficRapture:Usable() and (Player.soul_shards >= 5 or ShadowEmbrace:Stack() >= 3 or Player.enemies >= 3 or Target.timeToDie < (MaleficRapture:CastTime() * Player.soul_shards)) then
+		if Player.soul_shards >= 4 and Player.dot_count >= (3 + (SiphonLife.known and 1 or 0)) then
+			return MaleficRapture
 		end
-	elseif UnstableAffliction:Usable() then
-		if Player.ua_stack < 5 and not SummonDarkglare:Previous() and (Deathbolt.known and Deathbolt:Cooldown() <= Player.ua_ct and not CascadingCalamity.known or (Player.soul_shards >= 5 and Player.enemies < 2 or Player.soul_shards >= 2 and Player.enemies >= 2) and Target.timeToDie > (4 + Player.ua_ct) and Player.enemies  == 1 or Target.timeToDie <= (8 + Player.ua_ct * Player.soul_shards)) then
-			return UnstableAffliction
+		if Player.soul_shards >= 3 and Player.dot_count >= (3 + (SiphonLife.known and 1 or 0) + (VileTaint.known and 1 or 0)) then
+			return MaleficRapture
 		end
-		if Player.ua_remains <= (Player.ua_ct + Player.ua_padding) then
-			return UnstableAffliction
-		end
-		if (not Deathbolt.known or Player.soul_shards > 1) and (not VileTaint.known or Player.soul_shards > 1) and Player.ua_remains <= (Player.ua_ct + Player.ua_padding) and not CascadingCalamity.known then
-			return UnstableAffliction
-		end
-		if Player.soul_shards >= 4 and Agony:Ticking() >= 2 then
-			return UnstableAffliction
+		if Player.dot_count >= (3 + (SiphonLife.known and 1 or 0) + (VileTaint.known and 1 or 0) + (PhantomSingularity.known and 1 or 0)) then
+			return MaleficRapture
 		end
 	end
 end
@@ -2658,52 +2323,25 @@ actions.precombat+=/demonbolt
 		end
 	end
 --[[
-actions=potion,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)&(!talent.nether_portal.enabled|cooldown.nether_portal.remains>160)|target.time_to_die<30
-actions+=/use_item,name=azsharas_font_of_power,if=cooldown.summon_demonic_tyrant.remains<=20&!talent.nether_portal.enabled
-actions+=/use_items,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15
-actions+=/berserking,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15
-actions+=/blood_fury,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15
-actions+=/fireblood,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15
-actions+=/blood_of_the_enemy,if=pet.demonic_tyrant.active&pet.demonic_tyrant.remains<=15-gcd*3&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)
-actions+=/ripple_in_space,if=pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15
-actions+=/worldvein_resonance,if=buff.lifeblood.stack<3&(pet.demonic_tyrant.active&(!essence.vision_of_perfection.major|!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>=cooldown.summon_demonic_tyrant.duration-5)|target.time_to_die<=15)
-actions+=/use_item,name=pocketsized_computation_device,if=cooldown.summon_demonic_tyrant.remains>=20&cooldown.summon_demonic_tyrant.remains<=cooldown.summon_demonic_tyrant.duration-15|target.time_to_die<=30
-actions+=/use_item,name=rotcrusted_voodoo_doll,if=(cooldown.summon_demonic_tyrant.remains>=25|target.time_to_die<=30)
-actions+=/use_item,name=shiver_venom_relic,if=(cooldown.summon_demonic_tyrant.remains>=25|target.time_to_die<=30)
-actions+=/use_item,name=aquipotent_nautilus,if=(cooldown.summon_demonic_tyrant.remains>=25|target.time_to_die<=30)
-actions+=/use_item,name=tidestorm_codex,if=(cooldown.summon_demonic_tyrant.remains>=25|target.time_to_die<=30)
-actions+=/use_item,name=vial_of_storms,if=(cooldown.summon_demonic_tyrant.remains>=25|target.time_to_die<=30)
 actions+=/call_action_list,name=dcon_prep,if=talent.demonic_consumption.enabled&cooldown.summon_demonic_tyrant.remains<5
-actions+=/call_action_list,name=tyrant_active,if=pet.demonic_tyrant.active
-actions+=/hand_of_guldan,if=azerite.explosive_potential.rank&time<5&soul_shard>=3&buff.explosive_potential.down&buff.wild_imps.stack<3&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan
 actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&buff.demonic_core.stack=4
 actions+=/demonbolt,if=soul_shard<=4&buff.demonic_core.up&buff.demonic_core.remains<(gcd*buff.demonic_core.stack)
-actions+=/implosion,if=azerite.explosive_potential.rank&buff.wild_imps.stack>=3&buff.explosive_potential.remains<action.shadow_bolt.execute_time&(!talent.demonic_consumption.enabled|cooldown.summon_demonic_tyrant.remains>12)
 actions+=/doom,if=!ticking&time_to_die>30&spell_targets.implosion<2
-actions+=/bilescourge_bombers,if=azerite.explosive_potential.rank>0&time<10&spell_targets.implosion<2&buff.dreadstalkers.remains&talent.nether_portal.enabled
 actions+=/demonic_strength,if=(buff.wild_imps.stack<6|buff.demonic_power.up)|spell_targets.implosion<2
 actions+=/call_action_list,name=nether_portal,if=talent.nether_portal.enabled&spell_targets.implosion<=2
 actions+=/call_action_list,name=implosion,if=spell_targets.implosion>1
-actions+=/guardian_of_azeroth,if=cooldown.summon_demonic_tyrant.remains<=15|target.time_to_die<=30
 actions+=/grimoire_felguard,if=(target.time_to_die>120|target.time_to_die<cooldown.summon_demonic_tyrant.remains+15|cooldown.summon_demonic_tyrant.remains<13)
 actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
 actions+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
-actions+=/the_unbound_force,if=buff.reckless_force.react
 actions+=/bilescourge_bombers
-actions+=/hand_of_guldan,if=(azerite.baleful_invocation.enabled|talent.demonic_consumption.enabled)&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
+actions+=/hand_of_guldan,if=talent.demonic_consumption.enabled&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
 actions+=/summon_demonic_tyrant,if=soul_shard<3|target.time_to_die<20
 actions+=/power_siphon,if=buff.wild_imps.stack>=2&buff.demonic_core.stack<=2&buff.demonic_power.down&spell_targets.implosion<2
 actions+=/doom,if=talent.doom.enabled&refreshable&time_to_die>(dot.doom.remains+30)
 actions+=/hand_of_guldan,if=soul_shard>=5
-actions+=/hand_of_guldan,if=(soul_shard>=4|soul_shard>=3&talent.soul_conduit.enabled)&buff.memory_of_lucid_dreams.remains>cast_time
 actions+=/hand_of_guldan,if=soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
 actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
-actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22&!azerite.shadows_bite.enabled)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
-actions+=/focused_azerite_beam,if=!pet.demonic_tyrant.active&(!azerite.explosive_potential.enabled|buff.explosive_potential.remains>4.5*spell_haste)
-actions+=/purifying_blast
-actions+=/blood_of_the_enemy
-actions+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight&!pet.demonic_tyrant.active
-actions+=/reaping_flames,if=!pet.demonic_tyrant.active
+actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
 actions+=/call_action_list,name=build_a_shard
 ]]
 	if Target.boss and Target.timeToDie < 30 then
@@ -2717,14 +2355,8 @@ actions+=/call_action_list,name=build_a_shard
 				UseCooldown(Trinket2)
 			end
 		end
-		if WorldveinResonance:Usable() and Lifeblood:Stack() < 3 then
-			UseCooldown(WorldveinResonance)
-		end
-		if RippleInSpace:Usable() then
-			UseCooldown(RippleInSpace)
-		end
 	end
-	if Player.tyrant_remains > 0 and (not VisionOfPerfection.known or not DemonicConsumption.known or SummonDemonicTyrant:Cooldown() >= 85) then
+	if Player.tyrant_remains > 0 then
 		if Opt.pot and Target.boss and not Player:InArenaOrBattleground() and PotionOfUnbridledFury:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
 			UseCooldown(PotionOfUnbridledFury)
 		end
@@ -2735,27 +2367,12 @@ actions+=/call_action_list,name=build_a_shard
 				UseCooldown(Trinket2)
 			end
 		end
-		if WorldveinResonance:Usable() and Lifeblood:Stack() < 3 then
-			UseCooldown(WorldveinResonance)
-		end
-		if RippleInSpace:Usable() then
-			UseCooldown(RippleInSpace)
-		end
-	end
-	if Opt.trinket and Trinket.ShiverVenomRelic:Usable() then
-		if ShiverVenom:Stack() == 5 or (ShiverVenom:Stack() >= 3 and (Target.timeToDie < 2 or ShiverVenom:Remains() < 2)) then
-			UseCooldown(Trinket.ShiverVenomRelic)
-		end
 	end
 	if DemonicConsumption.known and SummonDemonicTyrant:Ready(5) then
 		local apl = self:dcon_prep()
 		if apl then return apl end
 	end
-	if Player.tyrant_remains > 0 then
-		local apl = self:tyrant_active()
-		if apl then return apl end
-	end
-	if ExplosivePotential.known and HandOfGuldan:Usable() and Player:TimeInCombat() < 5 and Player.soul_shards >= 3 and ExplosivePotential:Down() and Player.imp_count < 3 and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
+	if ImplosivePotential.known and HandOfGuldan:Usable() and Player:TimeInCombat() < 5 and Player.soul_shards >= 3 and ImplosivePotential:Down() and Player.imp_count < 3 and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
 		return HandOfGuldan
 	end
 	if Demonbolt:Usable() and Player.soul_shards <= 3 and DemonicCore:Stack() == 4 then
@@ -2764,13 +2381,13 @@ actions+=/call_action_list,name=build_a_shard
 	if Demonbolt:Usable() and Player.soul_shards <= 4 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
 		return Demonbolt
 	end
-	if ExplosivePotential.known and Implosion:Usable() and Player.imp_count >= 3 and ExplosivePotential:Remains() < ShadowBoltDemo:CastTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:Ready(12)) then
+	if ImplosivePotential.known and Implosion:Usable() and Player.imp_count >= 3 and ImplosivePotential:Remains() < ShadowBoltDemo:CastTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:Ready(12)) then
 		return Implosion
 	end
 	if Doom:Usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:Down() then
 		return Doom
 	end
-	if BilescourgeBombers:Usable() and ExplosivePotential.known and NetherPortal.known and Player:TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:Up() then
+	if BilescourgeBombers:Usable() and ImplosivePotential.known and NetherPortal.known and Player:TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:Up() then
 		UseCooldown(BilescourgeBombers)
 	end
 	if DemonicStrength:Usable() and (Player.enemies == 1 or DemonicPower:Up() or Player.imp_count < 6) then
@@ -2793,9 +2410,6 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 		local apl = self:implosion()
 		if apl then return apl end
 	end
-	if GuardianOfAzeroth:Usable() and (SummonDemonicTyrant:Ready(15) or Target.timeToDie <= 30) then
-		UseCooldown(GuardianOfAzeroth)
-	end
 	if GrimoireFelguard:Usable() and (Target.timeToDie > 120 or Target.timeToDie < (SummonDemonicTyrant:Cooldown() + 15) or SummonDemonicTyrant:Ready(13)) then
 		UseCooldown(GrimoireFelguard)
 	end
@@ -2805,19 +2419,8 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
 		return CallDreadstalkers
 	end
-	if TheUnboundForce:Usable() and RecklessForce:Up() then
-		UseCooldown(TheUnboundForce)
-	end
 	if BilescourgeBombers:Usable() then
 		UseCooldown(BilescourgeBombers)
-	end
-	if Player.tyrant_remains == 0 and Player.enemies >= 4 then
-		if FocusedAzeriteBeam:Usable() and not Player.moving then
-			UseCooldown(FocusedAzeriteBeam)
-		end
-		if PurifyingBlast:Usable() then
-			UseCooldown(PurifyingBlast)
-		end
 	end
 	if HandOfGuldan:Usable() and (BalefulInvocation.known or DemonicConsumption.known) and HandOfGuldan:Previous(1) and SummonDemonicTyrant:Ready(2) then
 		return HandOfGuldan
@@ -2838,9 +2441,6 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 		if Player.soul_shards >= 5 then
 			return HandOfGuldan
 		end
-		if MemoryOfLucidDreams.known and (Player.soul_shards >= 4 or SoulConduit.known) and MemoryOfLucidDreams:Remains() > HandOfGuldan:CastTime() then
-			return HandOfGuldan
-		end
 		if DemonicCore:Stack() >= 3 or (not CallDreadstalkers:Ready(4) and (not SummonDemonicTyrant:Ready(20) or SummonDemonicTyrant:Ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:Ready(3))) then
 			return HandOfGuldan
 		end
@@ -2851,39 +2451,18 @@ actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.n
 	if Demonbolt:Usable() and Player.soul_shards <= 3 and DemonicCore:Up() and ((SummonDemonicTyrant:Ready(6) or (not ShadowsBite.known and not SummonDemonicTyrant:Ready(22))) or DemonicCore:Stack() >= 3 or DemonicCore:Remains() < 5 or Target.timeToDie < 25 or (ShadowsBite.known and ShadowsBite:Up())) then
 		return Demonbolt
 	end
-	if FocusedAzeriteBeam:Usable() and Player.tyrant_remains == 0 and (not ExplosivePotential.known or ExplosivePotential:Remains() > (4.5 * Player.haste_factor)) then
-		UseCooldown(FocusedAzeriteBeam)
-	end
-	if PurifyingBlast:Usable() then
-		UseCooldown(PurifyingBlast)
-	end
-	if BloodOfTheEnemy:Usable() then
-		UseCooldown(BloodOfTheEnemy)
-	end
-	if Player.tyrant_remains == 0 then
-		if ReapingFlames:Usable() then
-			return UseCooldown(ReapingFlames)
-		end
-		if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() then
-			return ConcentratedFlame
-		end
-	end
 	return self:build_a_shard()
 end
 
 APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
 --[[
-actions.build_a_shard=memory_of_lucid_dreams,if=soul_shard<2&!talent.demonic_consumption.enabled
-actions.build_a_shard+=/soul_strike,if=soul_shard=4|soul_shard=3&buff.memory_of_lucid_dreams.up
+actions.build_a_shard=/soul_strike,if=soul_shard=4
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard)+action.hand_of_guldan.execute_time)
 actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&soul_shard<=3&pet.demonic_tyrant.active
 actions.build_a_shard+=/soul_strike
 actions.build_a_shard+=/shadow_bolt
 ]]
-	if not DemonicConsumption.known and Player.soul_shards < 2 and MemoryOfLucidDreams:Usable() then
-		UseCooldown(MemoryOfLucidDreams)
-	end
-	if SoulStrike:Usable() and (Player.soul_shards == 4 or (Player.soul_shards == 4 and MemoryOfLucidDreams.known and MemoryOfLucidDreams:Up())) then
+	if SoulStrike:Usable() and Player.soul_shards == 4 then
 		return SoulStrike
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() then
@@ -2902,21 +2481,6 @@ actions.build_a_shard+=/shadow_bolt
 	end
 end
 
-APL[SPEC.DEMONOLOGY].tyrant_active = function(self)
---[[
-actions.tyrant_active=implosion,if=azerite.explosive_potential.enabled&buff.wild_imps.stack>=3&buff.explosive_potential.remains<pet.demonic_tyrant.remains
-actions.tyrant_active+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.wild_imps.stack<3&soul_shard>=3&buff.explosive_potential.remains<execute_time&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan
-]]
-	if ExplosivePotential.known then
-		if Implosion:Usable() and Player.imp_count >= 3 and ExplosivePotential:Remains() < Player.tyrant_remains then
-			return Implosion
-		end
-		if HandOfGuldan:Usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:Remains() < HandOfGuldan:CastTime() and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
-			return HandOfGuldan
-		end
-	end
-end
-
 APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
 --[[
 actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
@@ -2925,17 +2489,13 @@ actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.h
 actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time*2
 actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
 actions.dcon_prep+=/call_dreadstalkers,if=buff.demonic_core.remains<6
-actions.dcon_prep+=/implosion,if=azerite.explosive_potential.enabled&buff.explosive_potential.remains<6&buff.wild_imps.stack>=3&soul_shard>=3
-actions.dcon_prep+=/hand_of_guldan,if=azerite.explosive_potential.enabled&buff.explosive_potential.down&soul_shard>=3&buff.wild_imps.stack<3&!(prev_gcd.1.hand_of_guldan|prev_gcd.2.hand_of_guldan)
 actions.dcon_prep+=/bilescourge_bombers
 actions.dcon_prep+=/call_dreadstalkers
 actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
 actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
-actions.dcon_prep+=/memory_of_lucid_dreams
 actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
 actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.stack>=2
 actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
-actions.dcon_prep+=/guardian_of_azeroth
 actions.dcon_prep+=/call_action_list,name=build_a_shard
 ]]
 	local tyrant_cd, hog_ct = SummonDemonicTyrant:Cooldown(), HandOfGuldan:CastTime()
@@ -2970,11 +2530,11 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if CallDreadstalkers:Usable() and DemonicCore:Remains() < 6 then
 		return CallDreadstalkers
 	end
-	if ExplosivePotential.known and ExplosivePotential:Remains() < 6 then
+	if ImplosivePotential.known and ImplosivePotential:Remains() < 6 then
 		if Implosion:Usable() and Player.imp_count >= 3 and (Player.soul_shards >= 3 or Player:ImpsIn(ShadowBoltDemo:CastTime()) < 3) then
 			return Implosion
 		end
-		if HandOfGuldan:Usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ExplosivePotential:Down() and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
+		if HandOfGuldan:Usable() and Player.imp_count < 3 and Player.soul_shards >= 3 and ImplosivePotential:Down() and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
 			return HandOfGuldan
 		end
 	end
@@ -2989,8 +2549,6 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 			UseCooldown(SummonVilefiend)
 		elseif GrimoireFelguard:Usable() then
 			UseCooldown(GrimoireFelguard)
-		elseif MemoryOfLucidDreams:Usable() then
-			UseCooldown(MemoryOfLucidDreams)
 		end
 		if HandOfGuldan:Usable() then
 			return HandOfGuldan
@@ -3002,35 +2560,27 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 	if Doom:Usable() and Doom:Refreshable() and Target.timeToDie > Doom:Remains() + 30 then
 		return Doom
 	end
-	if GuardianOfAzeroth:Usable() then
-		UseCooldown(GuardianOfAzeroth)
-	end
 	return self:build_a_shard()
 end
 
 APL[SPEC.DEMONOLOGY].implosion = function(self)
 --[[
-actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0&(!azerite.explosive_potential.rank|buff.wild_imps.stack>3))|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
+actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0)|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
 actions.implosion+=/bilescourge_bombers,if=talent.demonic_consumption.enabled
 actions.implosion+=/grimoire_felguard,if=cooldown.summon_demonic_tyrant.remains<13|!equipped.132369
 actions.implosion+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
 actions.implosion+=/summon_demonic_tyrant
 actions.implosion+=/hand_of_guldan,if=soul_shard>=5
-actions.implosion+=/hand_of_guldan,if=(soul_shard>=4|soul_shard>=3&talent.soul_conduit.enabled)&buff.memory_of_lucid_dreams.remains>cast_time
 actions.implosion+=/hand_of_guldan,if=soul_shard>=3&(((prev_gcd.2.hand_of_guldan|buff.wild_imps.stack>=3)&buff.wild_imps.stack<9)|cooldown.summon_demonic_tyrant.remains<=gcd*2|buff.demonic_power.remains>gcd*2)
 actions.implosion+=/demonbolt,if=prev_gcd.1.hand_of_guldan&soul_shard>=1&(buff.wild_imps.stack<=3|prev_gcd.3.hand_of_guldan)&soul_shard<4&buff.demonic_core.up
 actions.implosion+=/summon_vilefiend,if=(cooldown.summon_demonic_tyrant.remains>40&spell_targets.implosion<=2)|cooldown.summon_demonic_tyrant.remains<12
 actions.implosion+=/bilescourge_bombers,if=cooldown.summon_demonic_tyrant.remains>9
-actions.implosion+=/focused_azerite_beam
-actions.implosion+=/purifying_blast
-actions.implosion+=/blood_of_the_enemy
-actions.implosion+=/concentrated_flame,if=!dot.concentrated_flame_burn.remains&!action.concentrated_flame.in_flight&spell_targets.implosion<5
 actions.implosion+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
 actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demonic_core.stack>=3|buff.demonic_core.remains<=gcd*5.7|spell_targets.implosion>=4&cooldown.summon_demonic_tyrant.remains>22)
 actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
 actions.implosion+=/call_action_list,name=build_a_shard
 ]]
-	if Implosion:Usable() and ((Target.timeToDie < 3 and (not ExplosivePotential.known or Player.imp_count >= 3)) or (Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:Previous(1) or Player.imp_count >= 9 or BilescourgeBombers:Previous(1) or not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2))) and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2) or DemonicPower:Up())) or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:Previous(2))) then
+	if Implosion:Usable() and ((Target.timeToDie < 3 and (not ImplosivePotential.known or Player.imp_count >= 3)) or (Player.imp_count >= 6 and (Player.soul_shards < 3 or CallDreadstalkers:Previous(1) or Player.imp_count >= 9 or BilescourgeBombers:Previous(1) or not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2))) and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2) or DemonicPower:Up())) or (not DemonicCalling.known and Player.imp_count > 2 and CallDreadstalkers:Previous(2))) then
 		return Implosion
 	end
 	if DemonicConsumption.known and BilescourgeBombers:Usable() then
@@ -3049,9 +2599,6 @@ actions.implosion+=/call_action_list,name=build_a_shard
 		if Player.soul_shards >= 5 then
 			return HandOfGuldan
 		end
-		if MemoryOfLucidDreams.known and (Player.soul_shards >= 4 or SoulConduit.known) and MemoryOfLucidDreams:Remains() > HandOfGuldan:CastTime() then
-			return HandOfGuldan
-		end
 		if ((HandOfGuldan:Previous(2) or Player.imp_count >= 3) and Player.imp_count < 9) or SummonDemonicTyrant:Ready(Player.gcd * 2) or DemonicPower:Remains() > (Player.gcd * 2) then
 			return HandOfGuldan
 		end
@@ -3064,18 +2611,6 @@ actions.implosion+=/call_action_list,name=build_a_shard
 	end
 	if BilescourgeBombers:Usable() and not SummonDemonicTyrant:Ready(9) then
 		UseCooldown(BilescourgeBombers)
-	end
-	if FocusedAzeriteBeam:Usable() and (not ExplosivePotential.known or ExplosivePotential:Remains() > (4.5 * Player.haste_factor)) then
-		UseCooldown(FocusedAzeriteBeam)
-	end
-	if PurifyingBlast:Usable() then
-		UseCooldown(PurifyingBlast)
-	end
-	if BloodOfTheEnemy:Usable() then
-		UseCooldown(BloodOfTheEnemy)
-	end
-	if ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and Player.enemies < 5 then
-		return ConcentratedFlame
 	end
 	if SoulStrike:Usable() and Player.soul_shards < 5 and DemonicCore:Stack() <= 2 then
 		return SoulStrike
@@ -3133,7 +2668,6 @@ end
 APL[SPEC.DEMONOLOGY].nether_portal_building = function(self)
 --[[
 actions.nether_portal_building=use_item,name=azsharas_font_of_power,if=cooldown.nether_portal.remains<=5*spell_haste
-actions.nether_portal_building+=/guardian_of_azeroth,if=!cooldown.nether_portal.remains&soul_shard>=5
 actions.nether_portal_building+=/nether_portal,if=soul_shard>=5
 actions.nether_portal_building+=/call_dreadstalkers,if=time>=30
 actions.nether_portal_building+=/hand_of_guldan,if=time>=30&cooldown.call_dreadstalkers.remains>18&soul_shard>=3
@@ -3141,9 +2675,6 @@ actions.nether_portal_building+=/power_siphon,if=time>=30&buff.wild_imps.stack>=
 actions.nether_portal_building+=/hand_of_guldan,if=time>=30&soul_shard>=5
 actions.nether_portal_building+=/call_action_list,name=build_a_shard
 ]]
-	if GuardianOfAzeroth:Usable() and NetherPortal:Ready() and Player.soul_shards >= 5 then
-		UseCooldown(GuardianOfAzeroth)
-	end
 	if NetherPortal:Usable() and Player.soul_shards >= 5 then
 		UseCooldown(NetherPortal)
 	end
@@ -3247,7 +2778,7 @@ actions+=/shadowburn,if=soul_shard<2&(!variable.pool_soul_shards|charges>1)
 # It's worth stocking up on Soul Shards before a major cooldown usage
 actions+=/variable,name=pool_soul_shards,value=active_enemies>1&cooldown.havoc.remains<=10|cooldown.summon_infernal.remains<=20&(talent.grimoire_of_supremacy.enabled|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20)|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20&(cooldown.summon_infernal.remains>target.time_to_die|cooldown.summon_infernal.remains+cooldown.summon_infernal.duration>target.time_to_die)
 # Chaos Bolt has several possible use conditions. Crashing Chaos, Grimoire of Supremacy, and Dark Soul: Instability all favor casting as many CBs as possible when any of them are active
-actions+=/chaos_bolt,if=(talent.grimoire_of_supremacy.enabled|azerite.crashing_chaos.enabled)&pet.infernal.active|buff.dark_soul_instability.up
+actions+=/chaos_bolt,if=talent.grimoire_of_supremacy.enabled&pet.infernal.active|buff.dark_soul_instability.up
 # If Soul Shards are not being pooled and Eradication is not talented, just spend CBs as they become available
 actions+=/chaos_bolt,if=!variable.pool_soul_shards&!talent.eradication.enabled
 # With Eradication, it's beneficial to maximize the uptime on the debuff. However, it's still better to use Chaos Bolt immediately if Backdraft is up
@@ -3532,15 +3063,15 @@ UI.anchor_points = {
 	['kui'] = {
 		[SPEC.AFFLICTION] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		},
 		[SPEC.DEMONOLOGY] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		},
 		[SPEC.DESTRUCTION] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 6 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		}
 	},
 }
@@ -3607,7 +3138,7 @@ function UI:UpdateDisplay()
 	end
 	if Player.spec == SPEC.AFFLICTION then
 		if Opt.pet_count then
-			text_tl = Player.ua_stack > 0 and Player.ua_stack
+			text_tl = Player.dot_count > 0 and Player.dot_count
 		end
 		if Opt.tyrant then
 			local _, unit, remains
@@ -3662,7 +3193,7 @@ end
 
 function UI:UpdateCombat()
 	timer.combat = 0
-	local _, start, duration, remains, spellId
+	local _, start, duration, remains, spellId, speed, max_speed
 	Player.ctime = GetTime()
 	Player.time = Player.ctime - Player.time_diff
 	Player.main =  nil
@@ -3687,7 +3218,9 @@ function UI:UpdateCombat()
 	end
 	Player.mana = min(max(Player.mana, 0), Player.mana_max)
 	Player.soul_shards = min(max(Player.soul_shards, 0), Player.soul_shards_max)
-	Player.moving = GetUnitSpeed('player') ~= 0
+	speed, max_speed = GetUnitSpeed('player')
+	Player.moving = speed ~= 0
+	Player.movement_speed = max_speed / 7 * 100
 	Player:UpdatePet()
 
 	summonedPets:Purge()
@@ -3761,17 +3294,16 @@ end
 -- Start Event Handling
 
 function events:ADDON_LOADED(name)
-	if name == 'Doomed' then
+	if name == ADDON then
 		Opt = Doomed
 		if not Opt.frequency then
-			print('It looks like this is your first time running ' .. name .. ', why don\'t you take some time to familiarize yourself with the commands?')
+			print('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
 			print('Type |cFFFFD000' .. SLASH_Doomed1 .. '|r for a list of commands.')
 		end
 		if UnitLevel('player') < 10 then
-			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
+			print('[|cFFFFD000Warning|r] ' .. ADDON .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 		InitOpts()
-		Azerite:Init()
 		UI:UpdateDraggable()
 		UI:UpdateAlpha()
 		UI:UpdateScale()
@@ -3791,12 +3323,6 @@ end
 
 APL[SPEC.AFFLICTION].combat_event = function(self, eventType, srcGUID, dstGUID, spellId, ability)
 	if srcGUID ~= Player.guid then
-		return
-	end
-	if eventType == 'SPELL_CAST_SUCCESS' then
-		if ability == Agony then
-			ability:RefreshAura(dstGUID)
-		end
 		return
 	end
 end
@@ -3898,11 +3424,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 
 	if not ability then
---[[
-		if spellId and type(spellName) == 'string' then
-			print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
-		end
-]]
+		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 		return
 	end
 
@@ -3910,7 +3432,6 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	   eventType == 'SPELL_CAST_START' or
 	   eventType == 'SPELL_CAST_SUCCESS' or
 	   eventType == 'SPELL_CAST_FAILED' or
-	   eventType == 'SPELL_AURA_REMOVED' or
 	   eventType == 'SPELL_DAMAGE' or
 	   eventType == 'SPELL_ABSORBED' or
 	   eventType == 'SPELL_PERIODIC_DAMAGE' or
@@ -3939,7 +3460,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			end
 			if Opt.previous and doomedPanel:IsVisible() then
 				doomedPreviousPanel.ability = ability
-				doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\border.blp')
+				doomedPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 				doomedPreviousPanel.icon:SetTexture(ability.icon)
 				doomedPreviousPanel:Show()
 			end
@@ -3983,7 +3504,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			ability.range_est_start = nil
 		end
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and doomedPanel:IsVisible() and ability == doomedPreviousPanel.ability then
-			doomedPreviousPanel.border:SetTexture('Interface\\AddOns\\Doomed\\misseffect.blp')
+			doomedPreviousPanel.border:SetTexture(ADDON_PATH .. 'misseffect.blp')
 		end
 	end
 end
@@ -4063,7 +3584,6 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 			inventoryItems[i].can_use = false
 		end
 	end
-	Azerite:Update()
 	Player:UpdateAbilities()
 end
 
@@ -4119,8 +3639,15 @@ function events:PLAYER_PVP_TALENT_UPDATE()
 	Player:UpdateAbilities()
 end
 
-function events:AZERITE_ESSENCE_UPDATE()
-	Azerite:Update()
+function events:SOULBIND_ACTIVATED()
+	Player:UpdateAbilities()
+end
+
+function events:SOULBIND_NODE_UPDATED()
+	Player:UpdateAbilities()
+end
+
+function events:SOULBIND_PATH_CHANGED()
 	Player:UpdateAbilities()
 end
 
@@ -4199,10 +3726,10 @@ local function Status(desc, opt, ...)
 	else
 		opt_view = opt and '|cFF00C000On|r' or '|cFFC00000Off|r'
 	end
-	print('Doomed -', desc .. ':', opt_view, ...)
+	print(ADDON, '-', desc .. ':', opt_view, ...)
 end
 
-function SlashCmdList.Doomed(msg, editbox)
+SlashCmdList[ADDON] = function(msg, editbox)
 	msg = { strsplit(' ', msg:lower()) }
 	if startsWith(msg[1], 'lock') then
 		if msg[2] then
@@ -4342,13 +3869,13 @@ function SlashCmdList.Doomed(msg, editbox)
 			Opt.always_on = msg[2] == 'on'
 			Target:Update()
 		end
-		return Status('Show the Doomed UI without a target', Opt.always_on)
+		return Status('Show the ' .. ADDON .. ' UI without a target', Opt.always_on)
 	end
 	if msg[1] == 'cd' then
 		if msg[2] then
 			Opt.cooldown = msg[2] == 'on'
 		end
-		return Status('Use Doomed for cooldown management', Opt.cooldown)
+		return Status('Use ' .. ADDON .. ' for cooldown management', Opt.cooldown)
 	end
 	if msg[1] == 'swipe' then
 		if msg[2] then
@@ -4420,6 +3947,12 @@ function SlashCmdList.Doomed(msg, editbox)
 		end
 		return Status('Length of time target exists in auto AoE after being hit', Opt.auto_aoe_ttl, 'seconds')
 	end
+	if msg[1] == 'ttd' then
+		if msg[2] then
+			Opt.cd_ttd = tonumber(msg[2]) or 10
+		end
+		return Status('Minimum enemy lifetime to use cooldowns on (ignored on bosses)', Opt.cd_ttd, 'seconds')
+	end
 	if startsWith(msg[1], 'pot') then
 		if msg[2] then
 			Opt.pot = msg[2] == 'on'
@@ -4460,34 +3993,35 @@ function SlashCmdList.Doomed(msg, editbox)
 		UI:SnapAllPanels()
 		return Status('Position has been reset to', 'default')
 	end
-	print('Doomed (version: |cFFFFD000' .. GetAddOnMetadata('Doomed', 'Version') .. '|r) - Commands:')
+	print(ADDON, '(version: |cFFFFD000' .. GetAddOnMetadata(ADDON, 'Version') .. '|r) - Commands:')
 	local _, cmd
 	for _, cmd in next, {
-		'locked |cFF00C000on|r/|cFFC00000off|r - lock the Doomed UI so that it can\'t be moved',
-		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the Doomed UI to the Personal Resource Display',
-		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000glow|r - adjust the scale of the Doomed UI icons',
-		'alpha |cFFFFD000[percent]|r - adjust the transparency of the Doomed UI icons',
+		'locked |cFF00C000on|r/|cFFC00000off|r - lock the ' .. ADDON .. ' UI so that it can\'t be moved',
+		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the ' .. ADDON .. ' UI to the Personal Resource Display',
+		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000glow|r - adjust the scale of the ' .. ADDON .. ' UI icons',
+		'alpha |cFFFFD000[percent]|r - adjust the transparency of the ' .. ADDON .. ' UI icons',
 		'frequency |cFFFFD000[number]|r - set the calculation frequency (default is every 0.2 seconds)',
 		'glow |cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000blizzard|r |cFF00C000on|r/|cFFC00000off|r - glowing ability buttons on action bars',
 		'glow color |cFFF000000.0-1.0|r |cFF00FF000.1-1.0|r |cFF0000FF0.0-1.0|r - adjust the color of the ability button glow',
 		'previous |cFF00C000on|r/|cFFC00000off|r - previous ability icon',
-		'always |cFF00C000on|r/|cFFC00000off|r - show the Doomed UI without a target',
-		'cd |cFF00C000on|r/|cFFC00000off|r - use Doomed for cooldown management',
+		'always |cFF00C000on|r/|cFFC00000off|r - show the ' .. ADDON .. ' UI without a target',
+		'cd |cFF00C000on|r/|cFFC00000off|r - use ' .. ADDON .. ' for cooldown management',
 		'swipe |cFF00C000on|r/|cFFC00000off|r - show spell casting swipe animation on main ability icon',
 		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough resources to use it',
 		'miss |cFF00C000on|r/|cFFC00000off|r - red border around previous ability when it fails to hit',
 		'aoe |cFF00C000on|r/|cFFC00000off|r - allow clicking main ability icon to toggle amount of targets (disables moving)',
 		'bossonly |cFF00C000on|r/|cFFC00000off|r - only use cooldowns on bosses',
-		'hidespec |cFFFFD000aff|r/|cFFFFD000demo|r/|cFFFFD000dest|r - toggle disabling Doomed for specializations',
+		'hidespec |cFFFFD000aff|r/|cFFFFD000demo|r/|cFFFFD000dest|r - toggle disabling ' .. ADDON .. ' for specializations',
 		'interrupt |cFF00C000on|r/|cFFC00000off|r - show an icon for interruptable spells',
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
+		'ttd |cFFFFD000[seconds]|r  - minimum enemy lifetime to use cooldowns on (default is 8 seconds, ignored on bosses)',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'trinket |cFF00C000on|r/|cFFC00000off|r - show on-use trinkets in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show Demonology summoned pet counter (topleft)',
 		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Demonology Demonic Tyrant power/remains (topright)',
-		'|cFFFFD000reset|r - reset the location of the Doomed UI to default',
+		'|cFFFFD000reset|r - reset the location of the ' .. ADDON .. ' UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
 	end
