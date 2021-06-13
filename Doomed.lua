@@ -400,7 +400,7 @@ local abilities = {
 	all = {}
 }
 
-function Ability:Add(spellId, buff, player, spellId2)
+function Ability:Add(spellId, buff, player)
 	local ability = {
 		spellIds = type(spellId) == 'table' and spellId or { spellId },
 		spellId = 0,
@@ -926,11 +926,12 @@ local ShadowBolt = Ability:Add({686, 695, 705, 1088, 1106, 7641, 11659, 11660, 1
 ShadowBolt.mana_costs = {25, 40, 70, 110, 160, 210, 265, 315, 370, 380, 420}
 ShadowBolt.triggers_combat = true
 ------ Talents
-local Shadowburn = Ability:Add({17877, 18867, 18868, 18869, 18870, 18871, 27263, 30546}, false, true, 29341)
-Shadowburn.buff_duration = 5
+local Shadowburn = Ability:Add({17877, 18867, 18868, 18869, 18870, 18871, 27263, 30546}, false, true)
 Shadowburn.cooldown_duration = 15
 Shadowburn.requires_shard = true
 Shadowburn.mana_costs = {105, 130, 190, 245, 305, 365, 435, 515}
+Shadowburn.debuff = Ability:Add({29341}, false, true)
+Shadowburn.debuff.buff_duration = 5
 ------ Procs
 
 -- Pet Abilities
@@ -1085,6 +1086,7 @@ function Player:UpdateAbilities()
 	
 	-- Mark specific spells as known if they can be triggered by others
 	ShadowTrance.known = Nightfall.known
+	Shadowburn.debuff.known = Shadowburn.known
 	SpellLock.known = SummonFelhunter.known
 
 	abilities.bySpellId = {}
@@ -1094,9 +1096,6 @@ function Player:UpdateAbilities()
 	for _, ability in next, abilities.all do
 		if ability.known then
 			abilities.bySpellId[ability.spellId] = ability
-			if ability.spellId2 then
-				abilities.bySpellId[ability.spellId2] = ability
-			end
 			if ability.velocity > 0 then
 				abilities.velocity[#abilities.velocity + 1] = ability
 			end
@@ -1319,7 +1318,7 @@ APL.Main = function(self)
 			return UnstableAffliction
 		end
 	end
-	if DrainSoul:Usable() and Target.timeToDie < 3 and Shadowburn:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
+	if DrainSoul:Usable() and Target.timeToDie < 3 and Shadowburn.debuff:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
 		UseCooldown(DrainSoul)
 	end
 	if Shadowburn:Usable() and Target.timeToDie < 4 then
