@@ -409,6 +409,7 @@ function Ability:Add(spellId, buff, player, spellId2)
 		requires_charge = false,
 		requires_shard = false,
 		requires_pet = false,
+		triggers_combat = false,
 		triggers_gcd = true,
 		hasted_duration = false,
 		hasted_cooldown = false,
@@ -799,6 +800,8 @@ end
 -- End DoT Tracking
 
 -- Warlock Abilities
+---- General
+local Shoot = Ability:Add({5019}, false, true)
 ---- Affliction
 local Corruption = Ability:Add({172, 6222, 6223, 7648, 11671, 11672, 25311, 27216}, false, true)
 Corruption.buff_duration = 18
@@ -844,6 +847,7 @@ DrainSoul.mana_costs = {55, 125, 210, 290, 360}
 local Fear = Ability:Add({5782, 6213, 6215}, false, false)
 Fear.buff_duration = 20
 Fear.mana_cost_pct = 12
+Fear.triggers_combat = true
 local LifeTap = Ability:Add({1454, 1455, 1456, 11687, 11688, 11689, 27222}, false, true)
 LifeTap.health_costs = {30, 75, 140, 220, 310, 430, 582}
 ------ Talents
@@ -859,6 +863,7 @@ local UnstableAffliction = Ability:Add({30108, 30404, 30405}, false, true)
 UnstableAffliction.buff_duration = 18
 UnstableAffliction.tick_interval = 3
 UnstableAffliction.mana_costs = {270, 330, 400}
+UnstableAffliction.triggers_combat = true
 ------ Procs
 local ShadowTrance = Ability:Add({17941}, true, true) -- proc from Nightfall talent
 ShadowTrance.buff_duration = 10
@@ -866,6 +871,7 @@ ShadowTrance.buff_duration = 10
 local Banish = Ability:Add({710, 18647}, false, false)
 Banish.buff_duration = 20
 Banish.mana_costs = {100, 200}
+Banish.triggers_combat = true
 local CreateFirestone = Ability:Add({1254, 13699, 13700, 13701, 22128}, false, true)
 CreateFirestone.requires_shard = true
 CreateFirestone.mana_costs = {500, 700, 900, 1100, 1330}
@@ -880,13 +886,16 @@ CreateSpellstone.requires_shard = true
 CreateSpellstone.mana_costs = {500, 750, 1000, 1150}
 local DemonArmor = Ability:Add({687, 696, 706, 1086, 11733, 11734, 11735, 27260}, true, true)
 DemonArmor.buff_duration = 1800
-DemonArmor.mana_costs = {110, 208, 320, 460, 632, 820}
+DemonArmor.mana_costs = {20, 48, 110, 208, 320, 460, 632, 820}
 local DetectInvisibility = Ability:Add({132}, true, false)
 DetectInvisibility.buff_duration = 600
 DetectInvisibility.mana_cost_pct = 8
 local EyeOfKilrogg = Ability:Add({126}, true, true)
 EyeOfKilrogg.buff_duration = 45
 EyeOfKilrogg.mana_cost = 100
+local FelArmor = Ability:Add({28176, 28189}, true, true)
+FelArmor.buff_duration = 1800
+FelArmor.mana_costs = {637, 725}
 local HealthFunnel = Ability:Add({755, 3698, 3699, 3700, 11693, 11694, 11695, 27259}, true, true)
 HealthFunnel.buff_duration = 10
 HealthFunnel.tick_interval = 1
@@ -906,6 +915,7 @@ local Immolate = Ability:Add({348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 
 Immolate.buff_duration = 15
 Immolate.tick_interval = 3
 Immolate.mana_costs = {25, 45, 90, 155, 220, 295, 370, 380, 445}
+Immolate.triggers_combat = true
 local RainOfFire = Ability:Add({5740, 6219, 11677, 11678, 27212}, false, true)
 RainOfFire.buff_duration = 8
 RainOfFire.tick_interval = 2
@@ -914,8 +924,13 @@ local SearingPain = Ability:Add({5676, 17919, 17920, 17921, 17922, 17923, 27210,
 SearingPain.mana_costs = {45, 68, 91, 118, 141, 168, 191, 205}
 local ShadowBolt = Ability:Add({686, 695, 705, 1088, 1106, 7641, 11659, 11660, 11661, 25307, 27209}, false, true)
 ShadowBolt.mana_costs = {25, 40, 70, 110, 160, 210, 265, 315, 370, 380, 420}
+ShadowBolt.triggers_combat = true
 ------ Talents
-
+local Shadowburn = Ability:Add({17877, 18867, 18868, 18869, 18870, 18871, 27263, 30546}, false, true, 29341)
+Shadowburn.buff_duration = 5
+Shadowburn.cooldown_duration = 15
+Shadowburn.requires_shard = true
+Shadowburn.mana_costs = {105, 130, 190, 245, 305, 365, 435, 515}
 ------ Procs
 
 -- Pet Abilities
@@ -1021,6 +1036,9 @@ end
 function Player:TimeInCombat()
 	if self.combat_start > 0 then
 		return self.time - self.combat_start
+	end
+	if self.ability_casting and self.ability_casting.triggers_combat then
+		return 0.1
 	end
 	return 0
 end
@@ -1261,7 +1279,11 @@ end
 local APL = {}
 
 APL.Main = function(self)
-	if DemonArmor:Down() then
+	if FelArmor.known then
+		if FelArmor:Usable() and FelArmor:Down() then
+			UseExtra(FelArmor)
+		end
+	elseif DemonArmor:Usable() and DemonArmor:Down() then
 		UseExtra(DemonArmor)
 	end
 	if not Pet.alive then
@@ -1276,7 +1298,7 @@ APL.Main = function(self)
 		UseExtra(HealthFunnel)
 	end
 	if Player:TimeInCombat() == 0 then
-		if DarkPact:Usable() and Player:ManaPct() < 85 and Pet:ManaPct() > 15 then
+		if DarkPact:Usable() and Player:ManaPct() < 80 and Pet:ManaPct() > 15 then
 			UseCooldown(DarkPact)
 		end
 		if LifeTap:Usable() and Player:ManaPct() < 80 and Player:HealthPct() > 60 then
@@ -1297,25 +1319,31 @@ APL.Main = function(self)
 			return UnstableAffliction
 		end
 	end
+	if DrainSoul:Usable() and Target.timeToDie < 3 and Shadowburn:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
+		UseCooldown(DrainSoul)
+	end
+	if Shadowburn:Usable() and Target.timeToDie < 4 then
+		return Shadowburn
+	end
 	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() then
 		return ShadowBolt
-	end
-	if DrainSoul:Usable() and Target.timeToDie < 2 and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 30)) then
-		UseCooldown(DrainSoul)
 	end
 	if SiphonLife:Usable() and SiphonLife:Down() and Target.timeToDie > (Player.group_size < 3 and 9 or 15) then
 		return SiphonLife
 	end
-	if DarkPact:Usable() and ((Player:ManaPct() < 40 and Pet:ManaPct() > 20) or (Player:ManaPct() < 70 and Pet:ManaPct() > 80)) then
+	if DarkPact:Usable() and Pet:ManaPct() > 30 and Pet:ManaPct() - Player:ManaPct() > 20 and (not Player:UnderAttack() or Player:HealthPct() < 90) then
 		UseCooldown(DarkPact)
 	end
-	if LifeTap:Usable() and ((Player:ManaPct() < 40 and Player:HealthPct() > 80) or (Player:ManaPct() < 70 and Player:HealthPct() > 90)) then
+	if LifeTap:Usable() and ((Player:ManaPct() < 40 and Player:HealthPct() > 80) or (Player:ManaPct() < ((Player:UnderAttack() or Player.group_size == 1) and 85 or 70) and Player:HealthPct() > 90)) then
 		UseCooldown(LifeTap)
 	end
 	if DeathCoil:Usable() and (Player:HealthPct() < 50 or (Player:UnderAttack() and Player:HealthPct() < 80)) then
 		UseCooldown(DeathCoil)
 	end
-	if DrainLife:Usable() and (Player.group_size < 3 or Player:UnderAttack() or Player:HealthPct() < 85) then
+	if Shoot:Usable() and Target.timeToDie < ShadowBolt:CastTime() then
+		return Shoot
+	end
+	if DrainLife:Usable() and (Player.group_size < 3 or Player:UnderAttack() or Player:HealthPct() < 60) then
 		return DrainLife
 	end
 	if ShadowBolt:Usable() then
@@ -1326,6 +1354,9 @@ APL.Main = function(self)
 	end
 	if LifeTap:Usable() and Player:ManaPct() < 15 and Player:HealthPct() > 60 then
 		UseCooldown(LifeTap)
+	end
+	if Shoot:Usable() then
+		return Shoot
 	end
 end
 
