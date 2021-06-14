@@ -850,6 +850,12 @@ Fear.mana_cost_pct = 12
 Fear.triggers_combat = true
 local LifeTap = Ability:Add({1454, 1455, 1456, 11687, 11688, 11689, 27222}, false, true)
 LifeTap.health_costs = {30, 75, 140, 220, 310, 430, 582}
+local SeedOfCorruption = Ability:Add({27243}, false, true)
+SeedOfCorruption.buff_duration = 18
+SeedOfCorruption.tick_interval = 3
+SeedOfCorruption.mana_costs = {882}
+SeedOfCorruption:AutoAoe()
+SeedOfCorruption:TrackAuras()
 ------ Talents
 local DarkPact = Ability:Add({18220, 18937, 18938, 27265}, false, true)
 DarkPact.health_costs = {305, 440, 545, 700}
@@ -911,6 +917,12 @@ SummonImp.mana_cost_pct = 64
 ------ Procs
 
 ---- Destruction
+local Hellfire = Ability:Add({1949, 11683, 11684, 27213}, false, true)
+Hellfire.buff_duration = 15
+Hellfire.tick_interval = 1
+Hellfire.health_costs = {87, 144, 215, 308}
+Hellfire.mana_costs = {645, 975, 1300, 1665}
+Hellfire:AutoAoe()
 local Immolate = Ability:Add({348, 707, 1094, 2941, 11665, 11667, 11668, 25309, 27215}, false, true)
 Immolate.buff_duration = 15
 Immolate.tick_interval = 3
@@ -920,6 +932,7 @@ local RainOfFire = Ability:Add({5740, 6219, 11677, 11678, 27212}, false, true)
 RainOfFire.buff_duration = 8
 RainOfFire.tick_interval = 2
 RainOfFire.mana_costs = {295, 605, 885, 1185, 1480}
+RainOfFire:AutoAoe()
 local SearingPain = Ability:Add({5676, 17919, 17920, 17921, 17922, 17923, 27210, 30459}, false, true)
 SearingPain.mana_costs = {45, 68, 91, 118, 141, 168, 191, 205}
 local ShadowBolt = Ability:Add({686, 695, 705, 1088, 1106, 7641, 11659, 11660, 11661, 25307, 27209}, false, true)
@@ -1307,11 +1320,14 @@ APL.Main = function(self)
 			return UnstableAffliction
 		end
 	end
+	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() and ShadowTrance:Remains() < 2 * Player.haste_factor then
+		return ShadowBolt
+	end
 	if Target.timeToDie > 6 then
 		if CurseOfAgony:Usable() and CurseOfAgony:Down() and CurseOfTheElements:Down() and CurseOfTongues:Down() and CurseOfWeakness:Down() and CurseOfRecklessness:Down() then
 			return CurseOfAgony
 		end
-		if Corruption:Usable() and Corruption:Down() then
+		if Corruption:Usable() and Corruption:Down() and SeedOfCorruption:Down() then
 			return Corruption
 		end
 		if UnstableAffliction:Usable() and UnstableAffliction:Remains() < UnstableAffliction:CastTime() then
@@ -1320,6 +1336,9 @@ APL.Main = function(self)
 	end
 	if DrainSoul:Usable() and Target.timeToDie < 3 and Shadowburn.debuff:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
 		UseCooldown(DrainSoul)
+	end
+	if SeedOfCorruption:Usable() and Player.enemies >= 3 and SeedOfCorruption:Ticking() == 0 then
+		UseCooldown(SeedOfCorruption)
 	end
 	if Shadowburn:Usable() and Target.timeToDie < 4 then
 		return Shadowburn
@@ -1344,6 +1363,9 @@ APL.Main = function(self)
 	end
 	if DrainLife:Usable() and (Player.group_size < 3 or Player:UnderAttack() or Player:HealthPct() < 60) then
 		return DrainLife
+	end
+	if RainOfFire:Usable() and Player.enemies >= 4 then
+		UseCooldown(RainOfFire)
 	end
 	if ShadowBolt:Usable() then
 		return ShadowBolt
