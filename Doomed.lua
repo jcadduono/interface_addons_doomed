@@ -1214,6 +1214,7 @@ function Target:Update()
 		self.boss = false
 		self.stunnable = true
 		self.classification = 'normal'
+		self.type = 'Humanoid'
 		self.player = false
 		self.level = Player.level
 		self.hostile = true
@@ -1242,6 +1243,7 @@ function Target:Update()
 	self.boss = false
 	self.stunnable = true
 	self.classification = UnitClassification('target')
+	self.type = UnitCreatureType('target')
 	self.player = UnitIsPlayer('target')
 	self.level = UnitLevel('target')
 	self.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
@@ -1271,6 +1273,14 @@ function LifeTap:Usable()
 	end
 	return Ability.Usable(self)
 end
+
+function DrainLife:Usable()
+	if Target.type == 'Mechanical' then
+		return false
+	end
+	return Ability.Usable(self)
+end
+SiphonLife.Usable = DrainLife.Usable
 
 -- End Ability Modifications
 
