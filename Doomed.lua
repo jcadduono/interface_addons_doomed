@@ -1358,13 +1358,13 @@ APL.Main = function(self)
 	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() then
 		return ShadowBolt
 	end
-	if SiphonLife:Usable() and SiphonLife:Down() and Target.timeToDie > (Player.group_size < 3 and 9 or 15) then
+	if SiphonLife:Usable() and SiphonLife:Down() and Target.timeToDie > (Player:UnderAttack() and 9 or 15) then
 		return SiphonLife
 	end
 	if DarkPact:Usable() and Pet:ManaPct() > 30 and Pet:ManaPct() - Player:ManaPct() > 20 and (not Player:UnderAttack() or Player:HealthPct() < 90) then
 		UseCooldown(DarkPact)
 	end
-	if LifeTap:Usable() and ((Player:ManaPct() < 40 and Player:HealthPct() > 80) or (Player:ManaPct() < ((Player:UnderAttack() or Player.group_size == 1) and 85 or 70) and Player:HealthPct() > 90)) then
+	if LifeTap:Usable() and ((Player:ManaPct() < 40 and Player:HealthPct() > 80) or (Player:ManaPct() < (Player:UnderAttack() and 85 or 70) and Player:HealthPct() > 90)) then
 		UseCooldown(LifeTap)
 	end
 	if DeathCoil:Usable() and (Player:HealthPct() < 50 or (Player:UnderAttack() and Player:HealthPct() < 80)) then
@@ -1373,7 +1373,7 @@ APL.Main = function(self)
 	if Shoot:Usable() and Target.timeToDie < ShadowBolt:CastTime() then
 		return Shoot
 	end
-	if DrainLife:Usable() and (Player.group_size < 3 or Player:UnderAttack() or Player:HealthPct() < 60) then
+	if DrainLife:Usable() and (Player:UnderAttack() or Player:HealthPct() < 60) then
 		return DrainLife
 	end
 	if RainOfFire:Usable() and Player.enemies >= 4 then
