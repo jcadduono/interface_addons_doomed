@@ -125,6 +125,7 @@ local Player = {
 	group_size = 1,
 	moving = false,
 	movement_speed = 100,
+	threat = 0,
 	last_swing_taken = 0,
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
@@ -1044,7 +1045,7 @@ function Player:ManaPct()
 end
 
 function Player:UnderAttack()
-	return (Player.time - self.last_swing_taken) < 3
+	return self.threat > 1 or (self.time - self.last_swing_taken) < 3
 end
 
 function Player:TimeInCombat()
@@ -1150,6 +1151,7 @@ function Player:Update()
 	speed, max_speed = GetUnitSpeed('player')
 	self.moving = speed ~= 0
 	self.movement_speed = max_speed / 7 * 100
+	self.threat = UnitThreatSituation('player', 'target') or 0
 	Pet:Update()
 
 	trackAuras:Purge()
