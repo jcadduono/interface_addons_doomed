@@ -1045,7 +1045,7 @@ function Player:ManaPct()
 end
 
 function Player:UnderAttack()
-	return self.threat > 1 or (self.time - self.last_swing_taken) < 3
+	return self.threat >= 3 or (self.time - self.last_swing_taken) < 3
 end
 
 function Player:TimeInCombat()
