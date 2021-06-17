@@ -860,6 +860,7 @@ SeedOfCorruption:TrackAuras()
 ------ Talents
 local DarkPact = Ability:Add({18220, 18937, 18938, 27265}, false, true)
 DarkPact.health_costs = {305, 440, 545, 700}
+DarkPact.requires_pet = 'any'
 local ImprovedDrainSoul = Ability:Add({18213, 18372}, true, true)
 local Nightfall = Ability:Add({18094, 18095}, true, true)
 local SiphonLife = Ability:Add({18265, 18879, 18880, 18881, 27264, 30911}, false, true)
@@ -1346,17 +1347,17 @@ APL.Main = function(self)
 			return UnstableAffliction
 		end
 	end
-	if DrainSoul:Usable() and Target.timeToDie < 3 and Shadowburn.debuff:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
-		UseCooldown(DrainSoul)
-	end
 	if SeedOfCorruption:Usable() and Player.enemies >= 3 and SeedOfCorruption:Ticking() == 0 then
 		UseCooldown(SeedOfCorruption)
 	end
-	if Shadowburn:Usable() and Target.timeToDie < 4 then
-		return Shadowburn
-	end
 	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() then
 		return ShadowBolt
+	end
+	if Shadowburn:Usable() and Target.timeToDie < 4 then
+		UseCooldown(Shadowburn)
+	end
+	if DrainSoul:Usable() and Target.timeToDie < (3 * Player.haste_factor) and Shadowburn.debuff:Down() and (Player.soul_shards < 10 or (ImprovedDrainSoul.known and Player:ManaPct() < 60)) then
+		return DrainSoul
 	end
 	if SiphonLife:Usable() and SiphonLife:Down() and Target.timeToDie > (Player:UnderAttack() and 9 or 15) then
 		return SiphonLife
@@ -1370,10 +1371,10 @@ APL.Main = function(self)
 	if DeathCoil:Usable() and (Player:HealthPct() < 50 or (Player:UnderAttack() and Player:HealthPct() < 80)) then
 		UseCooldown(DeathCoil)
 	end
-	if Shoot:Usable() and Target.timeToDie < ShadowBolt:CastTime() then
-		return Shoot
+	if ImprovedDrainSoul.known and DrainSoul:Usable() and Target.timeToDie < ShadowBolt:CastTime() then
+		return DrainSoul
 	end
-	if DrainLife:Usable() and (Player:UnderAttack() or Player:HealthPct() < 60) then
+	if DrainLife:Usable() and (Player:UnderAttack() or Player:HealthPct() < (Player:ManaPct() < 40 and 80 or 60)) then
 		return DrainLife
 	end
 	if RainOfFire:Usable() and Player.enemies >= 4 then
