@@ -474,13 +474,13 @@ function Ability:Usable(seconds)
 	return self:Ready(seconds)
 end
 
-function Ability:Remains()
+function Ability:Remains(mine)
 	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
 	local _, i, id, expires
 	for i = 1, 40 do
-		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
+		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter .. (mine and '|PLAYER' or ''))
 		if not id then
 			return 0
 		elseif self:Match(id) then
@@ -862,6 +862,7 @@ local DarkPact = Ability:Add({18220, 18937, 18938, 27265}, false, true)
 DarkPact.health_costs = {305, 440, 545, 700}
 DarkPact.requires_pet = 'any'
 local ImprovedDrainSoul = Ability:Add({18213, 18372}, true, true)
+local Malediction = Ability:Add({32477, 32483, 32484}, false, true)
 local Nightfall = Ability:Add({18094, 18095}, true, true)
 local SiphonLife = Ability:Add({18265, 18879, 18880, 18881, 27264, 30911}, false, true)
 SiphonLife.buff_duration = 30
@@ -1336,8 +1337,11 @@ APL.Main = function(self)
 	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() and ShadowTrance:Remains() < 2 * Player.haste_factor then
 		return ShadowBolt
 	end
+	if Malediction.known and Target.boss and CurseOfTheElements:Usable() and CurseOfTheElements:Down() and CurseOfAgony:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
+		return CurseOfTheElements
+	end
 	if Target.timeToDie > 6 then
-		if CurseOfAgony:Usable() and CurseOfAgony:Down() and CurseOfTheElements:Down() and CurseOfTongues:Down() and CurseOfWeakness:Down() and CurseOfRecklessness:Down() then
+		if CurseOfAgony:Usable() and CurseOfAgony:Down() and CurseOfTheElements:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
 			return CurseOfAgony
 		end
 		if Corruption:Usable() and Corruption:Down() and SeedOfCorruption:Down() then
