@@ -814,6 +814,7 @@ CurseOfAgony.tick_interval = 2
 CurseOfAgony.mana_costs = {25, 50, 90, 130, 170, 215, 265}
 local CurseOfDoom = Ability:Add({603, 30910}, false, true)
 CurseOfDoom.buff_duration = 60
+CurseOfDoom.cooldown_duration = 60
 CurseOfDoom.mana_costs = {300, 380}
 local CurseOfRecklessness = Ability:Add({704, 7658, 7659, 11717, 27226}, false, false)
 CurseOfRecklessness.buff_duration = 120
@@ -959,6 +960,9 @@ SpellLock.requires_pet = 'felhunter'
 local BloodFury = Ability:Add({20572}, true, true)
 BloodFury.buff_duration = 15
 BloodFury.cooldown_duration = 180
+-- Class Debuffs
+local FireVulnerability = Ability:Add({22959})
+FireVulnerability.buff_duration = 30
 -- Trinket Effects
 
 -- End Abilities
@@ -1337,11 +1341,14 @@ APL.Main = function(self)
 	if Nightfall.known and ShadowBolt:Usable() and ShadowTrance:Up() and ShadowTrance:Remains() < 2 * Player.haste_factor then
 		return ShadowBolt
 	end
-	if Malediction.known and Target.boss and CurseOfTheElements:Usable() and CurseOfTheElements:Down() and CurseOfAgony:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
-		return CurseOfTheElements
-	end
 	if Target.timeToDie > 6 then
-		if CurseOfAgony:Usable() and CurseOfAgony:Down() and CurseOfTheElements:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
+		if Malediction.known and Target.boss and CurseOfTheElements:Usable() and CurseOfTheElements:Down() and CurseOfDoom:Down() and CurseOfAgony:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
+			return CurseOfTheElements
+		end
+		if CurseOfDoom:Usable() and Target.boss and Target.timeToDie > 75 and CurseOfDoom:Down() and CurseOfAgony:Down() and CurseOfTheElements:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
+			return CurseOfDoom
+		end
+		if CurseOfAgony:Usable() and CurseOfAgony:Down() and CurseOfDoom:Down() and CurseOfTheElements:Down(true) and CurseOfTongues:Down(true) and CurseOfWeakness:Down(true) and CurseOfRecklessness:Down(true) then
 			return CurseOfAgony
 		end
 		if Corruption:Usable() and Corruption:Down() and SeedOfCorruption:Down() then
@@ -1349,6 +1356,9 @@ APL.Main = function(self)
 		end
 		if UnstableAffliction:Usable() and UnstableAffliction:Remains() < UnstableAffliction:CastTime() then
 			return UnstableAffliction
+		end
+		if Immolate:Usable() and Immolate:Remains() < Immolate:CastTime() and FireVulnerability:Up() then
+			return Immolate
 		end
 	end
 	if SeedOfCorruption:Usable() and Player.enemies >= 3 and SeedOfCorruption:Ticking() == 0 then
