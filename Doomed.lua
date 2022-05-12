@@ -632,6 +632,26 @@ function Ability:Ticking()
 	return count
 end
 
+function Ability:HighestRemains()
+	if self.traveling then
+		for _, cast in next, self.traveling do
+			if Player.time - cast.start < self.max_range / self.velocity then
+				return self:Duration()
+			end
+		end
+	end
+	local remains, highest = 0, 0
+	if self.aura_targets then
+		for _, aura in next, self.aura_targets do
+			remains = aura.expires - Player.time - Player.execute_remains
+			if remains > highest then
+				highest = remains
+			end
+		end
+	end
+	return highest
+end
+
 function Ability:TickTime()
 	return self.hasted_ticks and (Player.haste_factor * self.tick_interval) or self.tick_interval
 end
@@ -983,6 +1003,7 @@ Corruption.mana_cost = 1
 Corruption.buff_duration = 14
 Corruption.tick_interval = 2
 Corruption.hasted_ticks = true
+Corruption.triggers_combat = true
 Corruption:TrackAuras()
 local MaleficRapture = Ability:Add(324536, false, true)
 MaleficRapture.shard_cost = 1
@@ -992,10 +1013,12 @@ SeedOfCorruption.shard_cost = 1
 SeedOfCorruption.buff_duration = 12
 SeedOfCorruption:SetVelocity(30)
 SeedOfCorruption.hasted_duration = true
+SeedOfCorruption.triggers_combat = true
 SeedOfCorruption:AutoAoe(true)
 SeedOfCorruption:TrackAuras()
 local ShadowBolt = Ability:Add(232670, false, true)
 ShadowBolt.mana_cost = 2
+ShadowBolt.triggers_combat = true
 ShadowBolt:SetVelocity(25)
 local SummonDarkglare = Ability:Add(205180, false, true)
 SummonDarkglare.mana_cost = 2
@@ -1006,6 +1029,7 @@ local UnstableAffliction = Ability:Add(316099, false, true)
 UnstableAffliction.buff_duration = 16
 UnstableAffliction.tick_interval = 2
 UnstableAffliction.hasted_ticks = true
+UnstableAffliction.triggers_combat = true
 UnstableAffliction:TrackAuras()
 ------ Talents
 local AbsoluteCorruption = Ability:Add(196103, false, true)
@@ -1013,6 +1037,7 @@ local CreepingDeath = Ability:Add(264000, false, true)
 local DarkSoulMisery = Ability:Add(113860, true, true)
 DarkSoulMisery.buff_duration = 20
 DarkSoulMisery.cooldown_duration = 120
+DarkSoulMisery.mana_cost = 1
 local DrainSoul = Ability:Add(198590, false, true)
 DrainSoul.mana_cost = 1
 DrainSoul.buff_duration = 5
@@ -1023,6 +1048,7 @@ local Haunt = Ability:Add(48181, false, true)
 Haunt.mana_cost = 2
 Haunt.buff_duration = 15
 Haunt.cooldown_duration = 15
+Haunt.triggers_combat = true
 Haunt:SetVelocity(40)
 local InevitableDemise = Ability:Add(334319, true, true, 334320)
 InevitableDemise.buff_duration = 20
@@ -1053,6 +1079,7 @@ VileTaint.buff_duration = 10
 VileTaint.cooldown_duration = 20
 VileTaint.tick_interval = 2
 VileTaint.hasted_ticks = true
+VileTaint.triggers_combat = true
 VileTaint:AutoAoe(true)
 VileTaint:TrackAuras()
 local WritheInAgony = Ability:Add(196102, false, true)
@@ -1063,12 +1090,14 @@ CallDreadstalkers.buff_duration = 12
 CallDreadstalkers.cooldown_duration = 20
 CallDreadstalkers.shard_cost = 2
 CallDreadstalkers.summon_count = 2
+CallDreadstalkers.triggers_combat = true
 local Demonbolt = Ability:Add(264178, false, true)
 Demonbolt.mana_cost = 2
 Demonbolt.shard_cost = -2
 Demonbolt:SetVelocity(35)
 local HandOfGuldan = Ability:Add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
+HandOfGuldan.triggers_combat = true
 HandOfGuldan:AutoAoe(true)
 local Implosion = Ability:Add(196277, false, true, 196278)
 Implosion.mana_cost = 2
@@ -1076,6 +1105,7 @@ Implosion:AutoAoe()
 local ShadowBoltDemo = Ability:Add(686, false, true)
 ShadowBoltDemo.mana_cost = 2
 ShadowBoltDemo.shard_cost = -1
+ShadowBoltDemo.triggers_combat = true
 ShadowBoltDemo:SetVelocity(20)
 local SummonDemonicTyrant = Ability:Add(265187, true, true)
 SummonDemonicTyrant.buff_duration = 15
@@ -1162,8 +1192,12 @@ Immolate.buff_duration = 18
 Immolate.mana_cost = 1.5
 Immolate.tick_interval = 3
 Immolate.hasted_ticks = true
+Immolate.triggers_combat = true
+Immolate:AutoAoe(false, 'cast')
+Immolate:TrackAuras()
 local Incinerate = Ability:Add(29722, false, true)
 Incinerate.mana_cost = 2
+Incinerate.triggers_combat = true
 Incinerate:SetVelocity(25)
 local Havoc = Ability:Add(80240, false, true)
 Havoc.buff_duration = 10
@@ -1171,10 +1205,13 @@ Havoc.cooldown_duration = 30
 Havoc.mana_cost = 2
 local ChaosBolt = Ability:Add(116858, false, true)
 ChaosBolt.shard_cost = 2
+ChaosBolt.triggers_combat = true
 ChaosBolt:SetVelocity(20)
-local RainOfFire = Ability:Add(5470, false, true, 42223)
+local RainOfFire = Ability:Add(5740, false, true, 42223)
 RainOfFire.buff_duration = 8
 RainOfFire.shard_cost = 3
+RainOfFire.tick_interval = 1
+RainOfFire.hasted_duration = true
 RainOfFire.hasted_ticks = true
 RainOfFire:AutoAoe(true)
 local SummonInfernal = Ability:Add(1122, false, true, 22703)
@@ -1185,15 +1222,32 @@ SummonInfernal:AutoAoe(true)
 ------ Talents
 local Cataclysm = Ability:Add(152108, false, true)
 Cataclysm.cooldown_duration = 30
+Cataclysm.mana_cost = 1
+Cataclysm.triggers_combat = true
 Cataclysm:AutoAoe(true)
 local ChannelDemonfire = Ability:Add(196447, false, true)
 ChannelDemonfire.cooldown_duration = 25
 ChannelDemonfire.mana_cost = 1.5
+ChannelDemonfire.triggers_combat = true
+local DarkSoulInstability = Ability:Add(113858, true, true)
+DarkSoulInstability.buff_duration = 20
+DarkSoulInstability.cooldown_duration = 120
+DarkSoulInstability.mana_cost = 1
+local Eradication = Ability:Add(196412, false, true, 196414)
+Eradication.buff_duration = 7
+local FireAndBrimstone = Ability:Add(196408, false, true)
+local Flashover = Ability:Add(267115, false, true)
 local Inferno = Ability:Add(270545, false, true)
 local InternalCombustion = Ability:Add(266134, false, true)
+local RainOfChaos = Ability:Add(266086, false, true)
+local ReverseEntropy = Ability:Add(205148, false, true, 266030)
+ReverseEntropy.buff_duration = 8
+local RoaringBlaze = Ability:Add(205184, false, true, 265931)
+RoaringBlaze.buff_duration = 8
 local SoulFire = Ability:Add(6353, false, true)
 SoulFire.cooldown_duration = 20
 SoulFire.mana_cost = 2
+SoulFire.triggers_combat = true
 SoulFire:SetVelocity(24)
 local Shadowburn = Ability:Add(17877, false, true)
 Shadowburn.buff_duration = 5
@@ -1201,13 +1255,19 @@ Shadowburn.cooldown_duration = 12
 Shadowburn.mana_cost = 1
 Shadowburn.requires_charge = true
 ------ Procs
-local Backdraft = Ability:Add(117828, true, true)
+local Backdraft = Ability:Add(196406, true, true, 117828)
 Backdraft.buff_duration = 10
+------ Tier Bonuses
+local Blasphemy = Ability:Add(367680, false, true) -- T28 4 piece
+local RitualOfRuin = Ability:Add(364433, true, true, 364349) -- T28 2 piece
+RitualOfRuin.buff_duration = 3600
 -- PvP talents
 local RotAndDecay = Ability:Add(212371, false, true)
 -- Racials
 
 -- Covenant abilities
+local LeadByExample = Ability:Add(342156, true, true, 342181) -- Necrolord (Emeni Soulbind)
+LeadByExample.buff_duration = 10
 local SoulRot = Ability:Add(325640, false, true)
 SoulRot.buff_duration = 8
 SoulRot.cooldown_duration = 60
@@ -1220,6 +1280,8 @@ SummonSteward.cooldown_duration = 300
 local ImplosivePotential = Ability:Add(337135, false, true, 337139)
 ImplosivePotential.buff_duration = 8
 ImplosivePotential.bonus_id = 7033
+local OdrShawlOfTheYmirjar = Ability:Add(337163, false, true)
+OdrShawlOfTheYmirjar.bonus_id = 7037
 -- Trinket Effects
 
 -- End Abilities
@@ -1360,6 +1422,8 @@ Pet.ViciousHellhound = SummonedPet:Add(136399, 15, NetherPortal)
 Pet.VoidTerror = SummonedPet:Add(136403, 15, NetherPortal)
 Pet.Wrathguard = SummonedPet:Add(136407, 15, NetherPortal)
 Pet.WildImpID = SummonedPet:Add(143622, 20, InnerDemons)
+-- Destruction Tier Bonus
+Pet.Blasphemy = SummonedPet:Add(185584, 8, Blasphemy)
 -- End Summoned Pets
 
 -- Start Inventory Items
@@ -1492,6 +1556,9 @@ end
 function Player:TimeInCombat()
 	if self.combat_start > 0 then
 		return self.time - self.combat_start
+	end
+	if self.ability_casting and self.ability_casting.triggers_combat then
+		return 0.1
 	end
 	return 0
 end
@@ -1701,7 +1768,11 @@ function Player:Update()
 	self.health.max = UnitHealthMax('player')
 	self.mana.regen = GetPowerRegen()
 	self.mana.current = UnitPower('player', 0) + (self.mana.regen * self.execute_remains)
-	self.soul_shards.current = UnitPower('player', 7)
+	if self.spec == SPEC.DESTRUCTION then
+		self.soul_shards.current = UnitPower('player', 7, true) / 10
+	else
+		self.soul_shards.current = UnitPower('player', 7)
+	end
 	if self.ability_casting then
 		self.mana.current = self.mana.current - self.ability_casting:Cost()
 		self.soul_shards.current = self.soul_shards.current - self.ability_casting:ShardCost()
@@ -2055,6 +2126,28 @@ function InevitableDemise:Stack()
 		return 0
 	end
 	return Ability.Stack(self)
+end
+
+function RitualOfRuin:Remains()
+	if ChaosBolt:Casting() then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function ChaosBolt:ShardCost()
+	if RitualOfRuin.known and RitualOfRuin:Up() then
+		return 0
+	end
+	return self.shard_cost
+end
+RainOfFire.ShardCost = ChaosBolt.ShardCost
+
+function Immolate:Remains()
+	if Cataclysm.known and Cataclysm:Casting() then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
 end
 
 -- End Ability Modifications
@@ -3029,17 +3122,23 @@ actions.nether_portal_building+=/call_action_list,name=build_a_shard
 end
 
 APL[SPEC.DESTRUCTION].Main = function(self)
+	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or Pet.Infernal:Up() or (DarkSoulInstability.known and DarkSoulInstability:Up()))
+	self.havoc_remains = Havoc:HighestRemains()
+
 	if Player:TimeInCombat() == 0 then
 --[[
 actions.precombat=flask
 actions.precombat+=/food
 actions.precombat+=/augmentation
 actions.precombat+=/summon_pet
+actions.precombat+=/use_item,name=tome_of_monstrous_constructions
+actions.precombat+=/use_item,name=soleahs_secret_technique
 actions.precombat+=/grimoire_of_sacrifice,if=talent.grimoire_of_sacrifice.enabled
 actions.precombat+=/snapshot_stats
-actions.precombat+=/potion
+actions.precombat+=/fleshcraft
+actions.precombat+=/use_item,name=shadowed_orb_of_torment
 actions.precombat+=/soul_fire
-actions.precombat+=/incinerate,if=!talent.soul_fire.enabled
+actions.precombat+=/incinerate
 ]]
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
 			return CreateHealthstone
@@ -3072,7 +3171,7 @@ actions.precombat+=/incinerate,if=!talent.soul_fire.enabled
 				UseCooldown(SpectralFlaskOfPower)
 			end
 		end
-		if Player.soul_shards.current < 5 and not (SoulFire:Casting() or Incinerate:Casting()) then
+		if Player:SoulShardDeficit() > 0 then
 			if SoulFire:Usable() then
 				return SoulFire
 			end
@@ -3094,44 +3193,40 @@ actions.precombat+=/incinerate,if=!talent.soul_fire.enabled
 		end
 	end
 --[[
-# Havoc uses a special priority list on most multitarget scenarios, but the target threshold can vary depending on talents
-actions=call_action_list,name=havoc,if=havoc_active&active_enemies<5-talent.inferno.enabled+(talent.inferno.enabled&talent.internal_combustion.enabled)
-# Cataclysm should be used on cooldown as soon as possible
+actions=call_action_list,name=havoc,if=havoc_active&active_enemies>1&active_enemies<5-talent.inferno.enabled+(talent.inferno.enabled&talent.internal_combustion.enabled)
+actions+=/fleshcraft,if=soulbind.volatile_solvent,cancel_if=buff.volatile_solvent_humanoid.up
+actions+=/conflagrate,if=talent.roaring_blaze.enabled&debuff.roaring_blaze.remains<1.5
 actions+=/cataclysm
-# Two target scenarios are handled like single target with Havoc weaved in. Starting with three targets, a specialized AoE priority is required
 actions+=/call_action_list,name=aoe,if=active_enemies>2
-# Immolate should never fall off the primary target. If Cataclysm will refresh Immolate before it expires, there's no reason to waste time casting it
-actions+=/immolate,cycle_targets=1,if=refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
-# #With Internal Combustion talented, it's possible Immolate will need to be refreshed sooner than the remaining duration says, if there's already a Chaos Bolt on the way to the target.
+actions+=/soul_fire,cycle_targets=1,if=refreshable&soul_shard<=4&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
+actions+=/immolate,cycle_targets=1,if=remains<3&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions+=/immolate,if=talent.internal_combustion.enabled&action.chaos_bolt.in_flight&remains<duration*0.5
-# The general rule of thumb for talents is to maximize the number of uses of each
+actions+=/chaos_bolt,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
 actions+=/call_action_list,name=cds
 actions+=/channel_demonfire
-# The if condition here always applies Havoc to something other than the primary target
-actions+=/havoc,cycle_targets=1,if=!(target=self.target)&(dot.immolate.remains>dot.immolate.duration*0.5|!talent.internal_combustion.enabled)&(!cooldown.summon_infernal.ready|!talent.grimoire_of_supremacy.enabled|talent.grimoire_of_supremacy.enabled&pet.infernal.remains<=10)
-# Soul Fire should be used on cooldown, it does not appear worth saving for generating Soul Shards during cooldowns
-actions+=/soul_fire
-# Conflagrate should only be used to set up Chaos Bolts. Flashover lets Conflagrate be used earlier to set up an Incinerate before CB. If a major cooldown is coming up, save charges for it
+actions+=/scouring_tithe
+actions+=/decimating_bolt
+actions+=/havoc,cycle_targets=1,if=!(target=self.target)&(dot.immolate.remains>dot.immolate.duration*0.5|!talent.internal_combustion.enabled)
+actions+=/impending_catastrophe
+actions+=/soul_rot
+actions+=/havoc,if=runeforge.odr_shawl_of_the_ymirjar.equipped
+actions+=/variable,name=pool_soul_shards,value=active_enemies>1&cooldown.havoc.remains<=10|buff.ritual_of_ruin.up&talent.rain_of_chaos
 actions+=/conflagrate,if=buff.backdraft.down&soul_shard>=1.5-0.3*talent.flashover.enabled&!variable.pool_soul_shards
-# Shadowburn is used as a discount Conflagrate to generate shards if you don't have enough for a Chaos Bolt. The same rules about saving it for major cooldowns applies
-actions+=/shadowburn,if=soul_shard<2&(!variable.pool_soul_shards|charges>1)
-# It's worth stocking up on Soul Shards before a major cooldown usage
-actions+=/variable,name=pool_soul_shards,value=active_enemies>1&cooldown.havoc.remains<=10|cooldown.summon_infernal.remains<=20&(talent.grimoire_of_supremacy.enabled|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20)|talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains<=20&(cooldown.summon_infernal.remains>target.time_to_die|cooldown.summon_infernal.remains+cooldown.summon_infernal.duration>target.time_to_die)
-# Chaos Bolt has several possible use conditions. Crashing Chaos, Grimoire of Supremacy, and Dark Soul: Instability all favor casting as many CBs as possible when any of them are active
-actions+=/chaos_bolt,if=talent.grimoire_of_supremacy.enabled&pet.infernal.active|buff.dark_soul_instability.up
-# If Soul Shards are not being pooled and Eradication is not talented, just spend CBs as they become available
-actions+=/chaos_bolt,if=!variable.pool_soul_shards&!talent.eradication.enabled
-# With Eradication, it's beneficial to maximize the uptime on the debuff. However, it's still better to use Chaos Bolt immediately if Backdraft is up
-actions+=/chaos_bolt,if=!variable.pool_soul_shards&talent.eradication.enabled&(debuff.eradication.remains<cast_time|buff.backdraft.up)
-# Even when saving, do not overcap on Soul Shards
-actions+=/chaos_bolt,if=(soul_shard>=4.5-0.2*active_enemies)
-# Don't overcap on charges of Conflagrate
-actions+=/conflagrate,if=charges>1
+actions+=/chaos_bolt,if=pet.infernal.active|buff.rain_of_chaos.remains>cast_time
+actions+=/chaos_bolt,if=buff.backdraft.up&!variable.pool_soul_shards
+actions+=/chaos_bolt,if=talent.eradication&!variable.pool_soul_shards&debuff.eradication.remains<cast_time
+actions+=/shadowburn,if=!variable.pool_soul_shards|soul_shard>=4.5
+actions+=/chaos_bolt,if=soul_shard>3.5
+actions+=/chaos_bolt,if=time_to_die<5&time_to_die>cast_time+travel_time
+actions+=/conflagrate,if=charges>1|time_to_die<gcd
 actions+=/incinerate
 ]]
-	if Havoc:Ticking() and Player.enemies < (5 - (Inferno.known and 1 or 0) + (Inferno.known and InternalCombustion.known and 1 or 0)) then
+	if self.havoc_remains > 0 and Player.enemies > 1 and Player.enemies < (5 - (Inferno.known and 1 or 0) + (Inferno.known and InternalCombustion.known and 1 or 0)) then
 		local apl = self:havoc()
 		if apl then return apl end
+	end
+	if RoaringBlaze.known and Conflagrate:Usable() and RoaringBlaze:Remains() < 1.5 then
+		return Conflagrate
 	end
 	if Cataclysm:Usable() then
 		UseCooldown(Cataclysm)
@@ -3139,6 +3234,9 @@ actions+=/incinerate
 	if Player.enemies > 2 then
 		local apl = self:aoe()
 		if apl then return apl end
+	end
+	if SoulFire:Usable() and SoulFire:Refreshable() and Player.soul_shards.current <= 4 and (not Catalysm.known or Cataclysm:Cooldown() > SoulFire:Remains()) then
+		return SoulFire
 	end
 	if Immolate:Usable() then
 		if Immolate:Refreshable() and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
@@ -3148,80 +3246,211 @@ actions+=/incinerate
 			return Immolate
 		end
 	end
-	self:cds()
+	if ChaosBolt:Usable() and (Pet.Infernal:Up() or Pet.Blasphemy:Up()) and Player.soul_shards.current >= 4 then
+		return ChaosBolt
+	end
+	if self.use_cds then
+		self:cds()
+	end
 	if ChannelDemonfire:Usable() then
 		UseCooldown(ChannelDemonfire)
 	end
-	if Havoc:Usable() and Player.enemies > 1 and (Immolate:Remains() > (Immolate:Duration() * 0.5) or not InternalCombustion.known) and (not SummonInfernal:Ready() or not GrimoireOfSupremacy.known or GrimoireOfSupremacy.known and Pet.Infernal:Remains() < 10) then
+--[[
+	if ScouringTithe:Usable() then
+		UseCooldown(ScouringTithe)
+	end
+	if DecimatingBolt:Usable() then
+		UseCooldown(DecimatingBolt)
+	end
+]]
+	if Havoc:Usable() and Player.enemies > 1 and (Immolate:Remains() > (Immolate:Duration() * 0.5) or not InternalCombustion.known) then
 		UseExtra(Havoc)
+	end
+--[[
+	if ImpendingCatastrophe:Usable() then
+		UseCooldown(ImpendingCatastrophe)
+	end
+]]
+	if SoulRot:Usable() then
+		UseCooldown(SoulRot)
+	end
+	if OdrShawlOfTheYmirjar.known and Havoc:Usable() then
+		UseExtra(Havoc)
+	end
+	self.pool_soul_shards = (Player.enemies > 1 and Havoc:Ready(10)) or (RainOfChaos.known and RitualOfRuin:Up())
+	if Conflagrate:Usable() and Backdraft:Down() and Player.soul_shards.current >= (1.5 - 0.3 * (Flashover.known and 1 or 0)) and not self.pool_soul_shards then
+		return Conflagrate
+	end
+	if ChaosBolt:Usable() and (
+		(Pet.Infernal:Up()) or
+		(RainOfChaos:Remains() > ChaosBolt:CastTime()) or
+		(Backdraft:Up() and not self.pool_soul_shards) or
+		(Eradication.known and not self.pool_soul_shards and Eradication:Remains() < ChaosBolt:CastTime())
+	) then
+		return ChaosBolt
+	end
+	if Shadowburn:Usable() and (not self.pool_soul_shards or Player.soul_shards.current >= 4.5) then
+		return Shadowburn
+	end
+	if ChaosBolt:Usable() and (
+		(Player.soul_shards.current > 3.5) or
+		(between(Target.timeToDie, ChaosBolt:CastTime() + ChaosBolt:TravelTime(), 5))
+	) then
+		return ChaosBolt
+	end
+	if Conflagrate:Usable() and (Conflagrate:Charges() > 1 or Target.timeToDie < Player.gcd) then
+		return Conflagrate
+	end
+	if Incinerate:Usable() then
+		return Incinerate
 	end
 end
 
 APL[SPEC.DESTRUCTION].aoe = function(self)
 --[[
-# Rain of Fire is typically the highest priority action, but certain situations favor using Chaos Bolt instead
-actions.aoe=rain_of_fire,if=pet.infernal.active&(buff.crashing_chaos.down|!talent.grimoire_of_supremacy.enabled)&(!cooldown.havoc.ready|active_enemies>3)
-# Channel Demonfire only needs one Immolate active during its cast for AoE. Primary target is used here for simplicity
+actions.aoe=rain_of_fire,if=pet.infernal.active&(!cooldown.havoc.ready|active_enemies>3)
+actions.aoe+=/soul_rot
+actions.aoe+=/impending_catastrophe
 actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
-# Similar to single target, there is no need to refresh Immolates if Cataclysm can do it instead
-actions.aoe+=/immolate,cycle_targets=1,if=remains<5&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
-# Rules for cooldowns do not change for AoE, so call the same list as on single target
+actions.aoe+=/immolate,cycle_targets=1,if=active_enemies<5&remains<5&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions.aoe+=/call_action_list,name=cds
-# Three targets is an in-between case that gives a slight benefit to higher priority Havoc
 actions.aoe+=/havoc,cycle_targets=1,if=!(target=self.target)&active_enemies<4
-# Rain of Fire will start to dominate on heavy AoE, but some significant Chaos Bolt buffs will still give higher damage output on occasion
-actions.aoe+=/chaos_bolt,if=talent.grimoire_of_supremacy.enabled&pet.infernal.active&(havoc_active|talent.cataclysm.enabled|talent.inferno.enabled&active_enemies<4)
-# Barring any exceptions, Rain of Fire will be used as much as possible, since multiple copies of it can stack
 actions.aoe+=/rain_of_fire
-# Even if the Havoc priority list won't be used, Havoc is pretty much free damage and resources and should be used almost on cooldown
-actions.aoe+=/havoc,cycle_targets=1,if=!(target=self.target)&(!talent.grimoire_of_supremacy.enabled|!talent.inferno.enabled|talent.grimoire_of_supremacy.enabled&pet.infernal.remains<=10)
-# Use Fire and Brimstone if Backdraft is active, as long as it will not overcap on Soul Shards
+actions.aoe+=/havoc,cycle_targets=1,if=!(self.target=target)
+actions.aoe+=/decimating_bolt
 actions.aoe+=/incinerate,if=talent.fire_and_brimstone.enabled&buff.backdraft.up&soul_shard<5-0.2*active_enemies
-# Other Soul Shard generating abilities are good filler if not using Fire and Brimstone
 actions.aoe+=/soul_fire
 actions.aoe+=/conflagrate,if=buff.backdraft.down
-actions.aoe+=/shadowburn,if=!talent.fire_and_brimstone.enabled
-# With Fire and Brimstone, Incinerate will be a strong filler. It's placed here for all talents to prevent accidentally using the single target rotation list
+actions.aoe+=/shadowburn,if=target.health.pct<20
+actions.aoe+=/immolate,if=refreshable
+actions.aoe+=/scouring_tithe
 actions.aoe+=/incinerate
 ]]
-
+	if RainOfFire:Usable() and Pet.Infernal:Up() and (not Havoc:Ready() or Player.enemies > 3) then
+		return RainOfFire
+	end
+	if SoulRot:Usable() then
+		UseCooldown(SoulRot)
+	end
+--[[
+	if ImpendingCatastrophe:Usable() then
+		UseCooldown(ImpendingCatastrophe)
+	end
+]]
+	if ChannelDemonfire:Usable() and Immolate:Remains() > ChannelDemonfire:CastTime() then
+		UseCooldown(ChannelDemonfire)
+	end
+	if Immolate:Usable() and Player.enemies < 5 and Immolate:Remains() < 5 and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
+		return Immolate
+	end
+	if self.use_cds then
+		self:cds()
+	end
+	if Havoc:Usable() and Player.enemies < 4 then
+		UseExtra(Havoc)
+	end
+	if RainOfFire:Usable() then
+		return RainOfFire
+	end
+	if Havoc:Usable() then
+		UseExtra(Havoc)
+	end
+--[[
+	if DecimatingBolt:Usable() then
+		UseCooldown(DecimatingBolt)
+	end
+]]
+	if FireAndBrimstone.known and Incinerate:Usable() and Backdraft:Up() and Player.soul_shards.current < (5 - 0.2 * Player.enemies) then
+		return Incinerate
+	end
+	if SoulFire:Usable() then
+		return SoulFire
+	end
+	if Conflagrate:Usable() and Backdraft:Down() then
+		return Conflagrate
+	end
+	if Shadowburn:Usable() and Target.healthPercentage < 20 then
+		return Shadowburn
+	end
+	if Immolate:Usable() and Immolate:Refreshable() then
+		return Immolate
+	end
+	if Incinerate:Usable() then
+		return Incinerate
+	end
 end
 
 APL[SPEC.DESTRUCTION].cds = function(self)
 --[[
-# If both cooldowns are ready, summon the Infernal then activate DSI. If not using DSI, use this on CD
-actions.cds=summon_infernal,if=cooldown.dark_soul_instability.ready|!talent.dark_soul_instability.enabled
-actions.cds+=/dark_soul_instability,if=pet.infernal.active
-# If DSI is not ready but you can get more than one infernal in before the end of the fight, summon the Infernal now
-actions.cds+=/summon_infernal,if=target.time_to_die>cooldown.summon_infernal.duration
-# If you can get in more than one more DSI before the end of the fight, use that now
-actions.cds+=/dark_soul_instability,if=target.time_to_die>cooldown.dark_soul_instability.duration+20
-# If the fight will end before DSI is back up, summon the Infernal
-actions.cds+=/summon_infernal,if=talent.dark_soul_instability.enabled&cooldown.dark_soul_instability.remains>target.time_to_die
-# If the fight will end before infernal is back up, use DSI
-actions.cds+=/dark_soul_instability,if=cooldown.summon_infernal.remains>target.time_to_die
-# If the fight is about to end, use CDs such that they get as much time up as possible
-actions.cds+=/summon_infernal,if=target.time_to_die<30
-actions.cds+=/dark_soul_instability,if=target.time_to_die<20
-actions.cds+=/potion,if=pet.infernal.active|target.time_to_die<30
-actions.cds+=/berserking
-actions.cds+=/blood_fury
-actions.cds+=/fireblood
-actions.cds+=/use_items
+actions.cds=use_item,name=shadowed_orb_of_torment,if=cooldown.summon_infernal.remains<3|time_to_die<42
+actions.cds+=/summon_infernal
+actions.cds+=/dark_soul_instability,if=pet.infernal.active|cooldown.summon_infernal.remains_expected>time_to_die
+actions.cds+=/potion,if=pet.infernal.active
+actions.cds+=/berserking,if=pet.infernal.active
+actions.cds+=/blood_fury,if=pet.infernal.active
+actions.cds+=/fireblood,if=pet.infernal.active
+actions.cds+=/use_item,name=scars_of_fraternal_strife,if=!buff.scars_of_fraternal_strife_4.up
+actions.cds+=/use_item,name=scars_of_fraternal_strife,if=buff.scars_of_fraternal_strife_4.up&pet.infernal.active
+actions.cds+=/use_items,if=pet.infernal.active|time_to_die<21
 ]]
-
+	if SummonInfernal:Usable() then
+		return UseCooldown(SummonInfernal)
+	end
+	if DarkSoulInstability:Usable() and (Pet.Infernal:Up() or SummonInfernal:Cooldown() > Target.timeToDie) then
+		return UseCooldown(DarkSoulInstability)
+	end
+	if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and Pet.Infernal:Up() then
+		return UseCooldown(PotionOfSpectralIntellect)
+	end
+	if Opt.trinket and ((Target.boss and Target.timeToDie < 21) or Pet.Infernal:Up()) then
+		if Trinket1:Usable() then
+			return UseCooldown(Trinket1)
+		elseif Trinket2:Usable() then
+			return UseCooldown(Trinket2)
+		end
+	end
 end
 
 APL[SPEC.DESTRUCTION].havoc = function(self)
 --[[
 actions.havoc=conflagrate,if=buff.backdraft.down&soul_shard>=1&soul_shard<=4
+actions.havoc+=/soul_fire,if=cast_time<havoc_remains
+actions.havoc+=/decimating_bolt,if=cast_time<havoc_remains&soulbind.lead_by_example.enabled
+actions.havoc+=/scouring_tithe,if=cast_time<havoc_remains
 actions.havoc+=/immolate,if=talent.internal_combustion.enabled&remains<duration*0.5|!talent.internal_combustion.enabled&refreshable
 actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains
-actions.havoc+=/soul_fire
-actions.havoc+=/shadowburn,if=active_enemies<3|!talent.fire_and_brimstone.enabled
+actions.havoc+=/shadowburn
 actions.havoc+=/incinerate,if=cast_time<havoc_remains
 ]]
-
+	if Conflagrate:Usable() and Backdraft:Down() and between(Player.soul_shards.current, 1, 4) then
+		return Conflagrate
+	end
+	if SoulFire:Usable() and SoulFire:CastTime() < self.havoc_remains then
+		return SoulFire
+	end
+--[[
+	if DecimatingBolt:Usable() and DecimatingBolt:CastTime() < self.havoc_remains and LeadByExample.known then
+		UseCooldown(DecimatingBolt)
+	end
+	if ScouringTithe:Usable() and ScouringTithe:CastTime() < self.havoc_remains then
+		UseCooldown(ScouringTithe)
+	end
+]]
+	if Immolate:Usable() and (
+		(InternalCombustion.known and Immolate:Remains() < (Immolate:Duration() * 0.5)) or
+		(not InternalCombustion.known and Immolate:Refreshable())
+	) then
+		return Immolate
+	end
+	if ChaosBolt:Usable() and ChaosBolt:CastTime() < self.havoc_remains then
+		return ChaosBolt
+	end
+	if Shadowburn:Usable() then
+		return Shadowburn
+	end
+	if Incinerate:Usable() and Incinerate:CastTime() < self.havoc_remains then
+		return Incinerate
+	end
 end
 
 APL.Interrupt = function(self)
@@ -3704,7 +3933,7 @@ CombatEvent.SWING_MISSED = function(event, srcGUID, dstGUID, missType, offHand, 
 end
 
 CombatEvent.SPELL_SUMMON = function(event, srcGUID, dstGUID)
-	if not srcGUID == Player.guid then
+	if srcGUID ~= Player.guid then
 		return
 	end
 	local pet = summonedPets:Find(dstGUID)
