@@ -2530,7 +2530,7 @@ actions+=/call_action_list,name=fillers
 	if Player.use_cds and DarkSoulMisery:Usable() and SummonDarkglare:Cooldown() < 15 and (PhantomSingularity:Up() or VileTaint:Up()) then
 		UseCooldown(DarkSoulMisery)
 	end
-	if SoulRot:Usable() and (SummonDarkglare:Ready(5) or not SummonDarkglare:Ready(50)) then
+	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() and (SummonDarkglare:Ready(5) or not SummonDarkglare:Ready(50)) then
 		UseCooldown(SoulRot)
 	end
 	apl = self:spenders()
@@ -3271,7 +3271,7 @@ actions+=/incinerate
 		UseCooldown(ImpendingCatastrophe)
 	end
 ]]
-	if SoulRot:Usable() then
+	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() then
 		UseCooldown(SoulRot)
 	end
 	if OdrShawlOfTheYmirjar.known and Havoc:Usable() then
@@ -3329,7 +3329,7 @@ actions.aoe+=/incinerate
 	if RainOfFire:Usable() and Pet.Infernal:Up() and (not Havoc:Ready() or Player.enemies > 3) then
 		return RainOfFire
 	end
-	if SoulRot:Usable() then
+	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() then
 		UseCooldown(SoulRot)
 	end
 --[[
