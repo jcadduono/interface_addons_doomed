@@ -1668,17 +1668,6 @@ function Player:UpdateAbilities()
 			end
 		end
 	end
-	
-	for _, pet in next, summonedPets.all do
-		pet.known = false
-		if pet.summon_spell then
-			if pet.summon_spell.known then
-				pet.known = true
-			elseif pet.summon_spell == NetherPortal and InnerDemons.known then
-				pet.known = true
-			end
-		end
-	end
 
 	if DrainSoul.known then
 		ShadowBolt.known = false
@@ -1694,6 +1683,8 @@ function Player:UpdateAbilities()
 	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
 	SpellLock.known = SummonFelhunter.known or SummonObserver.known
 	FelFirebolt.known = Pet.WildImp.known or Pet.WildImpID.known
+	RitualOfRuin.known = self.set_bonus.t28 >= 2
+	Blasphemy.known = self.set_bonus.t28 >= 4
 
 	wipe(abilities.bySpellId)
 	wipe(abilities.velocity)
@@ -1716,10 +1707,11 @@ function Player:UpdateAbilities()
 			end
 		end
 	end
-	
+
 	wipe(summonedPets.known)
 	wipe(summonedPets.byUnitId)
 	for _, pet in next, summonedPets.all do
+		pet.known = pet.summon_spell and pet.summon_spell.known
 		if pet.known then
 			summonedPets.known[#summonedPets.known + 1] = pet
 			summonedPets.byUnitId[pet.unitId] = pet
