@@ -2338,6 +2338,21 @@ function Pet.WildImp:CastSuccess(unit)
 end
 Pet.WildImpID.CastSuccess = Pet.WildImp.CastSuccess
 
+function Pet.Infernal:AddUnit(guid)
+	local unit = SummonedPet.AddUnit(self, guid)
+	if SummonInfernal.summoning then
+		SummonInfernal.summoning = false -- summoned a full duration infernal
+	else -- summoned a Rain of Chaos proc infernal
+		unit.expires = Player.time + 8
+	end
+	return unit
+end
+
+function SummonInfernal:CastSuccess(...)
+	Ability.CastSuccess(self, ...)
+	self.summoning = true
+end
+
 -- End Summoned Pet Modifications
 
 local function UseCooldown(ability, overwrite)
@@ -3116,6 +3131,7 @@ end
 APL[SPEC.DESTRUCTION].Main = function(self)
 	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or Pet.Infernal:Up() or (DarkSoulInstability.known and DarkSoulInstability:Up()))
 	self.havoc_remains = Havoc:HighestRemains()
+	Player.infernal_count = Pet.Infernal:Count() + Pet.Blasphemy:Count()
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -3238,7 +3254,7 @@ actions+=/incinerate
 			return Immolate
 		end
 	end
-	if ChaosBolt:Usable() and (Pet.Infernal:Up() or Pet.Blasphemy:Up()) and Player.soul_shards.current >= 4 then
+	if ChaosBolt:Usable() and Player.infernal_count > 0 and Player.soul_shards.current >= 4 then
 		return ChaosBolt
 	end
 	if self.use_cds then
@@ -3768,6 +3784,10 @@ function UI:UpdateDisplay()
 					end
 				end
 			end
+		end
+	elseif Player.spec == SPEC.DESTRUCTION then
+		if Opt.pet_count then
+			text_tl = Player.infernal_count > 0 and Player.infernal_count
 		end
 	end
 
