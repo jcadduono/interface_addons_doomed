@@ -3247,7 +3247,7 @@ actions+=/incinerate
 	if SoulFire:Usable() and SoulFire:Refreshable() and Player.soul_shards.current <= 4 and (not Catalysm.known or Cataclysm:Cooldown() > SoulFire:Remains()) then
 		return SoulFire
 	end
-	if Immolate:Usable() then
+	if Immolate:Usable() and Target.timeToDie > Immolate:Remains() then
 		if Immolate:Refreshable() and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
 			return Immolate
 		end
@@ -3381,7 +3381,7 @@ actions.aoe+=/incinerate
 	if Shadowburn:Usable() and Target.healthPercentage < 20 then
 		return Shadowburn
 	end
-	if Immolate:Usable() and Immolate:Refreshable() then
+	if Immolate:Usable() and Immolate:Refreshable() and Target.timeToDie > Immolate:Remains() then
 		return Immolate
 	end
 	if Incinerate:Usable() then
