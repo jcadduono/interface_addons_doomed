@@ -573,12 +573,12 @@ function Ability:Refreshable()
 	return self:Down()
 end
 
-function Ability:Up(condition)
-	return self:Remains(condition) > 0
+function Ability:Up(...)
+	return self:Remains(...) > 0
 end
 
-function Ability:Down(condition)
-	return self:Remains(condition) <= 0
+function Ability:Down(...)
+	return self:Remains(...) <= 0
 end
 
 function Ability:SetVelocity(velocity)
@@ -1343,25 +1343,25 @@ function SummonedPet:Add(unitId, duration, summonSpell)
 	return pet
 end
 
-function SummonedPet:Remains()
+function SummonedPet:Remains(initial)
 	local expires_max, guid, unit = 0
 	if self.summon_spell and self.summon_spell.summon_count > 0 and self.summon_spell:Casting() then
 		expires_max = self.duration
 	end
 	for guid, unit in next, self.active_units do
-		if unit.expires > expires_max then
+		if (not initial or unit.initial) and unit.expires > expires_max then
 			expires_max = unit.expires
 		end
 	end
-	return max(expires_max - Player.time - Player.execute_remains, 0)
+	return max(0, expires_max - Player.time - Player.execute_remains)
 end
 
-function SummonedPet:Up()
-	return self:Remains() > 0
+function SummonedPet:Up(...)
+	return self:Remains(...) > 0
 end
 
-function SummonedPet:Down()
-	return self:Remains() <= 0
+function SummonedPet:Down(...)
+	return self:Remains(...) <= 0
 end
 
 function SummonedPet:Count()
@@ -1770,8 +1770,8 @@ function Player:Update()
 		self.mana.current = self.mana.current - self.ability_casting:Cost()
 		self.soul_shards.current = self.soul_shards.current - self.ability_casting:ShardCost()
 	end
-	self.mana.current = min(max(self.mana.current, 0), self.mana.max)
-	self.soul_shards.current = min(max(self.soul_shards.current, 0), self.soul_shards.max)
+	self.mana.current = min(self.mana.max, max(0, self.mana.current))
+	self.soul_shards.current = min(self.soul_shards.max, max(0, self.soul_shards.current))
 	self.moving = GetUnitSpeed('player') ~= 0
 	self:UpdateThreat()
 	self:UpdatePet()
@@ -1957,7 +1957,7 @@ SummonFelguard.Up = SummonImp.Up
 SummonWrathguard.Up = SummonImp.Up
 
 function HandOfGuldan:ShardCost()
-	return min(max(Player.soul_shards.current, 1), 3)
+	return min(3, max(1, Player.soul_shards.current))
 end
 
 HandOfGuldan.cast_shards = 0
@@ -2143,6 +2143,28 @@ function Immolate:Remains()
 	return Ability.Remains(self)
 end
 
+function Backdraft:Stack()
+	local stack = Ability.Stack(self)
+	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting()) then
+		stack = stack - 1
+	end
+	return stack
+end
+
+function Backdraft:Remains()
+	if self:Stack() == 0 then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function Eradication:Remains()
+	if ChaosBolt:Casting() or ChaosBolt:Traveling() > 0 then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
@@ -2262,7 +2284,7 @@ function Pet.WildImp:UnitRemains(unit)
 		unit.cast_end = 0
 		remains = unit.expires - Player.time
 	end
-	return max(remains, 0)
+	return max(0, remains)
 end
 Pet.WildImpID.UnitRemains = Pet.WildImp.UnitRemains
 
@@ -2343,6 +2365,7 @@ function Pet.Infernal:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
 	if SummonInfernal.summoning then
 		SummonInfernal.summoning = false -- summoned a full duration infernal
+		unit.initial = true
 	else -- summoned a Rain of Chaos proc infernal
 		unit.expires = Player.time + 8
 	end
@@ -2506,7 +2529,7 @@ actions+=/call_action_list,name=fillers
 		if DrainSoul:Usable() and ShadowEmbrace:Remains() <= (Player.gcd * 2) then
 			return DrainSoul
 		end
-		if ShadowBolt:Usable() and ShadowEmbrace:Remains() <= (ShadowBolt:CastTime() * 2 + ShadowBolt:TravelTime()) and not ShadowBolt:Traveling() then
+		if ShadowBolt:Usable() and ShadowEmbrace:Remains() <= (ShadowBolt:CastTime() * 2 + ShadowBolt:TravelTime()) and ShadowBolt:Traveling() == 0 then
 			return ShadowBolt
 		end
 	end
@@ -3251,7 +3274,7 @@ actions+=/incinerate
 		if Immolate:Refreshable() and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
 			return Immolate
 		end
-		if InternalCombustion.known and ChaosBolt:Traveling() and Immolate:Remains() < (Immolate:Duration() * 0.5) then
+		if InternalCombustion.known and ChaosBolt:Traveling() > 0 and Immolate:Remains() < (Immolate:Duration() * 0.5) then
 			return Immolate
 		end
 	end
