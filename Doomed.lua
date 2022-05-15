@@ -186,6 +186,12 @@ local Player = {
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
 	},
 	main_freecast = false,
+	dot_count = 0,
+	pet_count = 0,
+	imp_count = 0,
+	infernal_count = 0,
+	tyrant_available_power = 0,
+	tyrant_cd = 0,
 }
 
 -- current target information
@@ -2404,7 +2410,6 @@ local APL = {
 }
 
 APL[SPEC.AFFLICTION].Main = function(self)
-	Player.darkglare_remains = Pet.Darkglare:Remains()
 	Player.use_cds = Target.boss or Target.timeToDie > Opt.cd_ttd or (SoulRot.known and SoulRot:Ticking() > 0) or (DarkSoulMisery.known and DarkSoulMisery:Up()) or SummonDarkglare:Up()
 	Player.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
 	Player.dot_count = Agony:Ticking() + Corruption:Ticking() + UnstableAffliction:Ticking() + (SiphonLife.known and SiphonLife:Ticking() or 0) + (PhantomSingularity.known and PhantomSingularity:Ticking() or 0) + (VileTaint.known and VileTaint:Ticking() or 0)
@@ -2692,7 +2697,7 @@ APL[SPEC.AFFLICTION].spenders = function(self)
 actions.spenders+=/call_action_list,name=fillers,if=(cooldown.summon_darkglare.remains<time_to_shard*(5-soul_shard)|cooldown.summon_darkglare.up)&time_to_die>cooldown.summon_darkglare.remains
 actions.spenders+=/seed_of_corruption,if=variable.use_seed
 ]]
-	if Player.use_cds and (SummonDarkglare:Ready(5 - Player.soul_shards.current) or Player.darkglare_remains > 0) and Target.timeToDie > SummonDarkglare:Cooldown() then
+	if Player.use_cds and (SummonDarkglare:Ready(5 - Player.soul_shards.current) or Pet.Darkglare:Up()) and Target.timeToDie > SummonDarkglare:Cooldown() then
 		local apl = self:fillers()
 		if apl then return apl end
 	end
