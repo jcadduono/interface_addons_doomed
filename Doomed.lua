@@ -407,8 +407,8 @@ function autoAoe:Add(guid, update)
 	if self.blacklist[guid] then
 		return
 	end
-	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
-	if unitId and self.ignored_units[tonumber(unitId)] then
+	local npcId = guid:match('^%a+%-0%-%d+%-%d+%-%d+%-(%d+)')
+	if not npcId or self.ignored_units[tonumber(npcId)] then
 		self.blacklist[guid] = Player.time + 10
 		return
 	end
@@ -1226,6 +1226,10 @@ SummonInfernal.cooldown_duration = 180
 SummonInfernal.mana_cost = 2
 SummonInfernal.shard_cost = 1
 SummonInfernal:AutoAoe(true)
+------ Pet Abilities
+local Immolation = Ability:Add(20153, false, false)
+Immolation.triggers_gcd = false
+Immolation:AutoAoe()
 ------ Talents
 local Cataclysm = Ability:Add(152108, false, true)
 Cataclysm.cooldown_duration = 30
@@ -1267,6 +1271,8 @@ local Backdraft = Ability:Add(196406, true, true, 117828)
 Backdraft.buff_duration = 10
 ------ Tier Bonuses
 local Blasphemy = Ability:Add(367680, false, true) -- T28 4 piece
+local ImpendingRuin = Ability:Add(364348, true, true) -- T28 2 piece
+ImpendingRuin.buff_duration = 3600
 local RitualOfRuin = Ability:Add(364433, true, true, 364349) -- T28 2 piece
 RitualOfRuin.buff_duration = 3600
 -- PvP talents
@@ -1301,12 +1307,12 @@ SummonedPet.__index = SummonedPet
 local summonedPets = {
 	all = {},
 	known = {},
-	byUnitId = {},
+	byNpcId = {},
 }
 
 function summonedPets:Find(guid)
-	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
-	return unitId and self.byUnitId[tonumber(unitId)]
+	local npcId = guid:match('^Creature%-0%-%d+%-%d+%-%d+%-(%d+)')
+	return npcId and self.byNpcId[tonumber(npcId)]
 end
 
 function summonedPets:Purge()
@@ -1337,9 +1343,9 @@ function summonedPets:Empowered()
 	return self:EmpoweredRemains() > 0
 end
 
-function SummonedPet:Add(unitId, duration, summonSpell)
+function SummonedPet:Add(npcId, duration, summonSpell)
 	local pet = {
-		unitId = unitId,
+		npcId = npcId,
 		duration = duration,
 		active_units = {},
 		summon_spell = summonSpell,
@@ -1691,7 +1697,9 @@ function Player:UpdateAbilities()
 	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
 	SpellLock.known = SummonFelhunter.known or SummonObserver.known
 	FelFirebolt.known = Pet.WildImp.known or Pet.WildImpID.known
+	Immolation.known = Pet.Infernal.known
 	RitualOfRuin.known = self.set_bonus.t28 >= 2
+	ImpendingRuin.known = RitualOfRuin.known
 	Blasphemy.known = self.set_bonus.t28 >= 4
 
 	wipe(abilities.bySpellId)
@@ -1717,15 +1725,12 @@ function Player:UpdateAbilities()
 	end
 
 	wipe(summonedPets.known)
-	wipe(summonedPets.byUnitId)
+	wipe(summonedPets.byNpcId)
 	for _, pet in next, summonedPets.all do
 		pet.known = pet.summon_spell and pet.summon_spell.known
 		if pet.known then
 			summonedPets.known[#summonedPets.known + 1] = pet
-			summonedPets.byUnitId[pet.unitId] = pet
-			if pet.unitId2 then
-				summonedPets.byUnitId[pet.unitId2] = pet
-			end
+			summonedPets.byNpcId[pet.npcId] = pet
 		end
 	end
 end
@@ -2129,17 +2134,25 @@ function InevitableDemise:Stack()
 end
 
 function RitualOfRuin:Remains()
-	if ChaosBolt:Casting() then
-		return 0
+	if ImpendingRuin:Stack() >= 10 then
+		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function ImpendingRuin:Stack()
+	local stack = Ability.Stack(self)
+	if Player.ability_casting then
+		stack = stack + Ability.ShardCost(Player.ability_casting)
+	end
+	return max(0, min(10, stack))
 end
 
 function ChaosBolt:ShardCost()
 	if RitualOfRuin.known and RitualOfRuin:Up() then
 		return 0
 	end
-	return self.shard_cost
+	return Ability.ShardCost(self)
 end
 RainOfFire.ShardCost = ChaosBolt.ShardCost
 
@@ -2351,20 +2364,31 @@ function Pet.WildImp:Casting()
 end
 Pet.WildImpID.Casting = Pet.WildImp.Casting
 
-function Pet.WildImp:CastStart(unit)
-	unit.cast_end = Player.time + FelFirebolt:CastTime()
+function Pet.WildImp:CastStart(unit, spellId, dstGUID)
+	if FelFirebolt:Match(spellId) then
+		unit.cast_end = Player.time + FelFirebolt:CastTime()
+	end
 end
 Pet.WildImpID.CastStart = Pet.WildImp.CastStart
 
-function Pet.WildImp:CastSuccess(unit)
-	if not summonedPets:Empowered() then
-		unit.energy = unit.energy - 20
+function Pet.WildImp:CastFailed(unit, spellId, dstGUID)
+	if FelFirebolt:Match(spellId) then
+		unit.cast_end = 0
 	end
-	if unit.energy <= 0 then
-		self.active_units[unit.guid] = nil
-		return
+end
+Pet.WildImpID.CastFailed = Pet.WildImp.CastFailed
+
+function Pet.WildImp:CastSuccess(unit, spellId, dstGUID)
+	if FelFirebolt:Match(spellId) then
+		if not summonedPets:Empowered() then
+			unit.energy = unit.energy - 20
+		end
+		if unit.energy <= 0 then
+			self.active_units[unit.guid] = nil
+			return
+		end
+		unit.cast_end = 0
 	end
-	unit.cast_end = 0
 end
 Pet.WildImpID.CastSuccess = Pet.WildImp.CastSuccess
 
@@ -2378,6 +2402,13 @@ function Pet.Infernal:AddUnit(guid)
 	end
 	return unit
 end
+
+function Pet.Infernal:SpellDamage(unit, spellId, dstGUID)
+	if Immolation:Match(spellId) then
+		Immolation:RecordTargetHit(dstGUID)
+	end
+end
+Pet.Blasphemy.SpellDamage = Pet.Infernal.SpellDamage
 
 function SummonInfernal:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
@@ -3985,17 +4016,20 @@ CombatEvent.SPELL_SUMMON = function(event, srcGUID, dstGUID)
 end
 
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
-	if spellId == FelFirebolt.spellId then
-		local pet = summonedPets:Find(srcGUID)
-		if pet then
-			local unit = pet.active_units[srcGUID]
-			if unit then
-				if event == 'SPELL_CAST_START' then
-					pet:CastStart(unit)
-				elseif event == 'SPELL_CAST_SUCCESS' then
-					pet:CastSuccess(unit)
-				end
+	local pet = summonedPets:Find(srcGUID)
+	if pet then
+		local unit = pet.active_units[srcGUID]
+		if unit then
+			if event == 'SPELL_CAST_SUCCESS' and pet.CastSuccess then
+				pet:CastSuccess(unit, spellId, dstGUID)
+			elseif event == 'SPELL_CAST_START' and pet.CastStart then
+				pet:CastStart(unit, spellId, dstGUID)
+			elseif event == 'SPELL_CAST_FAILED' and pet.CastFailed then
+				pet:CastFailed(unit, spellId, dstGUID, missType)
+			elseif event == 'SPELL_DAMAGE' and pet.SpellDamage then
+				pet:SpellDamage(unit, spellId, dstGUID)
 			end
+			--print(format('PET %d EVENT %s SPELL %s ID %d', pet.npcId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 		end
 		return
 	end
@@ -4054,7 +4088,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			ability:RecordTargetHit(dstGUID)
 		end
 	end
-	if event == 'RANGE_DAMAGE' or event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
+	if event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 		ability:CastLanded(dstGUID, event, missType)
 	end
 end
@@ -4086,7 +4120,7 @@ function events:UNIT_SPELLCAST_START(unitID, castGUID, spellId)
 	if Opt.interrupt and unitID == 'target' then
 		UI:UpdateCombatWithin(0.05)
 	end
-	if unitId == 'player' and spellId == HandOfGuldan.spellId then
+	if unitId == 'player' and HandOfGuldan:Match(spellId) then
 		HandOfGuldan.cast_shards = Player.soul_shards.current
 	end
 end
