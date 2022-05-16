@@ -1208,6 +1208,7 @@ local Havoc = Ability:Add(80240, false, true)
 Havoc.buff_duration = 12
 Havoc.cooldown_duration = 30
 Havoc.mana_cost = 2
+Havoc:AutoAoe(false, 'cast')
 Havoc:TrackAuras()
 local ChaosBolt = Ability:Add(116858, false, true)
 ChaosBolt.shard_cost = 2
