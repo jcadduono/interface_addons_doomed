@@ -750,7 +750,7 @@ end
 function Ability:CastTime()
 	local _, _, _, castTime = GetSpellInfo(self.spellId)
 	if castTime == 0 then
-		return self.triggers_gcd and Player.gcd or 0
+		return 0
 	end
 	return castTime / 1000
 end
@@ -1136,7 +1136,6 @@ Felstorm.requires_pet = true
 Felstorm.triggers_gcd = false
 Felstorm:AutoAoe()
 local FelFirebolt = Ability:Add(104318, false, false)
-FelFirebolt.triggers_gcd = false
 local LegionStrike = Ability:Add(30213, false, true)
 LegionStrike.requires_pet = true
 LegionStrike:AutoAoe()
@@ -1228,7 +1227,6 @@ SummonInfernal.shard_cost = 1
 SummonInfernal:AutoAoe(true)
 ------ Pet Abilities
 local Immolation = Ability:Add(20153, false, false)
-Immolation.triggers_gcd = false
 Immolation:AutoAoe()
 ------ Talents
 local Cataclysm = Ability:Add(152108, false, true)
@@ -2146,6 +2144,13 @@ function ImpendingRuin:Stack()
 		stack = stack + Ability.ShardCost(Player.ability_casting)
 	end
 	return max(0, min(10, stack))
+end
+
+function ChaosBolt:CastTime()
+	if RitualOfRuin.known and RitualOfRuin:Up() then
+		return 0
+	end
+	return Ability.CastTime(self)
 end
 
 function ChaosBolt:ShardCost()
