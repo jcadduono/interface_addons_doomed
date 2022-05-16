@@ -3856,6 +3856,16 @@ function UI:UpdateDisplay()
 		if Opt.pet_count then
 			text_tl = Player.infernal_count > 0 and Player.infernal_count
 		end
+		if Opt.tyrant then
+			local _, unit, remains
+			text_tr = ''
+			for _, unit in next, Pet.Infernal.active_units do
+				remains = unit.expires - Player.time
+				if remains > 0 then
+					text_tr = format('%s%.1fs\n', text_tr, remains)
+				end
+			end
+		end
 	end
 
 	doomedPanel.dimmer:SetShown(dim)
@@ -4605,13 +4615,13 @@ SlashCmdList[ADDON] = function(msg, editbox)
 				Opt.pet_count = msg[2] == 'on'
 			end
 		end
-		return Status('Show Demonology summoned pet counter (topleft)', Opt.pet_count == 'imps' and 'Wild Imps only' or Opt.pet_count)
+		return Status('Show summoned pet counter (topleft)', Opt.pet_count == 'imps' and 'Wild Imps only' or Opt.pet_count)
 	end
 	if startsWith(msg[1], 'tyr') then
 		if msg[2] then
 			Opt.tyrant = msg[2] == 'on'
 		end
-		return Status('Show Demonology Demonic Tyrant power/remains (topright)', Opt.tyrant)
+		return Status('Show Tyrant/Infernal/Darkglare power/remains (topright)', Opt.tyrant)
 	end
 	if msg[1] == 'reset' then
 		doomedPanel:ClearAllPoints()
@@ -4644,8 +4654,8 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'trinket |cFF00C000on|r/|cFFC00000off|r - show on-use trinkets in cooldown UI',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
-		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show Demonology summoned pet counter (topleft)',
-		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Demonology Demonic Tyrant power/remains (topright)',
+		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show summoned pet counter (topleft)',
+		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Tyrant/Infernal/Darkglare power/remains (topright)',
 		'|cFFFFD000reset|r - reset the location of the ' .. ADDON .. ' UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
