@@ -1773,7 +1773,8 @@ function Player:Update()
 	self.mana.regen = GetPowerRegen()
 	self.mana.current = UnitPower('player', 0) + (self.mana.regen * self.execute_remains)
 	if self.spec == SPEC.DESTRUCTION then
-		self.soul_shards.current = UnitPower('player', 7, true) / 10
+		self.infernal_count = Pet.Infernal:Count() + (Blasphemy.known and Pet.Blasphemy:Count() or 0)
+		self.soul_shards.current = (UnitPower('player', 7, true) + (self.infernal_count * 2 * self.execute_remains)) / 10
 	else
 		self.soul_shards.current = UnitPower('player', 7)
 	end
@@ -3199,7 +3200,6 @@ APL[SPEC.DESTRUCTION].Main = function(self)
 	self.infernal_up = Pet.Infernal:Up(true)
 	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up or (DarkSoulInstability.known and DarkSoulInstability:Up()))
 	self.havoc_remains = Havoc:HighestRemains()
-	Player.infernal_count = Pet.Infernal:Count() + Pet.Blasphemy:Count()
 
 	if Player:TimeInCombat() == 0 then
 --[[
