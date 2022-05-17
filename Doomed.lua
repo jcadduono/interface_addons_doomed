@@ -1022,10 +1022,10 @@ SeedOfCorruption.hasted_duration = true
 SeedOfCorruption.triggers_combat = true
 SeedOfCorruption:AutoAoe(true)
 SeedOfCorruption:TrackAuras()
-local ShadowBolt = Ability:Add(232670, false, true)
-ShadowBolt.mana_cost = 2
-ShadowBolt.triggers_combat = true
-ShadowBolt:SetVelocity(25)
+local ShadowBoltAffliction = Ability:Add(232670, false, true)
+ShadowBoltAffliction.mana_cost = 2
+ShadowBoltAffliction.triggers_combat = true
+ShadowBoltAffliction:SetVelocity(25)
 local SummonDarkglare = Ability:Add(205180, false, true)
 SummonDarkglare.mana_cost = 2
 SummonDarkglare.cooldown_duration = 180
@@ -1108,11 +1108,11 @@ HandOfGuldan:AutoAoe(true)
 local Implosion = Ability:Add(196277, false, true, 196278)
 Implosion.mana_cost = 2
 Implosion:AutoAoe()
-local ShadowBoltDemo = Ability:Add(686, false, true)
-ShadowBoltDemo.mana_cost = 2
-ShadowBoltDemo.shard_cost = -1
-ShadowBoltDemo.triggers_combat = true
-ShadowBoltDemo:SetVelocity(20)
+local ShadowBoltDemonology = Ability:Add(686, false, true)
+ShadowBoltDemonology.mana_cost = 2
+ShadowBoltDemonology.shard_cost = -1
+ShadowBoltDemonology.triggers_combat = true
+ShadowBoltDemonology:SetVelocity(20)
 local SummonDemonicTyrant = Ability:Add(265187, true, true)
 SummonDemonicTyrant.buff_duration = 15
 SummonDemonicTyrant.cooldown_duration = 90
@@ -1314,6 +1314,8 @@ local OdrShawlOfTheYmirjar = Ability:Add(337163, false, true)
 OdrShawlOfTheYmirjar.bonus_id = 7037
 -- Trinket Effects
 
+-- Aliases
+local ShadowBolt = ShadowBoltAffliction
 -- End Abilities
 
 -- Start Summoned Pets
@@ -1699,6 +1701,11 @@ function Player:UpdateAbilities()
 		end
 	end
 
+	if ShadowBoltAffliction.known then
+		ShadowBolt = ShadowBoltAffliction
+	elseif ShadowBoltDemonology.known then
+		ShadowBolt = ShadowBoltDemonology
+	end
 	if DrainSoul.known then
 		ShadowBolt.known = false
 	end
@@ -2827,12 +2834,12 @@ actions.precombat+=/demonbolt
 				UseCooldown(SpectralFlaskOfPower)
 			end
 		end
-		if Player.soul_shards.current < 5 and Player.imp_count < 6 and not (Demonbolt:Casting() or ShadowBoltDemo:Casting()) then
-			if Demonbolt:Usable() and (Target.boss or DemonicCore:Up()) and (Player.soul_shards.current <= 3 or DemonicCore:Up() and DemonicCore:Remains() < (ShadowBoltDemo:CastTime() * 2)) then
+		if Player.soul_shards.current < 5 and Player.imp_count < 6 and not (Demonbolt:Casting() or ShadowBolt:Casting()) then
+			if Demonbolt:Usable() and (Target.boss or DemonicCore:Up()) and (Player.soul_shards.current <= 3 or DemonicCore:Up() and DemonicCore:Remains() < (ShadowBolt:CastTime() * 2)) then
 				return Demonbolt
 			end
-			if ShadowBoltDemo:Usable() then
-				return ShadowBoltDemo
+			if ShadowBolt:Usable() then
+				return ShadowBolt
 			end
 		end
 	else
@@ -2903,7 +2910,7 @@ actions+=/call_action_list,name=build_a_shard
 	if Demonbolt:Usable() and Player.soul_shards.current <= 4 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
 		return Demonbolt
 	end
-	if ImplosivePotential.known and Implosion:Usable() and Player.imp_count >= 3 and ImplosivePotential:Remains() < ShadowBoltDemo:CastTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:Ready(12)) then
+	if ImplosivePotential.known and Implosion:Usable() and Player.imp_count >= 3 and ImplosivePotential:Remains() < ShadowBolt:CastTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:Ready(12)) then
 		return Implosion
 	end
 	if Doom:Usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:Down() then
@@ -2988,7 +2995,7 @@ actions.build_a_shard+=/shadow_bolt
 		return SoulStrike
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() then
-		if DemonicCore:Remains() <= (ShadowBoltDemo:CastTime() * (5 - Player.soul_shards.current) + HandOfGuldan:CastTime()) then
+		if DemonicCore:Remains() <= (ShadowBolt:CastTime() * (5 - Player.soul_shards.current) + HandOfGuldan:CastTime()) then
 			return Demonbolt
 		end
 		if Player.soul_shards.current <= 3 and Player.tyrant_remains > 0 then
@@ -2998,8 +3005,8 @@ actions.build_a_shard+=/shadow_bolt
 	if SoulStrike:Usable() then
 		return SoulStrike
 	end
-	if ShadowBoltDemo:Usable() then
-		return ShadowBoltDemo
+	if ShadowBolt:Usable() then
+		return ShadowBolt
 	end
 end
 
@@ -3053,7 +3060,7 @@ actions.dcon_prep+=/call_action_list,name=build_a_shard
 		return CallDreadstalkers
 	end
 	if ImplosivePotential.known and ImplosivePotential:Remains() < 6 then
-		if Implosion:Usable() and Player.imp_count >= 3 and (Player.soul_shards.current >= 3 or Player:ImpsIn(ShadowBoltDemo:CastTime()) < 3) then
+		if Implosion:Usable() and Player.imp_count >= 3 and (Player.soul_shards.current >= 3 or Player:ImpsIn(ShadowBolt:CastTime()) < 3) then
 			return Implosion
 		end
 		if HandOfGuldan:Usable() and Player.imp_count < 3 and Player.soul_shards.current >= 3 and ImplosivePotential:Down() and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
@@ -3171,11 +3178,11 @@ actions.nether_portal_active+=/call_action_list,name=build_a_shard
 	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
 		return CallDreadstalkers
 	end
-	if Player.soul_shards.current == 1 and (CallDreadstalkers:Ready(ShadowBoltDemo:CastTime()) or (BilescourgeBombers.known and BilescourgeBombers:Ready(ShadowBoltDemo:CastTime()))) then
+	if Player.soul_shards.current == 1 and (CallDreadstalkers:Ready(ShadowBolt:CastTime()) or (BilescourgeBombers.known and BilescourgeBombers:Ready(ShadowBolt:CastTime()))) then
 		local apl = self:build_a_shard()
 		if apl then return apl end
 	end
-	if HandOfGuldan:Usable() and not NetherPortal:Ready(165 + HandOfGuldan:CastTime()) and not CallDreadstalkers:Ready(Demonbolt:CastTime()) and not CallDreadstalkers:Ready(ShadowBoltDemo:CastTime())  then
+	if HandOfGuldan:Usable() and not NetherPortal:Ready(165 + HandOfGuldan:CastTime()) and not CallDreadstalkers:Ready(Demonbolt:CastTime()) and not CallDreadstalkers:Ready(ShadowBolt:CastTime())  then
 		return HandOfGuldan
 	end
 	if SummonDemonicTyrant:Usable() and ((Player.soul_shards.current == 0 and NetherPortal:Remains() < 5) or (NetherPortal:Remains() < SummonDemonicTyrant:CastTime() + 0.5)) then
