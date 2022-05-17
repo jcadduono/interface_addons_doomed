@@ -1279,12 +1279,29 @@ local RotAndDecay = Ability:Add(212371, false, true)
 -- Racials
 
 -- Covenant abilities
+local DecimatingBolt = Ability:Add(325289, false, true) -- Necrolord
+DecimatingBolt.cooldown_duration = 45
+DecimatingBolt.mana_cost = 4
+DecimatingBolt.triggers_combat = true
+local Fleshcraft = Ability:Add(324631, true, true) -- Necrolord
+Fleshcraft.buff_duration = 120
+Fleshcraft.cooldown_duration = 120
+local ImpendingCatastrophe = Ability:Add(321792, false, true) -- Venthyr
+ImpendingCatastrophe.cooldown_duration = 60
+ImpendingCatastrophe.mana_cost = 4
+ImpendingCatastrophe.triggers_combat = true
+ImpendingCatastrophe:AutoAoe()
 local LeadByExample = Ability:Add(342156, true, true, 342181) -- Necrolord (Emeni Soulbind)
 LeadByExample.buff_duration = 10
-local SoulRot = Ability:Add(325640, false, true)
+local SoulRot = Ability:Add(325640, false, true) -- Night Fae
 SoulRot.buff_duration = 8
 SoulRot.cooldown_duration = 60
 SoulRot.mana_cost = 0.5
+local ScouringTithe = Ability:Add(312321, false, true) -- Kyrian
+ScouringTithe.cooldown_duration = 40
+ScouringTithe.buff_duration = 18
+ScouringTithe.mana_cost = 2
+ScouringTithe.triggers_combat = true
 local SummonSteward = Ability:Add(324739, false, true) -- Kyrian
 SummonSteward.cooldown_duration = 300
 -- Soulbind conduits
@@ -2484,14 +2501,17 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 			UseCooldown(Trinket.SoleahsSecretTechnique)
 		end
 		if SummonSteward:Usable() and PhialOfSerenity:Charges() < 1 then
-			UseCooldown(SummonSteward)
+			UseExtra(SummonSteward)
+		end
+		if Fleshcraft:Usable() and Fleshcraft:Remains() < 10 then
+			UseExtra(Fleshcraft)
 		end
 		if not Player:InArenaOrBattleground() then
 			if EternalAugmentRune:Usable() and EternalAugmentRune.buff:Remains() < 300 then
 				UseCooldown(EternalAugmentRune)
 			end
 			if EternalFlask:Usable() and EternalFlask.buff:Remains() < 300 and SpectralFlaskOfPower.buff:Remains() < 300 then
-				UseCooldown(SpectralFlaskOfPower)
+				UseCooldown(EternalFlask)
 			end
 			if Opt.pot and SpectralFlaskOfPower:Usable() and SpectralFlaskOfPower.buff:Remains() < 300 and EternalFlask.buff:Remains() < 300 then
 				UseCooldown(SpectralFlaskOfPower)
@@ -2623,8 +2643,8 @@ actions.cooldowns+=/blood_fury,if=!cooldown.summon_darkglare.up
 actions.cooldowns+=/dark_soul,if=target.time_to_die<20+gcd|spell_targets.seed_of_corruption_aoe>1+raid_event.invulnerable.up|talent.sow_the_seeds.enabled&cooldown.summon_darkglare.remains>=cooldown.summon_darkglare.duration-10
 ]]
 	if Opt.pot and Target.boss and not Player:InArenaOrBattleground() then
-		if PotionOfUnbridledFury:Usable() and (Target.timeToDie < 30 or Pet.Darkglare:Up() and (not DarkSoulMisery.known or DarkSoulMisery:Up())) then
-			return UseCooldown(PotionOfUnbridledFury)
+		if PotionOfSpectralIntellect:Usable() and (Target.timeToDie < 30 or Pet.Darkglare:Up() and (not DarkSoulMisery.known or DarkSoulMisery:Up())) then
+			return UseCooldown(PotionOfSpectralIntellect)
 		end
 	end
 	if Opt.trinket and (not DarkSoulMisery.known or not DarkSoulMisery:Ready()) and (SummonDarkglare:Cooldown() > 70 or Target.timeToDie < 20 or (UnstableAffliction:Up() and (not PhantomSingularity.known or PhantomSingularity:Up()) and (SummonDarkglare:Ready() or Pet.Darkglare:Up()))) then
@@ -2791,14 +2811,17 @@ actions.precombat+=/demonbolt
 			UseCooldown(Trinket.SoleahsSecretTechnique)
 		end
 		if SummonSteward:Usable() and PhialOfSerenity:Charges() < 1 then
-			UseCooldown(SummonSteward)
+			UseExtra(SummonSteward)
+		end
+		if Fleshcraft:Usable() and Fleshcraft:Remains() < 10 then
+			UseExtra(Fleshcraft)
 		end
 		if not Player:InArenaOrBattleground() then
 			if EternalAugmentRune:Usable() and EternalAugmentRune.buff:Remains() < 300 then
 				UseCooldown(EternalAugmentRune)
 			end
 			if EternalFlask:Usable() and EternalFlask.buff:Remains() < 300 and SpectralFlaskOfPower.buff:Remains() < 300 then
-				UseCooldown(SpectralFlaskOfPower)
+				UseCooldown(EternalFlask)
 			end
 			if Opt.pot and SpectralFlaskOfPower:Usable() and SpectralFlaskOfPower.buff:Remains() < 300 and EternalFlask.buff:Remains() < 300 then
 				UseCooldown(SpectralFlaskOfPower)
@@ -2844,10 +2867,10 @@ actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demo
 actions+=/call_action_list,name=build_a_shard
 ]]
 	if Target.boss and Target.timeToDie < 30 then
-		if Opt.pot and not Player:InArenaOrBattleground() and PotionOfUnbridledFury:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
-			UseCooldown(PotionOfUnbridledFury)
+		if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
+			UseCooldown(PotionOfSpectralIntellect)
 		end
-		if Opt.trinket and (Target.timeToDie < 15 or PotionOfUnbridledFury.buff:Up()) then
+		if Opt.trinket and (Target.timeToDie < 15 or PotionOfSpectralIntellect.buff:Up()) then
 			if Trinket1:Usable() then
 				UseCooldown(Trinket1)
 			elseif Trinket2:Usable() then
@@ -2856,8 +2879,8 @@ actions+=/call_action_list,name=build_a_shard
 		end
 	end
 	if Player.tyrant_remains > 0 then
-		if Opt.pot and Target.boss and not Player:InArenaOrBattleground() and PotionOfUnbridledFury:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
-			UseCooldown(PotionOfUnbridledFury)
+		if Opt.pot and Target.boss and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
+			UseCooldown(PotionOfSpectralIntellect)
 		end
 		if Opt.trinket then
 			if Trinket1:Usable() then
@@ -3234,14 +3257,17 @@ actions.precombat+=/incinerate
 			UseCooldown(Trinket.SoleahsSecretTechnique)
 		end
 		if SummonSteward:Usable() and PhialOfSerenity:Charges() < 1 then
-			UseCooldown(SummonSteward)
+			UseExtra(SummonSteward)
+		end
+		if Fleshcraft:Usable() and Fleshcraft:Remains() < 10 then
+			UseExtra(Fleshcraft)
 		end
 		if not Player:InArenaOrBattleground() then
 			if EternalAugmentRune:Usable() and EternalAugmentRune.buff:Remains() < 300 then
 				UseCooldown(EternalAugmentRune)
 			end
 			if EternalFlask:Usable() and EternalFlask.buff:Remains() < 300 and SpectralFlaskOfPower.buff:Remains() < 300 then
-				UseCooldown(SpectralFlaskOfPower)
+				UseCooldown(EternalFlask)
 			end
 			if Opt.pot and SpectralFlaskOfPower:Usable() and SpectralFlaskOfPower.buff:Remains() < 300 and EternalFlask.buff:Remains() < 300 then
 				UseCooldown(SpectralFlaskOfPower)
@@ -3331,22 +3357,18 @@ actions+=/incinerate
 	if ChannelDemonfire:Usable() then
 		UseCooldown(ChannelDemonfire)
 	end
---[[
-	if ScouringTithe:Usable() then
+	if ScouringTithe:Usable() and ScouringTithe:Down() then
 		UseCooldown(ScouringTithe)
 	end
 	if DecimatingBolt:Usable() then
 		UseCooldown(DecimatingBolt)
 	end
-]]
 	if Havoc:Usable() and Player.enemies > 1 and (Immolate:Remains() > (Immolate:Duration() * 0.5) or not InternalCombustion.known) then
 		UseExtra(Havoc)
 	end
---[[
 	if ImpendingCatastrophe:Usable() then
 		UseCooldown(ImpendingCatastrophe)
 	end
-]]
 	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() then
 		UseCooldown(SoulRot)
 	end
@@ -3412,11 +3434,9 @@ actions.aoe+=/incinerate
 	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() then
 		UseCooldown(SoulRot)
 	end
---[[
 	if ImpendingCatastrophe:Usable() then
 		UseCooldown(ImpendingCatastrophe)
 	end
-]]
 	if ChannelDemonfire:Usable() and Immolate:Remains() > ChannelDemonfire:CastTime() then
 		UseCooldown(ChannelDemonfire)
 	end
@@ -3435,11 +3455,9 @@ actions.aoe+=/incinerate
 	if Havoc:Usable() then
 		UseExtra(Havoc)
 	end
---[[
 	if DecimatingBolt:Usable() then
 		UseCooldown(DecimatingBolt)
 	end
-]]
 	if FireAndBrimstone.known and Incinerate:Usable() and Backdraft:Up() and Player.soul_shards.current < (5 - 0.2 * Player.enemies) then
 		return Incinerate
 	end
@@ -3508,14 +3526,12 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	if SoulFire:Usable() and SoulFire:CastTime() < self.havoc_remains then
 		return SoulFire
 	end
---[[
 	if DecimatingBolt:Usable() and DecimatingBolt:CastTime() < self.havoc_remains and LeadByExample.known then
 		UseCooldown(DecimatingBolt)
 	end
-	if ScouringTithe:Usable() and ScouringTithe:CastTime() < self.havoc_remains then
+	if ScouringTithe:Usable() and ScouringTithe:Down() and ScouringTithe:CastTime() < self.havoc_remains then
 		UseCooldown(ScouringTithe)
 	end
-]]
 	if Immolate:Usable() and (
 		(InternalCombustion.known and Immolate:Remains() < (Immolate:Duration() * 0.5)) or
 		(not InternalCombustion.known and Immolate:Refreshable())
