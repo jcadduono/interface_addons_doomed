@@ -3196,7 +3196,8 @@ actions.nether_portal_building+=/call_action_list,name=build_a_shard
 end
 
 APL[SPEC.DESTRUCTION].Main = function(self)
-	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or Pet.Infernal:Up() or (DarkSoulInstability.known and DarkSoulInstability:Up()))
+	self.infernal_up = Pet.Infernal:Up(true)
+	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up or (DarkSoulInstability.known and DarkSoulInstability:Up()))
 	self.havoc_remains = Havoc:HighestRemains()
 	Player.infernal_count = Pet.Infernal:Count() + Pet.Blasphemy:Count()
 
@@ -3357,7 +3358,7 @@ actions+=/incinerate
 		return Conflagrate
 	end
 	if ChaosBolt:Usable() and (
-		(Pet.Infernal:Up()) or
+		(self.infernal_up) or
 		(RainOfChaos:Remains() > ChaosBolt:CastTime()) or
 		(Backdraft:Up() and not self.pool_soul_shards) or
 		(Eradication.known and not self.pool_soul_shards and Eradication:Remains() < ChaosBolt:CastTime())
@@ -3384,6 +3385,7 @@ end
 APL[SPEC.DESTRUCTION].aoe = function(self)
 --[[
 actions.aoe=rain_of_fire,if=pet.infernal.active&(!cooldown.havoc.ready|active_enemies>3)
+actions.aoe+=rain_of_fire,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
 actions.aoe+=/soul_rot
 actions.aoe+=/impending_catastrophe
 actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
@@ -3401,7 +3403,10 @@ actions.aoe+=/immolate,if=refreshable
 actions.aoe+=/scouring_tithe
 actions.aoe+=/incinerate
 ]]
-	if RainOfFire:Usable() and Pet.Infernal:Up() and (not Havoc:Ready() or Player.enemies > 3) then
+	if RainOfFire:Usable() and (
+		(self.infernal_up and (not Havoc:Ready() or Player.enemies > 3)) or
+		(Player.infernal_count > 0 and Player.soul_shards.current >= 4)
+	) then
 		return RainOfFire
 	end
 	if SoulRot:Usable() and SoulRot:Remains() < SoulRot:CastTime() then
@@ -3471,13 +3476,13 @@ actions.cds+=/use_items,if=pet.infernal.active|time_to_die<21
 	if SummonInfernal:Usable() then
 		return UseCooldown(SummonInfernal)
 	end
-	if DarkSoulInstability:Usable() and (Pet.Infernal:Up() or SummonInfernal:Cooldown() > Target.timeToDie) then
+	if DarkSoulInstability:Usable() and (self.infernal_up or SummonInfernal:Cooldown() > Target.timeToDie) then
 		return UseCooldown(DarkSoulInstability)
 	end
-	if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and Pet.Infernal:Up() then
+	if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and self.infernal_up then
 		return UseCooldown(PotionOfSpectralIntellect)
 	end
-	if Opt.trinket and ((Target.boss and Target.timeToDie < 21) or Pet.Infernal:Up()) then
+	if Opt.trinket and ((Target.boss and Target.timeToDie < 21) or self.infernal_up) then
 		if Trinket1:Usable() then
 			return UseCooldown(Trinket1)
 		elseif Trinket2:Usable() then
