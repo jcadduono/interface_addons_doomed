@@ -1310,6 +1310,9 @@ SummonSteward.cooldown_duration = 300
 local ImplosivePotential = Ability:Add(337135, false, true, 337139)
 ImplosivePotential.buff_duration = 8
 ImplosivePotential.bonus_id = 7033
+local MadnessOfTheAzjAqir = Ability:Add(337169, true, true, 337170)
+MadnessOfTheAzjAqir.buff_duration = 4
+MadnessOfTheAzjAqir.bonus_id = 7039
 local OdrShawlOfTheYmirjar = Ability:Add(337163, false, true)
 OdrShawlOfTheYmirjar.bonus_id = 7037
 -- Trinket Effects
@@ -2211,6 +2214,13 @@ end
 
 function Eradication:Remains()
 	if ChaosBolt:Casting() or ChaosBolt:Traveling() > 0 then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
+function MadnessOfTheAzjAqir:Remains()
+	if ChaosBolt:Casting() then
 		return self:Duration()
 	end
 	return Ability.Remains(self)
@@ -3306,7 +3316,7 @@ actions=call_action_list,name=havoc,if=havoc_active&active_enemies>1&active_enem
 actions+=/fleshcraft,if=soulbind.volatile_solvent,cancel_if=buff.volatile_solvent_humanoid.up
 actions+=/conflagrate,if=talent.roaring_blaze.enabled&debuff.roaring_blaze.remains<1.5
 actions+=/cataclysm
-actions+=/call_action_list,name=aoe,if=active_enemies>2-set_bonus.tier28_4pc
+actions+=/call_action_list,name=aoe,if=active_enemies>2-(set_bonus.tier28_4pc&(!runeforge.madness_of_the_azjaqir.equipped|talent.inferno.enabled))
 actions+=/soul_fire,cycle_targets=1,if=refreshable&soul_shard<=4&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions+=/immolate,cycle_targets=1,if=remains<3&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions+=/immolate,if=talent.internal_combustion.enabled&action.chaos_bolt.in_flight&remains<duration*0.5
@@ -3340,7 +3350,7 @@ actions+=/incinerate
 	if Cataclysm:Usable() then
 		UseCooldown(Cataclysm)
 	end
-	if Player.enemies > (2 - (Blasphemy.known and 1 or 0)) then
+	if Player.enemies > (2 - (Blasphemy.known and (not MadnessOfTheAzjAqir.known or Inferno.known) and 1 or 0)) then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
