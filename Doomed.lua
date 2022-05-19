@@ -3306,18 +3306,18 @@ actions=call_action_list,name=havoc,if=havoc_active&active_enemies>1&active_enem
 actions+=/fleshcraft,if=soulbind.volatile_solvent,cancel_if=buff.volatile_solvent_humanoid.up
 actions+=/conflagrate,if=talent.roaring_blaze.enabled&debuff.roaring_blaze.remains<1.5
 actions+=/cataclysm
-actions+=/call_action_list,name=aoe,if=active_enemies>2
+actions+=/call_action_list,name=aoe,if=active_enemies>2-set_bonus.tier28_4pc
 actions+=/soul_fire,cycle_targets=1,if=refreshable&soul_shard<=4&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions+=/immolate,cycle_targets=1,if=remains<3&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
 actions+=/immolate,if=talent.internal_combustion.enabled&action.chaos_bolt.in_flight&remains<duration*0.5
 actions+=/chaos_bolt,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
 actions+=/call_action_list,name=cds
 actions+=/channel_demonfire
-actions+=/scouring_tithe
 actions+=/decimating_bolt
 actions+=/havoc,cycle_targets=1,if=!(target=self.target)&(dot.immolate.remains>dot.immolate.duration*0.5|!talent.internal_combustion.enabled)
+actions+=/scouring_tithe,if=!remains
 actions+=/impending_catastrophe
-actions+=/soul_rot
+actions+=/soul_rot,if=remains<cast_time
 actions+=/havoc,if=runeforge.odr_shawl_of_the_ymirjar.equipped
 actions+=/variable,name=pool_soul_shards,value=active_enemies>1&cooldown.havoc.remains<=10|buff.ritual_of_ruin.up&talent.rain_of_chaos
 actions+=/conflagrate,if=buff.backdraft.down&soul_shard>=1.5-0.3*talent.flashover.enabled&!variable.pool_soul_shards
@@ -3340,7 +3340,7 @@ actions+=/incinerate
 	if Cataclysm:Usable() then
 		UseCooldown(Cataclysm)
 	end
-	if Player.enemies > 2 then
+	if Player.enemies > (2 - (Blasphemy.known and 1 or 0)) then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
@@ -3364,14 +3364,14 @@ actions+=/incinerate
 	if ChannelDemonfire:Usable() then
 		UseCooldown(ChannelDemonfire)
 	end
-	if ScouringTithe:Usable() and ScouringTithe:Down() then
-		UseCooldown(ScouringTithe)
-	end
 	if DecimatingBolt:Usable() then
 		UseCooldown(DecimatingBolt)
 	end
 	if Havoc:Usable() and Player.enemies > 1 and (Immolate:Remains() > (Immolate:Duration() * 0.5) or not InternalCombustion.known) then
 		UseExtra(Havoc)
+	end
+	if ScouringTithe:Usable() and ScouringTithe:Down() then
+		UseCooldown(ScouringTithe)
 	end
 	if ImpendingCatastrophe:Usable() then
 		UseCooldown(ImpendingCatastrophe)
@@ -3414,8 +3414,8 @@ end
 APL[SPEC.DESTRUCTION].aoe = function(self)
 --[[
 actions.aoe=rain_of_fire,if=pet.infernal.active&(!cooldown.havoc.ready|active_enemies>3)
-actions.aoe+=rain_of_fire,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
-actions.aoe+=/soul_rot
+actions.aoe+=/rain_of_fire,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
+actions.aoe+=/soul_rot,if=remains<cast_time
 actions.aoe+=/impending_catastrophe
 actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
 actions.aoe+=/immolate,cycle_targets=1,if=active_enemies<5&remains<5&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
@@ -3429,7 +3429,7 @@ actions.aoe+=/soul_fire
 actions.aoe+=/conflagrate,if=buff.backdraft.down
 actions.aoe+=/shadowburn,if=target.health.pct<20
 actions.aoe+=/immolate,if=refreshable
-actions.aoe+=/scouring_tithe
+actions.aoe+=/scouring_tithe,if=!remains
 actions.aoe+=/incinerate
 ]]
 	if RainOfFire:Usable() and (
