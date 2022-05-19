@@ -2147,7 +2147,14 @@ function SpellLock:Usable()
 end
 
 function AxeToss:Usable()
-	if not Target.stunnable or not (SummonFelguard:Up() or SummonWrathguard:Up()) then
+	if not (SummonFelguard:Up() or SummonWrathguard:Up()) then
+		return false
+	end
+	return Ability.Usable(self)
+end
+
+function MortalCoil:Usable()
+	if not Target.stunnable then
 		return false
 	end
 	return Ability.Usable(self)
@@ -3572,6 +3579,9 @@ APL.Interrupt = function(self)
 	end
 	if AxeToss:Usable() then
 		return AxeToss
+	end
+	if MortalCoil:Usable() then
+		return MortalCoil
 	end
 end
 
