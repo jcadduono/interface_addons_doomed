@@ -2241,7 +2241,7 @@ function Pet.Darkglare:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
 	unit.power = 0
 	if SummonDarkglare.summoning then
-		unit.full = true
+		unit.initial = true
 		SummonDarkglare.summoning = false
 	end
 	return unit
@@ -2251,7 +2251,7 @@ function Pet.DemonicTyrant:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
 	unit.power = 0
 	if SummonDemonicTyrant.summoning then
-		unit.full = true
+		unit.initial = true
 		if DemonicConsumption.known then
 			self:Consumption(unit)
 		end
@@ -3261,6 +3261,7 @@ actions.precombat+=/snapshot_stats
 actions.precombat+=/fleshcraft
 actions.precombat+=/use_item,name=shadowed_orb_of_torment
 actions.precombat+=/soul_fire
+actions.precombat+=/cataclysm
 actions.precombat+=/incinerate
 ]]
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
@@ -3296,6 +3297,9 @@ actions.precombat+=/incinerate
 			if Opt.pot and SpectralFlaskOfPower:Usable() and SpectralFlaskOfPower.buff:Remains() < 300 and EternalFlask.buff:Remains() < 300 then
 				UseCooldown(SpectralFlaskOfPower)
 			end
+		end
+		if Cataclysm:Usable() then
+			UseCooldown(Cataclysm)
 		end
 		if Player:SoulShardDeficit() > 0 then
 			if SoulFire:Usable() then
@@ -3822,6 +3826,7 @@ end
 function UI:UpdateDisplay()
 	timer.display = 0
 	local dim, dim_cd, text_center, text_tl, text_tr, text_cd
+	Player:UpdateTime()
 
 	if Opt.dimmer then
 		dim = not ((not Player.main) or
@@ -3880,9 +3885,9 @@ function UI:UpdateDisplay()
 			else
 				text_tr = ''
 			end
-			local _, unit, remains
+			local remains
 			for _, unit in next, Pet.DemonicTyrant.active_units do
-				if unit.full then
+				if unit.initial then
 					remains = unit.expires - Player.time
 					if unit.power > 0 and remains > 5 then
 						text_tr = format('%s%d%%\n', text_tr, unit.power)
@@ -3892,7 +3897,7 @@ function UI:UpdateDisplay()
 				end
 			end
 			for _, unit in next, Pet.DemonicTyrant.active_units do
-				if not unit.full then
+				if not unit.initial then
 					remains = unit.expires - Player.time
 					if remains > 0 then
 						text_tr = format('%s%.1fs\n', text_tr, remains)
@@ -3905,9 +3910,25 @@ function UI:UpdateDisplay()
 			text_tl = Player.infernal_count > 0 and Player.infernal_count
 		end
 		if Opt.tyrant then
-			local _, unit, remains
+			local remains
 			text_tr = ''
 			for _, unit in next, Pet.Infernal.active_units do
+				if unit.initial then
+					remains = unit.expires - Player.time
+					if remains > 0 then
+						text_tr = format('%s%.1fs\n', text_tr, remains)
+					end
+				end
+			end
+			for _, unit in next, Pet.Infernal.active_units do
+				if not unit.initial then
+					remains = unit.expires - Player.time
+					if remains > 0 then
+						text_tr = format('%s%.1fs\n', text_tr, remains)
+					end
+				end
+			end
+			for _, unit in next, Pet.Blasphemy.active_units do
 				remains = unit.expires - Player.time
 				if remains > 0 then
 					text_tr = format('%s%.1fs\n', text_tr, remains)
