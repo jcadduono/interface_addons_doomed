@@ -3539,7 +3539,8 @@ end
 
 APL[SPEC.DESTRUCTION].havoc = function(self)
 --[[
-actions.havoc=conflagrate,if=buff.backdraft.down&soul_shard>=1&soul_shard<=4
+actions.havoc=rain_of_fire,if=buff.rain_of_chaos.up&(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4.5
+actions.havoc+=/conflagrate,if=buff.backdraft.down&soul_shard>=1&soul_shard<=4
 actions.havoc+=/soul_fire,if=cast_time<havoc_remains
 actions.havoc+=/decimating_bolt,if=cast_time<havoc_remains&soulbind.lead_by_example.enabled
 actions.havoc+=/scouring_tithe,if=cast_time<havoc_remains
@@ -3548,6 +3549,9 @@ actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains
 actions.havoc+=/shadowburn
 actions.havoc+=/incinerate,if=cast_time<havoc_remains
 ]]
+	if RainOfChaos.known and RainOfFire:Usable() and RainOfChaos:Up() and Player.infernal_count > 0 and Player.soul_shards.current >= 4.5 then
+		return RainOfFire
+	end
 	if Conflagrate:Usable() and Backdraft:Down() and between(Player.soul_shards.current, 1, 4) then
 		return Conflagrate
 	end
