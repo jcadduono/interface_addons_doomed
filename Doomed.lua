@@ -504,6 +504,7 @@ function Ability:Add(spellId, buff, player, spellId2)
 		rank = 0,
 		mana_cost = 0,
 		shard_cost = 0,
+		shard_gain = 0,
 		cooldown_duration = 0,
 		buff_duration = 0,
 		tick_interval = 0,
@@ -696,6 +697,10 @@ end
 
 function Ability:ShardCost()
 	return self.shard_cost
+end
+
+function Ability:ShardGain()
+	return self.shard_gain
 end
 
 function Ability:ChargesFractional()
@@ -1099,7 +1104,7 @@ CallDreadstalkers.summon_count = 2
 CallDreadstalkers.triggers_combat = true
 local Demonbolt = Ability:Add(264178, false, true)
 Demonbolt.mana_cost = 2
-Demonbolt.shard_cost = -2
+Demonbolt.shard_gain = 2
 Demonbolt:SetVelocity(35)
 local HandOfGuldan = Ability:Add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
@@ -1110,7 +1115,7 @@ Implosion.mana_cost = 2
 Implosion:AutoAoe()
 local ShadowBoltDemonology = Ability:Add(686, false, true)
 ShadowBoltDemonology.mana_cost = 2
-ShadowBoltDemonology.shard_cost = -1
+ShadowBoltDemonology.shard_gain = 1
 ShadowBoltDemonology.triggers_combat = true
 ShadowBoltDemonology:SetVelocity(20)
 local SummonDemonicTyrant = Ability:Add(265187, true, true)
@@ -1173,7 +1178,7 @@ local PowerSiphon = Ability:Add(264130, false, true)
 PowerSiphon.cooldown_duration = 30
 local SoulStrike = Ability:Add(264057, false, true, 267964)
 SoulStrike.cooldown_duration = 10
-SoulStrike.shard_cost = -1
+SoulStrike.shard_gain = 1
 SoulStrike.requires_pet = true
 local SummonVilefiend = Ability:Add(264119, false, true)
 SummonVilefiend.buff_duration = 15
@@ -1190,6 +1195,7 @@ DemonicPower.buff_duration = 15
 local Conflagrate = Ability:Add(17962, false, true)
 Conflagrate.cooldown_duration = 12.96
 Conflagrate.mana_cost = 1
+Conflagrate.shard_gain = 0.5
 Conflagrate.requires_charge = true
 Conflagrate.hasted_cooldown = true
 local Immolate = Ability:Add(348, false, true, 157736)
@@ -1202,6 +1208,7 @@ Immolate:AutoAoe(false, 'cast')
 Immolate:TrackAuras()
 local Incinerate = Ability:Add(29722, false, true)
 Incinerate.mana_cost = 2
+Incinerate.shard_gain = 0.2
 Incinerate.triggers_combat = true
 Incinerate:SetVelocity(25)
 local Havoc = Ability:Add(80240, false, true)
@@ -1224,7 +1231,6 @@ RainOfFire:AutoAoe(true)
 local SummonInfernal = Ability:Add(1122, false, true, 22703)
 SummonInfernal.cooldown_duration = 180
 SummonInfernal.mana_cost = 2
-SummonInfernal.shard_cost = 1
 SummonInfernal:AutoAoe(true)
 ------ Pet Abilities
 local Immolation = Ability:Add(20153, false, false)
@@ -1256,14 +1262,17 @@ ReverseEntropy.buff_duration = 8
 local RoaringBlaze = Ability:Add(205184, false, true, 265931)
 RoaringBlaze.buff_duration = 8
 local SoulFire = Ability:Add(6353, false, true)
-SoulFire.cooldown_duration = 20
+SoulFire.cooldown_duration = 45
 SoulFire.mana_cost = 2
+SoulFire.shard_gain = 1
 SoulFire.triggers_combat = true
 SoulFire:SetVelocity(24)
 local Shadowburn = Ability:Add(17877, false, true)
 Shadowburn.buff_duration = 5
 Shadowburn.cooldown_duration = 12
 Shadowburn.mana_cost = 1
+Shadowburn.shard_cost = 1
+Shadowburn.hasted_cooldown = true
 Shadowburn.requires_charge = true
 ------ Procs
 local Backdraft = Ability:Add(196406, true, true, 117828)
@@ -1806,8 +1815,15 @@ function Player:Update()
 		self.soul_shards.current = UnitPower('player', 7)
 	end
 	if self.ability_casting then
-		self.mana.current = self.mana.current - self.ability_casting:Cost()
-		self.soul_shards.current = self.soul_shards.current - self.ability_casting:ShardCost()
+		if self.ability_casting.mana_cost > 0 then
+			self.mana.current = self.mana.current - self.ability_casting:Cost()
+		end
+		if self.ability_casting.shard_cost > 0 then
+			self.soul_shards.current = self.soul_shards.current - self.ability_casting:ShardCost()
+		end
+		if self.ability_casting.shard_gain > 0 then
+			self.soul_shards.current = self.soul_shards.current + self.ability_casting:ShardGain()
+		end
 	end
 	self.mana.current = min(self.mana.max, max(0, self.mana.current))
 	self.soul_shards.current = min(self.soul_shards.max, max(0, self.soul_shards.current))
