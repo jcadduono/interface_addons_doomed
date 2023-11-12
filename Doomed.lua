@@ -8,6 +8,7 @@ local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
 -- reference heavily accessed global functions from local scope for performance
 local min = math.min
 local max = math.max
+local ceil = math.ceil
 local floor = math.floor
 local GetPowerRegenForPowerType = _G.GetPowerRegenForPowerType
 local GetShapeshiftForm = _G.GetShapeshiftForm
@@ -245,6 +246,7 @@ local Player = {
 	set_bonus = {
 		t29 = 0, -- Scalesworn Cultist's Habit
 		t30 = 0, -- Sinister Savant's Cursethreads
+		t31 = 0, -- Devout Ashdevil's Pactweave
 	},
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
@@ -1082,6 +1084,7 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 DrainLife.hasted_ticks = true
+local GrandWarlocksDesign = Ability:Add(387084, true, true)
 local SpellLock = Ability:Add(119910, false, true)
 SpellLock.cooldown_duration = 24
 SpellLock.player_triggered = true
@@ -1094,39 +1097,22 @@ MortalCoil.mana_cost = 2
 MortalCoil.buff_duration = 3
 MortalCoil.cooldown_duration = 45
 MortalCoil:SetVelocity(24)
------- Procs
 local SoulConduit = Ability:Add(215941, true, true)
+local SummonSoulkeeper = Ability:Add(386244, true, true, 386256)
+SummonSoulkeeper.buff_duration = 10
+------ Procs
+local TormentedSoul = Ability:Add(386251, true, true)
 ------ Permanent Pets
 local SummonImp = Ability:Add(688, false, true)
 SummonImp.shard_cost = 1
-SummonImp.pet_family = 'Imp'
-local SummonFelImp = Ability:Add(112866, false, true, 219424)
-SummonFelImp.shard_cost = 1
-SummonFelImp.pet_family = 'Fel Imp'
 local SummonFelhunter = Ability:Add(691, false, true)
 SummonFelhunter.shard_cost = 1
-SummonFelhunter.pet_family = 'Felhunter'
-local SummonObserver = Ability:Add(112869, false, true, 219450)
-SummonObserver.shard_cost = 1
-SummonObserver.pet_family = 'Observer'
 local SummonVoidwalker = Ability:Add(697, false, true)
 SummonVoidwalker.shard_cost = 1
-SummonVoidwalker.pet_family = 'Voidwalker'
-local SummonVoidlord = Ability:Add(112867, false, true, 219445)
-SummonVoidlord.shard_cost = 1
-SummonVoidlord.pet_family = 'Voidlord'
 local SummonSuccubus = Ability:Add(712, false, true)
 SummonSuccubus.shard_cost = 1
-SummonSuccubus.pet_family = 'Succubus'
-local SummonShivarra = Ability:Add(112868, false, true, 219436)
-SummonShivarra.shard_cost = 1
-SummonShivarra.pet_family = 'Shivarra'
 local SummonFelguard = Ability:Add(30146, false, true)
 SummonFelguard.shard_cost = 1
-SummonFelguard.pet_family = 'Felguard'
-local SummonWrathguard = Ability:Add(112870, false, true, 219467)
-SummonWrathguard.shard_cost = 1
-SummonWrathguard.pet_family = 'Wrathguard'
 ---- Affliction
 local Agony = Ability:Add(980, false, true)
 Agony.mana_cost = 1
@@ -1220,7 +1206,11 @@ VileTaint:AutoAoe(true)
 VileTaint:TrackAuras()
 local WritheInAgony = Ability:Add(196102, false, true)
 ---- Demonology
------- Base Abilities
+------ Talents
+local BilescourgeBombers = Ability:Add(267211, false, true, 267213)
+BilescourgeBombers.buff_duration = 6
+BilescourgeBombers.cooldown_duration = 30
+BilescourgeBombers:AutoAoe(true)
 local CallDreadstalkers = Ability:Add(104316, false, true)
 CallDreadstalkers.buff_duration = 12
 CallDreadstalkers.cooldown_duration = 20
@@ -1230,25 +1220,81 @@ CallDreadstalkers.triggers_combat = true
 local Demonbolt = Ability:Add(264178, false, true)
 Demonbolt.mana_cost = 2
 Demonbolt.shard_gain = 2
+Demonbolt.triggers_comabt = true
 Demonbolt:SetVelocity(35)
+local DemonicCalling = Ability:Add(205145, true, true, 205146)
+DemonicCalling.buff_duration = 20
+local DemonicStrength = Ability:Add(267171, true, true)
+DemonicStrength.aura_target = 'pet'
+DemonicStrength.buff_duration = 20
+DemonicStrength.cooldown_duration = 60
+local Doom = Ability:Add(603, false, true)
+Doom.mana_cost = 1
+Doom.buff_duration = 20
+Doom.tick_interval = 20
+Doom.hasted_duration = true
+Doom.hasted_ticks = true
+local DreadCalling = Ability:Add(387391, true, true, 387393)
+local Dreadlash = Ability:Add(264078, false, true, 271971)
+local FelSunder = Ability:Add(387399, false, true, 387402)
+FelSunder.buff_duration = 8
+local FromTheShadows = Ability:Add(267170, false, true, 270569)
+FromTheShadows.buff_duration = 12
+local GrimoireFelguard = Ability:Add(111898, false, true)
+GrimoireFelguard.buff_duration = 17
+GrimoireFelguard.cooldown_duration = 120
+GrimoireFelguard.shard_cost = 1
+GrimoireFelguard.summon_count = 1
+local Guillotine = Ability:Add(386833, false, true, 386609)
+Guillotine.cooldown_duration = 45
+Guillotine.requires_pet = true
+Guillotine:AutoAoe()
 local HandOfGuldan = Ability:Add(105174, false, true, 86040)
 HandOfGuldan.shard_cost = 1
 HandOfGuldan.triggers_combat = true
 HandOfGuldan:AutoAoe(true)
+local ImpGangBoss = Ability:Add(387445, true, true, 387458)
+local InnerDemons = Ability:Add(267216, false, true)
 local Implosion = Ability:Add(196277, false, true, 196278)
 Implosion.mana_cost = 2
 Implosion:AutoAoe()
+local NetherPortal = Ability:Add(267217, true, true, 267218)
+NetherPortal.buff_duration = 15
+NetherPortal.cooldown_duration = 180
+NetherPortal.shard_cost = 1
+local PowerSiphon = Ability:Add(264130, false, true)
+PowerSiphon.cooldown_duration = 30
+local ReignOfTyranny = Ability:Add(427684, false, true)
+local SacrificedSouls = Ability:Add(267214, false, true)
 local ShadowBoltDemonology = Ability:Add(686, false, true)
 ShadowBoltDemonology.mana_cost = 2
 ShadowBoltDemonology.shard_gain = 1
 ShadowBoltDemonology.triggers_combat = true
 ShadowBoltDemonology:SetVelocity(20)
+local ShadowsBite = Ability:Add(387322, true, true, 272945)
+ShadowsBite.buff_duration = 8
+local SoulboundTyrant = Ability:Add(334585, false, true)
+SoulboundTyrant.talent_node = 71992
+local SoulStrike = Ability:Add(264057, false, true, 267964)
+SoulStrike.cooldown_duration = 10
+SoulStrike.shard_gain = 1
+SoulStrike.requires_pet = true
 local SummonDemonicTyrant = Ability:Add(265187, true, true)
 SummonDemonicTyrant.buff_duration = 15
 SummonDemonicTyrant.cooldown_duration = 90
 SummonDemonicTyrant.mana_cost = 2
 SummonDemonicTyrant.summon_count = 1
 SummonDemonicTyrant.summoning = false
+local SummonVilefiend = Ability:Add(264119, false, true)
+SummonVilefiend.buff_duration = 15
+SummonVilefiend.cooldown_duration = 45
+SummonVilefiend.shard_cost = 1
+SummonVilefiend.summon_count = 1
+local TheHoundmastersStratagem = Ability:Add(267170, false, true, 270569)
+TheHoundmastersStratagem.buff_duration = 12
+------ Procs
+local DemonicCore = Ability:Add(267102, true, true, 264173)
+DemonicCore.buff_duration = 20
 ------ Pet Abilities
 local AxeToss = Ability:Add(89766, false, true, 119914)
 AxeToss.cooldown_duration = 30
@@ -1269,52 +1315,6 @@ local FelFirebolt = Ability:Add(104318, false, false)
 local LegionStrike = Ability:Add(30213, false, true)
 LegionStrike.requires_pet = true
 LegionStrike:AutoAoe()
------- Talents
-local BilescourgeBombers = Ability:Add(267211, false, true, 267213)
-BilescourgeBombers.buff_duration = 6
-BilescourgeBombers.cooldown_duration = 30
-BilescourgeBombers.shard_cost = 2
-BilescourgeBombers:AutoAoe(true)
-local DemonicCalling = Ability:Add(205145, true, true, 205146)
-DemonicCalling.buff_duration = 20
-local DemonicConsumption = Ability:Add(267215, false, true)
-local DemonicStrength = Ability:Add(267171, true, true)
-DemonicStrength.aura_target = 'pet'
-DemonicStrength.buff_duration = 20
-DemonicStrength.cooldown_duration = 60
-local Doom = Ability:Add(603, false, true)
-Doom.mana_cost = 1
-Doom.buff_duration = 30
-Doom.tick_interval = 30
-Doom.hasted_duration = true
-local Dreadlash = Ability:Add(264078, false, true)
-local FromTheShadows = Ability:Add(267170, false, true, 270569)
-FromTheShadows.buff_duration = 12
-local InnerDemons = Ability:Add(267216, false, true)
-local GrimoireFelguard = Ability:Add(111898, false, true)
-GrimoireFelguard.cooldown_duration = 120
-GrimoireFelguard.shard_cost = 1
-GrimoireFelguard.summon_count = 1
-local NetherPortal = Ability:Add(267217, true, true, 267218)
-NetherPortal.buff_duration = 15
-NetherPortal.cooldown_duration = 180
-NetherPortal.shard_cost = 1
-local PowerSiphon = Ability:Add(264130, false, true)
-PowerSiphon.cooldown_duration = 30
-local SoulStrike = Ability:Add(264057, false, true, 267964)
-SoulStrike.cooldown_duration = 10
-SoulStrike.shard_gain = 1
-SoulStrike.requires_pet = true
-local SummonVilefiend = Ability:Add(264119, false, true)
-SummonVilefiend.buff_duration = 15
-SummonVilefiend.cooldown_duration = 45
-SummonVilefiend.shard_cost = 1
-SummonVilefiend.summon_count = 1
------- Procs
-local DemonicCore = Ability:Add(267102, true, true, 264173)
-DemonicCore.buff_duration = 20
-local DemonicPower = Ability:Add(265273, true, true)
-DemonicPower.buff_duration = 15
 ---- Destruction
 ------ Base Abilities
 local Conflagrate = Ability:Add(17962, false, true)
@@ -1361,19 +1361,10 @@ SummonInfernal:AutoAoe(true)
 local Immolation = Ability:Add(20153, false, false)
 Immolation:AutoAoe()
 ------ Talents
-local Cataclysm = Ability:Add(152108, false, true)
-Cataclysm.cooldown_duration = 30
-Cataclysm.mana_cost = 1
-Cataclysm.triggers_combat = true
-Cataclysm:AutoAoe(true)
 local ChannelDemonfire = Ability:Add(196447, false, true)
 ChannelDemonfire.cooldown_duration = 25
 ChannelDemonfire.mana_cost = 1.5
 ChannelDemonfire.triggers_combat = true
-local DarkSoulInstability = Ability:Add(113858, true, true)
-DarkSoulInstability.buff_duration = 20
-DarkSoulInstability.cooldown_duration = 120
-DarkSoulInstability.mana_cost = 1
 local Eradication = Ability:Add(196412, false, true, 196414)
 Eradication.buff_duration = 7
 local FireAndBrimstone = Ability:Add(196408, false, true)
@@ -1410,7 +1401,10 @@ MadnessOfTheAzjAqir.buff_duration = 5
 local Backdraft = Ability:Add(196406, true, true, 117828)
 Backdraft.buff_duration = 10
 -- Tier set bonuses
-
+local DoomBrand = Ability:Add(423583, true, true, 423584) -- T31 2pc
+DoomBrand.buff_duration = 20
+local RiteOfRuvaraad = Ability:Add(409725, true, true) -- T30 4pc
+RiteOfRuvaraad.buff_duration = 17
 -- Racials
 
 -- PvP talents
@@ -1431,7 +1425,6 @@ function SummonedPets:Find(guid)
 end
 
 function SummonedPets:Purge()
-	local _, pet, guid, unit
 	for _, pet in next, self.known do
 		for guid, unit in next, pet.active_units do
 			if unit.expires <= Player.time then
@@ -1454,20 +1447,11 @@ function SummonedPets:Update()
 end
 
 function SummonedPets:Count()
-	local _, pet, guid, unit
 	local count = 0
 	for _, pet in next, self.known do
 		count = count + pet:Count()
 	end
 	return count
-end
-
-function SummonedPets:EmpoweredRemains()
-	return max(0, (self.empowered_ends or 0) - Player.time)
-end
-
-function SummonedPets:Empowered()
-	return self:EmpoweredRemains() > 0
 end
 
 function SummonedPet:Add(unitId, duration, summonSpell)
@@ -1484,10 +1468,10 @@ function SummonedPet:Add(unitId, duration, summonSpell)
 end
 
 function SummonedPet:Remains(initial)
-	local expires_max, guid, unit = 0
 	if self.summon_spell and self.summon_spell.summon_count > 0 and self.summon_spell:Casting() then
-		expires_max = self.duration
+		return self.duration
 	end
+	local expires_max = 0
 	for guid, unit in next, self.active_units do
 		if (not initial or unit.initial) and unit.expires > expires_max then
 			expires_max = unit.expires
@@ -1505,7 +1489,7 @@ function SummonedPet:Down(...)
 end
 
 function SummonedPet:Count()
-	local count, guid, unit = 0
+	local count = 0
 	if self.summon_spell and self.summon_spell:Casting() then
 		count = count + self.summon_spell.summon_count
 	end
@@ -1518,7 +1502,7 @@ function SummonedPet:Count()
 end
 
 function SummonedPet:Expiring(seconds)
-	local count, guid, unit = 0
+	local count = 0
 	for guid, unit in next, self.active_units do
 		if unit.expires - Player.time <= (seconds or Player.execute_remains) then
 			count = count + 1
@@ -1554,10 +1538,10 @@ end
 Pet.Darkglare = SummonedPet:Add(103673, 20, SummonDarkglare)
 Pet.DemonicTyrant = SummonedPet:Add(135002, 15, SummonDemonicTyrant)
 Pet.Dreadstalker = SummonedPet:Add(98035, 12, CallDreadstalkers)
-Pet.Felguard = SummonedPet:Add(17252, 15, GrimoireFelguard)
+Pet.Felguard = SummonedPet:Add(17252, 17, GrimoireFelguard)
 Pet.Infernal = SummonedPet:Add(89, 30, SummonInfernal)
 Pet.Vilefiend = SummonedPet:Add(135816, 15, SummonVilefiend)
-Pet.WildImp = SummonedPet:Add(55659, 20, HandOfGuldan)
+Pet.WildImp = SummonedPet:Add(55659, 45, HandOfGuldan)
 ---- Nether Portal / Inner Demons
 Pet.Bilescourge = SummonedPet:Add(136404, 15, NetherPortal)
 Pet.Darkhound = SummonedPet:Add(136408, 15, NetherPortal)
@@ -1803,19 +1787,17 @@ function Player:UpdateKnown()
 	if DrainSoul.known then
 		ShadowBolt.known = false
 	end
-	DemonicPower.known = SummonDemonicTyrant.known
-	SummonImp.known = SummonImp.known and not SummonFelImp.known
-	SummonFelhunter.known = SummonFelhunter.known and not SummonObserver.known
-	SummonVoidwalker.known = SummonVoidwalker.known and not SummonVoidlord.known
-	SummonSuccubus.known = SummonSuccubus.known and not SummonShivarra.known
-	SummonFelguard.known = SummonFelguard.known and not SummonWrathguard.known
-	AxeToss.known = SummonFelguard.known or SummonWrathguard.known
-	Felstorm.known = SummonFelguard.known or SummonWrathguard.known
-	LegionStrike.known = SummonFelguard.known or SummonWrathguard.known
-	SpellLock.known = SummonFelhunter.known or SummonObserver.known
-	FelFirebolt.known = Pet.WildImp.known or Pet.WildImpID.known
+	if SummonFelguard.known then
+		AxeToss.known = true
+		Felstorm.known = true
+		LegionStrike.known = true
+	end
+	SpellLock.known = SummonFelhunter.known
+	FelFirebolt.known = Pet.WildImp.known
 	Immolation.known = Pet.Infernal.known
 	ImpendingRuin.known = RitualOfRuin.known
+	DoomBrand.known = Player.set_bonus.t31 >= 2
+	RiteOfRuvaraad.known = Player.set_bonus.t30 >= 4
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -1922,12 +1904,7 @@ function Player:Update()
 		if self.cast.ability.mana_cost > 0 then
 			self.mana.current = self.mana.current - self.cast.ability:ManaCost()
 		end
-		if self.cast.ability.shard_cost > 0 then
-			self.soul_shards.current = self.soul_shards.current - self.cast.ability:ShardCost()
-		end
-		if self.cast.ability.shard_gain > 0 then
-			self.soul_shards.current = self.soul_shards.current + self.cast.ability:ShardGain()
-		end
+		self.soul_shards.current = self.soul_shards.current - self.cast.ability:ShardCost() + self.cast.ability:ShardGain()
 	end
 	self.mana.current = clamp(self.mana.current, 0, self.mana.max)
 	self.mana.pct = self.mana.current / self.mana.max * 100
@@ -1976,7 +1953,7 @@ function Player:Init()
 end
 
 function Player:ImpsIn(seconds)
-	local count, guid, unit = 0
+	local count = 0
 	for guid, unit in next, Pet.WildImp.active_units do
 		if Pet.WildImp:UnitRemains(unit) > (self.execute_remains + seconds) then
 			count = count + 1
@@ -1987,7 +1964,7 @@ function Player:ImpsIn(seconds)
 			count = count + 1
 		end
 	end
-	if Pet.WildImpID.known then
+	if InnerDemons.known then
 		for guid, unit in next, Pet.WildImpID.active_units do
 			if Pet.WildImpID:UnitRemains(unit) > (self.execute_remains + seconds) then
 				count = count + 1
@@ -2139,15 +2116,10 @@ SummonImp.Up = function(self)
 	end
 	return UnitCreatureFamily('pet') == self.pet_family
 end
-SummonFelImp.Up = SummonImp.Up
 SummonFelhunter.Up = SummonImp.Up
-SummonObserver.Up = SummonImp.Up
 SummonVoidwalker.Up = SummonImp.Up
-SummonVoidlord.Up = SummonImp.Up
 SummonSuccubus.Up = SummonImp.Up
-SummonShivarra.Up = SummonImp.Up
 SummonFelguard.Up = SummonImp.Up
-SummonWrathguard.Up = SummonImp.Up
 
 function HandOfGuldan:ShardCost()
 	return clamp(Player.soul_shards.current, 1, 3)
@@ -2186,30 +2158,26 @@ function InnerDemons:ImpSpawned()
 end
 
 function PowerSiphon:Sacrifice()
-	local expires_min, guid, unit, sacrifice = Player.time + 60
+	local energy_min = 1000
+	local energy, imp, sacrifice
 	for guid, unit in next, Pet.WildImp.active_units do
-		if unit.expires < expires_min then
-			expires_min = unit.expires
+		energy = unit.energy + (Pet.WildImp:Empowered(unit) and 100 or 0)
+		if energy < energy_min then
+			energy_min = energy
 			sacrifice = guid
+			imp = Pet.WildImp
 		end
 	end
-	if Pet.WildImpID.known then
-		for guid, unit in next, Pet.WildImpID.active_units do
-			if unit.expires < expires_min then
-				expires_min = unit.expires
-				sacrifice = guid
-			end
+	for guid, unit in next, Pet.WildImpID.active_units do
+		energy = unit.energy + (Pet.WildImpID:Empowered(unit) and 100 or 0)
+		if energy < energy_min then
+			energy_min = energy
+			sacrifice = guid
+			imp = Pet.WildImpID
 		end
 	end
 	if sacrifice then
-		if Pet.WildImp.active_units[sacrifice] then
-			Pet.WildImp.active_units[sacrifice] = nil
-			return
-		end
-		if Pet.WildImpID.active_units[sacrifice] then
-			Pet.WildImpID.active_units[sacrifice] = nil
-			return
-		end
+		imp.active_units[sacrifice] = nil
 	end
 end
 
@@ -2220,41 +2188,17 @@ function PowerSiphon:CastSuccess(...)
 end
 
 function Implosion:Implode()
-	local guid
 	for guid in next, Pet.WildImp.active_units do
 		Pet.WildImp.active_units[guid] = nil
 	end
-	if Pet.WildImpID.known then
-		for guid in next, Pet.WildImpID.active_units do
-			Pet.WildImpID.active_units[guid] = nil
-		end
+	for guid in next, Pet.WildImpID.active_units do
+		Pet.WildImpID.active_units[guid] = nil
 	end
 end
 
 function Implosion:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
 	self:Implode()
-end
-
-function DemonicPower:Remains()
-	if SummonDemonicTyrant:Casting() then
-		return self:Duration()
-	end
-	return Ability.Remains(self)
-end
-
-function DemonicPower:Ends()
-	local _, i, id, expires
-	for i = 1, 40 do
-		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.aura_target, i, self.aura_filter)
-		if not id then
-			break
-		end
-		if id == self.spellId then
-			return max(0, Player.time + (expires - Player.ctime))
-		end
-	end
-	return 0
 end
 
 --[[
@@ -2275,9 +2219,9 @@ end
 function CallDreadstalkers:ShardCost()
 	local cost = self.shard_cost
 	if DemonicCalling:Up() then
-		cost = cost - 1
+		cost = cost - 2
 	end
-	return cost
+	return max(0, cost)
 end
 
 function SummonDemonicTyrant:CastSuccess(...)
@@ -2285,6 +2229,14 @@ function SummonDemonicTyrant:CastSuccess(...)
 	self.summoning = true
 end
 SummonDarkglare.CastSuccess = SummonDemonicTyrant.CastSuccess
+
+function SummonDemonicTyrant:ShardGain()
+	local gain = self.shard_gain
+	if SoulboundTyrant.known then
+		gain = gain + ceil(2.5 * SoulboundTyrant.rank)
+	end
+	return gain
+end
 
 function DemonicStrength:Usable()
 	if Felstorm:Up() then
@@ -2294,14 +2246,14 @@ function DemonicStrength:Usable()
 end
 
 function SpellLock:Usable()
-	if not (SummonFelhunter:Up() or SummonObserver:Up()) then
+	if not SummonFelhunter:Up() then
 		return false
 	end
 	return Ability.Usable(self)
 end
 
 function AxeToss:Usable()
-	if not (SummonFelguard:Up() or SummonWrathguard:Up()) then
+	if not SummonFelguard:Up() then
 		return false
 	end
 	return Ability.Usable(self)
@@ -2351,13 +2303,6 @@ function ChaosBolt:ShardCost()
 end
 RainOfFire.ShardCost = ChaosBolt.ShardCost
 
-function Immolate:Remains()
-	if Cataclysm.known and Cataclysm:Casting() then
-		return self:Duration()
-	end
-	return Ability.Remains(self)
-end
-
 function Backdraft:Stack()
 	local stack = Ability.Stack(self)
 	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting()) then
@@ -2396,9 +2341,27 @@ end
 
 -- Start Summoned Pet Modifications
 
+function SummonedPet:Empower(seconds, units)
+	local count = 0
+	for guid, unit in next, self.active_units do
+		if unit.expires > Player.time then
+			unit.expires = unit.expires + seconds
+			unit.empower_expires = Player.time + seconds
+			count = count + 1
+			if units and count >= units then
+				break
+			end
+		end
+	end
+	return count
+end
+
+function SummonedPet:Empowered(unit)
+	return unit.empower_expires and (unit.empower_expires - Player.time) > Player.execute_remains
+end
+
 function Pet.Darkglare:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
-	unit.power = 0
 	if SummonDarkglare.summoning then
 		unit.initial = true
 		SummonDarkglare.summoning = false
@@ -2408,74 +2371,39 @@ end
 
 function Pet.DemonicTyrant:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
-	unit.power = 0
+	unit.power = 100
 	if SummonDemonicTyrant.summoning then
 		unit.initial = true
-		if DemonicConsumption.known then
-			self:Consumption(unit)
+		local count = 0
+		if Pet.Dreadstalker.known then
+			count = count + Pet.Dreadstalker:Empower(15)
 		end
-		self:EmpowerLesser(15)
+		if Pet.Vilefiend.known then
+			count = count + Pet.Vilefiend:Empower(15)
+		end
+		if Pet.Felguard.known then
+			count = count + Pet.Felguard:Empower(15)
+		end
+		if Pet.WildImp.known then
+			count = count + Pet.WildImp:Empower(15, 10 + (ReignOfTyranny.known and 5 or 0))
+		end
+		if ReignOfTyranny.known then
+			unit.power = unit.power + (10 * count)
+		end
 		SummonDemonicTyrant.summoning = false
 	end
 	return unit
 end
 
-function Pet.DemonicTyrant:Consumption(unit)
-	local guid, imp
-	for guid, imp in next, Pet.WildImp.active_units do
-		if imp.expires > Player.time then
-			unit.power = unit.power + (imp.energy / 2)
-		end
-		Pet.WildImp.active_units[guid] = nil
-	end
-	if Pet.WildImpID.known then
-		for guid, imp in next, Pet.WildImpID.active_units do
-			if imp.expires > Player.time then
-				unit.power = unit.power + (imp.energy / 2)
-			end
-			Pet.WildImpID.active_units[guid] = nil
-		end
-	end
-end
-
-function Pet.DemonicTyrant:EmpowerLesser(seconds)
-	local _, pet, guid, unit
-	for _, pet in next, SummonedPets.known do
-		if pet ~= self then
-			for guid, unit in next, pet.active_units do
-				if unit.expires > Player.time then
-					unit.expires = unit.expires + seconds
-				end
-			end
-		end
-	end
-end
-
 function Pet.DemonicTyrant:Power()
-	local _, unit
 	for _, unit in next, self.active_units do
-		if unit.power > 0 then
-			return unit.power
-		end
+		return unit.power
 	end
 	return 0
 end
 
 function Pet.DemonicTyrant:AvailablePower()
-	local power, guid, imp = 0
-	for guid, imp in next, Pet.WildImp.active_units do
-		if (imp.expires - Player.time) > Player.execute_remains then
-			power = power + (imp.energy / 2)
-		end
-	end
-	if Pet.WildImpID.known then
-		for guid, imp in next, Pet.WildImpID.active_units do
-			if (imp.expires - Player.time) > Player.execute_remains then
-				power = power + (imp.energy / 2)
-			end
-		end
-	end
-	return power
+	return 100 -- finish this later
 end
 
 function Pet.WildImp:AddUnit(guid)
@@ -2495,18 +2423,15 @@ function Pet.WildImpID:AddUnit(guid)
 end
 
 function Pet.WildImp:UnitRemains(unit)
-	if DemonicConsumption.known and SummonDemonicTyrant:Casting() then
-		return 0
-	end
 	local energy, remains = unit.energy, 0
 	if unit.cast_end > Player.time then
-		if SummonedPets:Empowered() then
-			remains = SummonedPets:EmpoweredRemains()
+		if self:Empowered(unit) then
+			remains = unit.empower_expires - Player.time
 		else
-			energy = energy - 20
+			energy = energy - 16
 			remains = unit.cast_end - Player.time
 		end
-		remains = remains + (energy / 20 * FelFirebolt:CastTime())
+		remains = remains + (floor(energy / 16) * FelFirebolt:CastTime())
 	else
 		unit.cast_end = 0
 		remains = unit.expires - Player.time
@@ -2516,10 +2441,7 @@ end
 Pet.WildImpID.UnitRemains = Pet.WildImp.UnitRemains
 
 function Pet.WildImp:Count()
-	if DemonicConsumption.known and SummonDemonicTyrant:Casting() then
-		return 0
-	end
-	local count, guid, unit = 0
+	local count = 0
 	for guid, unit in next, self.active_units do
 		if self:UnitRemains(unit) > Player.execute_remains then
 			count = count + 1
@@ -2534,10 +2456,7 @@ function Pet.WildImp:Count()
 end
 
 function Pet.WildImpID:Count()
-	if DemonicConsumption.known and SummonDemonicTyrant:Casting() then
-		return 0
-	end
-	local count, guid, unit = 0
+	local count = 0
 	for guid, unit in next, self.active_units do
 		if self:UnitRemains(unit) > Player.execute_remains then
 			count = count + 1
@@ -2550,9 +2469,6 @@ function Pet.WildImpID:Count()
 end
 
 function Pet.WildImp:Remains()
-	if DemonicConsumption.known and SummonDemonicTyrant:Casting() then
-		return 0
-	end
 	return SummonedPet.Remains(self)
 end
 Pet.WildImpID.Remains = Pet.WildImp.Remains
@@ -2561,7 +2477,6 @@ function Pet.WildImp:Casting()
 	if Player.combat_start == 0 then
 		return false
 	end
-	local guid, unit = 0
 	for guid, unit in next, self.active_units do
 		if unit.cast_end >= Player.time then
 			return true
@@ -2570,6 +2485,17 @@ function Pet.WildImp:Casting()
 	return false
 end
 Pet.WildImpID.Casting = Pet.WildImp.Casting
+
+function Pet.WildImp:RemainsUnder(seconds)
+	local count = 0
+	for guid, unit in next, self.active_units do
+		if between(self:UnitRemains(unit), Player.execute_remains, seconds) then
+			count = count + 1
+		end
+	end
+	return count
+end
+Pet.WildImpID.RemainsUnder = Pet.WildImp.RemainsUnder
 
 function Pet.WildImp:CastStart(unit, spellId, dstGUID)
 	if FelFirebolt:Match(spellId) then
@@ -2587,12 +2513,12 @@ Pet.WildImpID.CastFailed = Pet.WildImp.CastFailed
 
 function Pet.WildImp:CastSuccess(unit, spellId, dstGUID)
 	if FelFirebolt:Match(spellId) then
-		if not SummonedPets:Empowered() then
-			unit.energy = unit.energy - 20
-		end
-		if unit.energy <= 0 then
-			self.active_units[unit.guid] = nil
-			return
+		if not self:Empowered(unit) then
+			unit.energy = unit.energy - 16
+			if unit.energy < 16 then
+				self.active_units[unit.guid] = nil
+				return
+			end
 		end
 		unit.cast_end = 0
 	end
@@ -2928,15 +2854,7 @@ actions.spenders+=/seed_of_corruption,if=variable.use_seed
 end
 
 APL[SPEC.DEMONOLOGY].Main = function(self)
-	HandOfGuldan:Purge()
-	if Opt.pet_count then
-		Pet.count = SummonedPets:Count() + (Pet.alive and 1 or 0)
-	end
-	Pet.imp_count = Pet.WildImp:Count() + (Pet.WildImpID and Pet.WildImpID:Count() or 0)
-	Pet.tyrant_cd = SummonDemonicTyrant:Cooldown()
-	Pet.tyrant_remains = Pet.DemonicTyrant:Remains()
-	Pet.tyrant_power = Pet.DemonicTyrant:Power()
-	Pet.tyrant_available_power = Pet.DemonicTyrant:AvailablePower()
+	self:variables()
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -2944,10 +2862,21 @@ actions.precombat=flask
 actions.precombat+=/food
 actions.precombat+=/augmentation
 actions.precombat+=/summon_pet
-actions.precombat+=/inner_demons,if=talent.inner_demons.enabled
 actions.precombat+=/snapshot_stats
-actions.precombat+=/potion
-actions.precombat+=/demonbolt
+actions.precombat+=/variable,name=shadow_timings,default=0,op=reset
+actions.precombat+=/variable,name=shadow_timings,op=set,value=0,if=cooldown.invoke_power_infusion_0.duration!=120
+actions.precombat+=/variable,name=trinket_1_buffs,value=trinket.1.has_buff.intellect|trinket.1.has_buff.mastery|trinket.1.has_buff.versatility|trinket.1.has_buff.haste|trinket.1.has_buff.crit|trinket.1.is.mirror_of_fractured_tomorrows
+actions.precombat+=/variable,name=trinket_2_buffs,value=trinket.2.has_buff.intellect|trinket.2.has_buff.mastery|trinket.2.has_buff.versatility|trinket.2.has_buff.haste|trinket.2.has_buff.crit|trinket.2.is.mirror_of_fractured_tomorrows
+actions.precombat+=/variable,name=trinket_1_exclude,value=trinket.1.is.ruby_whelp_shell|trinket.1.is.whispering_incarnate_icon
+actions.precombat+=/variable,name=trinket_2_exclude,value=trinket.2.is.ruby_whelp_shell|trinket.2.is.whispering_incarnate_icon
+actions.precombat+=/variable,name=trinket_1_manual,value=trinket.1.is.nymues_unraveling_spindle
+actions.precombat+=/variable,name=trinket_2_manual,value=trinket.2.is.nymues_unraveling_spindle
+actions.precombat+=/variable,name=trinket_1_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_1_buffs&(trinket.1.cooldown.duration%%cooldown.summon_demonic_tyrant.duration=0|cooldown.summon_demonic_tyrant.duration%%trinket.1.cooldown.duration=0)
+actions.precombat+=/variable,name=trinket_2_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_2_buffs&(trinket.2.cooldown.duration%%cooldown.summon_demonic_tyrant.duration=0|cooldown.summon_demonic_tyrant.duration%%trinket.2.cooldown.duration=0)
+actions.precombat+=/variable,name=trinket_priority,op=setif,value=2,value_else=1,condition=!variable.trinket_1_buffs&variable.trinket_2_buffs|variable.trinket_2_buffs&((trinket.2.cooldown.duration%trinket.2.proc.any_dps.duration)*(1.5+trinket.2.has_buff.intellect)*(variable.trinket_2_sync))>((trinket.1.cooldown.duration%trinket.1.proc.any_dps.duration)*(1.5+trinket.1.has_buff.intellect)*(variable.trinket_1_sync))
+actions.precombat+=/power_siphon
+actions.precombat+=/demonbolt,if=!buff.power_siphon.up
+actions.precombat+=/shadow_bolt
 ]]
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
 			return CreateHealthstone
@@ -2955,12 +2884,13 @@ actions.precombat+=/demonbolt
 		if not Pet.active then
 			if SummonFelguard:Usable() then
 				return SummonFelguard
-			elseif SummonWrathguard:Usable() then
-				return SummonWrathguard
 			end
 		end
-		if Player.soul_shards.current < 5 and Pet.imp_count < 6 and not (Demonbolt:Casting() or ShadowBolt:Casting()) then
-			if Demonbolt:Usable() and (Target.boss or DemonicCore:Up()) and (Player.soul_shards.current <= 3 or DemonicCore:Up() and DemonicCore:Remains() < (ShadowBolt:CastTime() * 2)) then
+		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < 4) then
+			UseCooldown(PowerSiphon)
+		end
+		if Target.boss and Pet.count < 6 then
+			if Demonbolt:Usable() and DemonicCore:Down() then
 				return Demonbolt
 			end
 			if ShadowBolt:Usable() then
@@ -2971,389 +2901,347 @@ actions.precombat+=/demonbolt
 		if not Pet.active then
 			if SummonFelguard:Usable() then
 				UseExtra(SummonFelguard)
-			elseif SummonWrathguard:Usable() then
-				UseExtra(SummonWrathguard)
 			end
 		end
 	end
 --[[
-actions+=/call_action_list,name=dcon_prep,if=talent.demonic_consumption.enabled&cooldown.summon_demonic_tyrant.remains<5
-actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&buff.demonic_core.stack=4
-actions+=/demonbolt,if=soul_shard<=4&buff.demonic_core.up&buff.demonic_core.remains<(gcd*buff.demonic_core.stack)
-actions+=/doom,if=!ticking&time_to_die>30&spell_targets.implosion<2
-actions+=/demonic_strength,if=(buff.wild_imps.stack<6|buff.demonic_power.up)|spell_targets.implosion<2
-actions+=/call_action_list,name=nether_portal,if=talent.nether_portal.enabled&spell_targets.implosion<=2
-actions+=/call_action_list,name=implosion,if=spell_targets.implosion>1
-actions+=/grimoire_felguard,if=(target.time_to_die>120|target.time_to_die<cooldown.summon_demonic_tyrant.remains+15|cooldown.summon_demonic_tyrant.remains<13)
-actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
-actions+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
+actions=call_action_list,name=variables
+actions+=/call_action_list,name=racials,if=pet.demonic_tyrant.active|fight_remains<22,use_off_gcd=1
+actions+=/call_action_list,name=items,use_off_gcd=1
+actions+=/invoke_external_buff,name=power_infusion,if=(buff.nether_portal.up&buff.nether_portal.remains<3&talent.nether_portal)|fight_remains<20|pet.demonic_tyrant.active&fight_remains<100|fight_remains<25|(pet.demonic_tyrant.active|!talent.summon_demonic_tyrant&buff.dreadstalkers.up)
+actions+=/call_action_list,name=fight_end,if=fight_remains<30
+actions+=/call_action_list,name=tyrant,if=cooldown.summon_demonic_tyrant.remains<15&(!talent.summon_vilefiend.enabled|buff.vilefiend.up|cooldown.summon_vilefiend.remains<gcd.max*5)&(buff.dreadstalkers.up|cooldown.call_dreadstalkers.remains<gcd.max*5)&(!talent.grimoire_felguard.enabled|!set_bonus.tier30_2pc|buff.grimoire_felguard.up|cooldown.grimoire_felguard.remains<10|cooldown.grimoire_felguard.remains>25)&(!variable.shadow_timings|variable.tyrant_cd<15|fight_remains<40|buff.power_infusion.up)
+actions+=/summon_demonic_tyrant,if=buff.vilefiend.up|buff.grimoire_felguard.up|cooldown.grimoire_felguard.remains>90
+actions+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>45
+actions+=/demonbolt,target_if=(!debuff.doom_brand.up|action.hand_of_guldan.in_flight&debuff.doom_brand.remains<=3),if=buff.demonic_core.up&(((!talent.soul_strike|cooldown.soul_strike.remains>gcd.max*2)&soul_shard<4)|soul_shard<(4-(active_enemies>2)))&!prev_gcd.1.demonbolt&set_bonus.tier31_2pc
+actions+=/power_siphon,if=!buff.demonic_core.up&(!debuff.doom_brand.up|(!action.hand_of_guldan.in_flight&debuff.doom_brand.remains<gcd.max+action.demonbolt.travel_time)|(action.hand_of_guldan.in_flight&debuff.doom_brand.remains<gcd.max+action.demonbolt.travel_time+3))&set_bonus.tier31_2pc
+actions+=/demonic_strength,if=buff.nether_portal.remains<gcd.max&(fight_remains>63&!(fight_remains>cooldown.summon_demonic_tyrant.remains+69)|cooldown.summon_demonic_tyrant.remains>30|variable.shadow_timings|buff.rite_of_ruvaraad.up|!talent.summon_demonic_tyrant|!talent.grimoire_felguard|!set_bonus.tier30_2pc)
 actions+=/bilescourge_bombers
-actions+=/hand_of_guldan,if=talent.demonic_consumption.enabled&prev_gcd.1.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<2
-actions+=/summon_demonic_tyrant,if=soul_shard<3|target.time_to_die<20
-actions+=/power_siphon,if=buff.wild_imps.stack>=2&buff.demonic_core.stack<=2&buff.demonic_power.down&spell_targets.implosion<2
-actions+=/doom,if=talent.doom.enabled&refreshable&time_to_die>(dot.doom.remains+30)
-actions+=/hand_of_guldan,if=soul_shard>=5
-actions+=/hand_of_guldan,if=soul_shard>=3&(buff.demonic_core.stack>=3|cooldown.call_dreadstalkers.remains>4&(cooldown.summon_demonic_tyrant.remains>20|cooldown.summon_demonic_tyrant.remains<gcd*4)&(!talent.summon_vilefiend.enabled|cooldown.summon_vilefiend.remains>3))
-actions+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
-actions+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&((cooldown.summon_demonic_tyrant.remains<6|cooldown.summon_demonic_tyrant.remains>22)|buff.demonic_core.stack>=3|buff.demonic_core.remains<5|time_to_die<25|buff.shadows_bite.remains)
-actions+=/call_action_list,name=build_a_shard
+actions+=/guillotine,if=buff.nether_portal.remains<gcd.max&(cooldown.demonic_strength.remains|!talent.demonic_strength)
+actions+=/call_dreadstalkers,if=cooldown.summon_demonic_tyrant.remains>25|variable.tyrant_cd>25|buff.nether_portal.up
+# If Tyrant is not up, it Implodes naturally. On 3-4t it waits till <6s left on Tyrant. On 5t+ it waits till <8s left on Tyrant
+actions+=/implosion,if=two_cast_imps>0&variable.impl&!prev_gcd.1.implosion&buff.wild_imps.stack>8
+actions+=/summon_soulkeeper,if=buff.tormented_soul.stack=10&active_enemies>1
+actions+=/demonic_strength,if=(fight_remains>63&!(fight_remains>cooldown.summon_demonic_tyrant.remains+69)|cooldown.summon_demonic_tyrant.remains>30|buff.rite_of_ruvaraad.up|variable.shadow_timings|!talent.summon_demonic_tyrant|!talent.grimoire_felguard|!set_bonus.tier30_2pc)
+# Uses HoG as long as you will have 2 shards ready for Dogs or are capped on Shards (1T and Wilf only)
+actions+=/hand_of_guldan,if=((soul_shard>2&cooldown.call_dreadstalkers.remains>gcd.max*4&cooldown.summon_demonic_tyrant.remains>17)|soul_shard=5|soul_shard=4&talent.soul_strike&cooldown.soul_strike.remains<gcd.max*2)&(active_enemies=1&talent.grand_warlocks_design)
+actions+=/hand_of_guldan,if=soul_shard>2&!(active_enemies=1&talent.grand_warlocks_design)
+# Demonbolt if we have more than one core
+actions+=/demonbolt,target_if=(!debuff.doom_brand.up|action.hand_of_guldan.in_flight&debuff.doom_brand.remains<=3)|active_enemies<4,if=buff.demonic_core.stack>1&((soul_shard<4&!talent.soul_strike|cooldown.soul_strike.remains>gcd.max*2)|soul_shard<3)&!variable.pool_cores_for_tyrant
+# Demonbolt if 2pc is safe
+actions+=/demonbolt,target_if=(!debuff.doom_brand.up|action.hand_of_guldan.in_flight&debuff.doom_brand.remains<=3)|active_enemies<4,if=set_bonus.tier31_2pc&(debuff.doom_brand.remains>10&buff.demonic_core.up&soul_shard<4)&!variable.pool_cores_for_tyrant
+actions+=/demonbolt,if=fight_remains<buff.demonic_core.stack*gcd.max
+# Aggressive Core usage if PS is coming off CD
+actions+=/demonbolt,target_if=(!debuff.doom_brand.up|action.hand_of_guldan.in_flight&debuff.doom_brand.remains<=3)|active_enemies<4,if=buff.demonic_core.up&(cooldown.power_siphon.remains<4)&(soul_shard<4)&!variable.pool_cores_for_tyrant
+actions+=/power_siphon,if=!buff.demonic_core.up
+actions+=/summon_vilefiend,if=fight_remains<cooldown.summon_demonic_tyrant.remains+5
+actions+=/doom,target_if=refreshable
+actions+=/shadow_bolt
 ]]
+	self:racials()
+	self:items()
+	local apl
 	if Target.boss and Target.timeToDie < 30 then
-		if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
-			UseCooldown(PotionOfSpectralIntellect)
-		end
-		if Opt.trinket and (Target.timeToDie < 15 or PotionOfSpectralIntellect.buff:Up()) then
-			if Trinket1:Usable() then
-				UseCooldown(Trinket1)
-			elseif Trinket2:Usable() then
-				UseCooldown(Trinket2)
-			end
-		end
-	end
-	if Pet.tyrant_remains > 0 then
-		if Opt.pot and Target.boss and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and (not NetherPortal.known or not NetherPortal:Ready(160)) then
-			UseCooldown(PotionOfSpectralIntellect)
-		end
-		if Opt.trinket then
-			if Trinket1:Usable() then
-				UseCooldown(Trinket1)
-			elseif Trinket2:Usable() then
-				UseCooldown(Trinket2)
-			end
-		end
-	end
-	if DemonicConsumption.known and SummonDemonicTyrant:Ready(5) then
-		local apl = self:dcon_prep()
+		apl = self:fight_end()
 		if apl then return apl end
 	end
-	if ImplosivePotential.known and HandOfGuldan:Usable() and Player:TimeInCombat() < 5 and Player.soul_shards.current >= 3 and ImplosivePotential:Down() and Pet.imp_count < 3 and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
-		return HandOfGuldan
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Stack() == 4 then
-		return Demonbolt
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 4 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
-		return Demonbolt
-	end
-	if ImplosivePotential.known and Implosion:Usable() and Pet.imp_count >= 3 and ImplosivePotential:Remains() < ShadowBolt:CastTime() and (not DemonicConsumption.known or not SummonDemonicTyrant:Ready(12)) then
-		return Implosion
-	end
-	if Doom:Usable() and Player.enemies == 1 and Target.timeToDie > 30 and Doom:Down() then
-		return Doom
-	end
-	if BilescourgeBombers:Usable() and ImplosivePotential.known and NetherPortal.known and Player:TimeInCombat() < 10 and Player.enemies == 1 and Pet.Dreadstalker:Up() then
-		UseCooldown(BilescourgeBombers)
-	end
-	if DemonicStrength:Usable() and (Player.enemies == 1 or DemonicPower:Up() or Pet.imp_count < 6) then
-		UseCooldown(DemonicStrength)
-	end
-	if NetherPortal.known and Player.enemies < 3 then
---[[
-actions.nether_portal=call_action_list,name=nether_portal_building,if=cooldown.nether_portal.remains<20
-actions.nether_portal+=/call_action_list,name=nether_portal_active,if=cooldown.nether_portal.remains>165
-]]
-		if NetherPortal:Ready(20) then
-			local apl = self:nether_portal_building()
-			if apl then return apl end
-		elseif not NetherPortal:Ready(165) then
-			local apl = self:nether_portal_active()
-			if apl then return apl end
-		end
-	end
-	if Player.enemies > 1 then
-		local apl = self:implosion()
+	if SummonDemonicTyrant.known and SummonDemonicTyrant:Ready(15) and (Pet.tyrant_cd < 15 or Target.timeToDie < 40 or PowerInfusion:Up()) and (
+		(not SummonVilefiend.known or Pet.Vilefiend:Up() or SummonVilefiend:Ready(Player.gcd * 5)) and
+		(Pet.Dreadstalker:Up() or CallDreadstalkers:Ready(Player.gcd * 5)) and
+		(not GrimoireFelguard.known or Player.set_bonus.t30 < 2 or Pet.Felguard:Up() or not between(GrimoireFelguard:Cooldown(), 10, 25))
+	) then
+		apl = self:tyrant()
 		if apl then return apl end
 	end
-	if GrimoireFelguard:Usable() and (Target.timeToDie > 120 or Target.timeToDie < (SummonDemonicTyrant:Cooldown() + 15) or SummonDemonicTyrant:Ready(13)) then
-		UseCooldown(GrimoireFelguard)
+	if SummonDemonicTyrant:Usable() and (Pet.Vilefiend:Up() or Pet.Felguard:Up() or not GrimoireFelguard:Ready(90)) then
+		UseCooldown(SummonDemonicTyrant)
 	end
-	if SummonVilefiend:Usable() and (SummonDemonicTyrant:Ready(12) or not SummonDemonicTyrant:Ready(40)) then
+	if SummonVilefiend:Usable() and not SummonDemonicTyrant:Ready(45) then
 		UseCooldown(SummonVilefiend)
 	end
-	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
-		return CallDreadstalkers
+	if DoomBrand.known then
+		if Demonbolt:Usable() and DemonicCore:Up() and not Demonbolt:Previous() and (
+			((not SoulStrike.known or not SoulStrike:Ready(Player.gcd * 2)) and Player.soul_shards.current < 4) or
+			Player.soul_shards.current < (4 - (Player.enemies > 2 and 1 or 0))
+		) then
+			return Demonbolt
+		end
+		if PowerSiphon:Usable() and DemonicCore:Down() and (
+			DoomBrand:Down() or
+			(DoomBrand:Remains() < (Player.gcd + Demonbolt:TravelTime() + (HandOfGuldan:Traveling() and 3 or 0)))
+		) then
+			UseCooldown(PowerSiphon)
+		end
+	end
+	if DemonicStrength:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) and (
+		(Target.timeToDie > 63 and not (Target.timeToDie > (SummonDemonicTyrant:Cooldown() + 69))) or
+		not SummonDemonicTyrant:Ready(30) or
+		(RiteOfRuvaraad.known and RiteOfRuvaraad:Up()) or
+		not SummonDemonicTyrant.known or
+		not GrimoireFelguard.known or
+		Player.set_bonus.t30 < 2
+	) then
+		UseCooldown(DemonicStrength)
 	end
 	if BilescourgeBombers:Usable() then
 		UseCooldown(BilescourgeBombers)
 	end
-	if HandOfGuldan:Usable() and DemonicConsumption.known and HandOfGuldan:Previous(1) and SummonDemonicTyrant:Ready(2) then
+	if Guillotine:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) and (not DemonicStrength.known or not DemonicStrength:Ready()) then
+		UseCooldown(Guillotine)
+	end
+	if CallDreadstalkers:Usable() and (not SummonDemonicTyrant:Ready(25) or Pet.tyrant_cd > 25 or (NetherPortal.known and NetherPortal:Up())) then
+		return CallDreadstalkers
+	end
+	if Implosion:Usable() and self.impl and Pet.imp_count > 8 and not Implosion:Previous() and (Pet.WildImp:RemainsUnder(3 * Player.haste_factor) + Pet.WildImpID:RemainsUnder(3 * Player.haste_factor)) > 0 then
+		return Implosion
+	end
+	if SummonSoulkeeper:Usable() and TormentedSoul:Stack() >= 10 and Player.enemies > 1 then
+		UseCooldown(SummonSoulkeeper)
+	end
+	if DemonicStrength:Usable() and (
+		(Target.timeToDie > 63 and not (Target.timeToDie > (SummonDemonicTyrant:Cooldown() + 69))) or
+		not SummonDemonicTyrant:Ready(30) or
+		(RiteOfRuvaraad.known and RiteOfRuvaraad:Up()) or
+		not SummonDemonicTyrant.known or
+		not GrimoireFelguard.known or
+		Player.set_bonus.t30 < 2
+	) then
+		UseCooldown(DemonicStrength)
+	end
+	if Demonbolt:Usable() and DemonicCore:Up() and (
+		(Player.soul_shards.current < 5 and DemonicCore:Remains() < (Player.gcd * 2)) or
+		(Player.soul_shards.current < 4 and (DemonicCore:Stack() + Pet.Dreadstalker:Expiring(Player.gcd * 2)) > 4)
+	) then
+		return Demonbolt
+	end
+	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (
+		Player.soul_shards.current >= 5 or
+		(not CallDreadstalkers:Ready(Player.gcd * 4) and not SummonDemonicTyrant:Ready(17)) or
+		(Player.soul_shards.current == 4 and SoulStrike.known and SoulStrike:Ready(Player.gcd * 2) and GrandWarlocksDesign.known and Player.enemies == 1) or
+		not (Player.enemies == 1 and GrandWarlocksDesign.known)
+	) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:Usable() and (Player.soul_shards.current < 3 or Target.timeToDie < 20) then
-		UseCooldown(SummonDemonicTyrant)
+	if Demonbolt:Usable() and DemonicCore:Up() and not self.pool_cores_for_tyrant and (
+		(DemonicCore:Stack() > 1 and (
+			Player.soul_shards.current < 3 or
+			(Player.soul_shards.current < 4 and not SoulStrike.known) or
+			(SoulStrike.known and not SoulStrike:Ready(Player.gcd * 2))
+		)) or
+		(DoomBrand.known and DoomBrand:Remains() > 10 and Player.soul_shards.current < 4) or
+		(Target.boss and Target.timeToDie < (DemonicCore:Stack() * Player.gcd)) or
+		(PowerSiphon.known and PowerSiphon:Ready(4) and Player.soul_shards.current < 4)
+	) then
+		return Demonbolt
 	end
-	if PowerSiphon:Usable() and Player.enemies == 1 and Pet.imp_count >= 2 and DemonicCore:Stack() <= 2 and DemonicPower:Down() then
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Down() then
 		UseCooldown(PowerSiphon)
 	end
-	if Doom:Usable() and Doom:Refreshable() and Target.timeToDie > (Doom:Remains() + 30) then
+	if SummonVilefiend:Usable() and Target.boss and Target.timeToDie < (SummonDemonicTyrant:Cooldown() + 5) then
+		UseCooldown(SummonVilefiend)
+	end
+	if Doom:Usable() and Doom:Refreshable() and Target.timeToDie > (Doom:Remains() + Doom:TickTime()) then
 		return Doom
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Up() and DemonicCore:Remains() <= HandOfGuldan:CastTime() then
-		return Demonbolt
-	end
-	if HandOfGuldan:Usable() and Player.soul_shards.current >= 3 then
-		if Player.soul_shards.current >= 5 then
-			return HandOfGuldan
-		end
-		if DemonicCore:Stack() >= 3 or (not CallDreadstalkers:Ready(4) and (not SummonDemonicTyrant:Ready(20) or SummonDemonicTyrant:Ready(Player.gcd * 4)) and (not SummonVilefiend.known or not SummonVilefiend:Ready(3))) then
-			return HandOfGuldan
-		end
-	end
-	if SoulStrike:Usable() and Player.soul_shards.current < 5 and DemonicCore:Stack() <= 2 then
-		return SoulStrike
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Up() and ((SummonDemonicTyrant:Ready(6) or not SummonDemonicTyrant:Ready(22)) or DemonicCore:Stack() >= 3 or DemonicCore:Remains() < 5 or Target.timeToDie < 25) then
-		return Demonbolt
-	end
-	return self:build_a_shard()
-end
-
-APL[SPEC.DEMONOLOGY].build_a_shard = function(self)
---[[
-actions.build_a_shard=/soul_strike,if=soul_shard=4
-actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&buff.demonic_core.remains<=(action.shadow_bolt.execute_time*(5-soul_shard)+action.hand_of_guldan.execute_time)
-actions.build_a_shard+=/demonbolt,if=buff.demonic_core.up&soul_shard<=3&pet.demonic_tyrant.active
-actions.build_a_shard+=/soul_strike
-actions.build_a_shard+=/shadow_bolt
-]]
-	if SoulStrike:Usable() and Player.soul_shards.current == 4 then
-		return SoulStrike
-	end
-	if Demonbolt:Usable() and DemonicCore:Up() then
-		if DemonicCore:Remains() <= (ShadowBolt:CastTime() * (5 - Player.soul_shards.current) + HandOfGuldan:CastTime()) then
-			return Demonbolt
-		end
-		if Player.soul_shards.current <= 3 and Pet.tyrant_remains > 0 then
-			return Demonbolt
-		end
-	end
-	if SoulStrike:Usable() then
-		return SoulStrike
 	end
 	if ShadowBolt:Usable() then
 		return ShadowBolt
 	end
 end
 
-APL[SPEC.DEMONOLOGY].dcon_prep = function(self)
+APL[SPEC.DEMONOLOGY].tyrant = function(self)
 --[[
-actions.dcon_prep=hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&!prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
-actions.dcon_prep+=/summon_demonic_tyrant,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.hand_of_guldan&(prev_gcd.3.hand_of_guldan|prev_gcd.4.hand_of_guldan)
-actions.dcon_prep+=/demonbolt,if=soul_shard>=2&buff.demonic_core.up&prev_gcd.1.hand_of_guldan&!(prev_gcd.3.hand_of_guldan&prev_gcd.5.hand_of_guldan)&cooldown.summon_demonic_tyrant.remains<execute_time+action.hand_of_guldan.cast_time*2
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard>=4&prev_gcd.1.demonbolt&prev_gcd.2.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time*2
-actions.dcon_prep+=/hand_of_guldan,if=prev_gcd.1.hand_of_guldan&prev_gcd.2.demonbolt&prev_gcd.3.hand_of_guldan&cooldown.summon_demonic_tyrant.remains<execute_time
-actions.dcon_prep+=/call_dreadstalkers,if=buff.demonic_core.remains<6
-actions.dcon_prep+=/bilescourge_bombers
-actions.dcon_prep+=/call_dreadstalkers
-actions.dcon_prep+=/summon_vilefiend,if=soul_shard=5
-actions.dcon_prep+=/grimoire_felguard,if=soul_shard=5
-actions.dcon_prep+=/hand_of_guldan,if=soul_shard=5
-actions.dcon_prep+=/demonbolt,if=soul_shard<=3&buff.demonic_core.stack>=2
-actions.dcon_prep+=/doom,if=refreshable&target.time_to_die>remains+30
-actions.dcon_prep+=/call_action_list,name=build_a_shard
+actions.tyrant=invoke_external_buff,name=power_infusion,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max
+actions.tyrant+=/hand_of_guldan,if=variable.pet_expire>gcd.max+action.summon_demonic_tyrant.cast_time&variable.pet_expire<gcd.max*4
+actions.tyrant+=/call_action_list,name=items,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max,use_off_gcd=1
+actions.tyrant+=/call_action_list,name=racials,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max,use_off_gcd=1
+actions.tyrant+=/potion,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max,use_off_gcd=1
+actions.tyrant+=/summon_demonic_tyrant,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max
+actions.tyrant+=/implosion,if=pet_count>2&(buff.dreadstalkers.down&buff.grimoire_felguard.down&buff.vilefiend.down)&(active_enemies>3|active_enemies>2&talent.grand_warlocks_design)
+actions.tyrant+=/shadow_bolt,if=prev_gcd.1.grimoire_felguard&time>30&buff.nether_portal.down&buff.demonic_core.down
+actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<4&(!buff.vilefiend.up|!talent.summon_vilefiend&(!buff.dreadstalkers.up))&(buff.nether_portal.down)
+actions.tyrant+=/shadow_bolt,if=buff.vilefiend.down&buff.nether_portal.down&buff.dreadstalkers.down&soul_shard<5-buff.demonic_core.stack
+actions.tyrant+=/nether_portal,if=soul_shard=5
+actions.tyrant+=/summon_vilefiend,if=(soul_shard=5|buff.nether_portal.up)&cooldown.summon_demonic_tyrant.remains<13&variable.np
+actions.tyrant+=/call_dreadstalkers,if=(buff.vilefiend.up|!talent.summon_vilefiend&(!talent.nether_portal|buff.nether_portal.up|cooldown.nether_portal.remains>30)&(buff.nether_portal.up|buff.grimoire_felguard.up|soul_shard=5|cooldown.grimoire_felguard.remains&buff.vilefiend.remains<9))&cooldown.summon_demonic_tyrant.remains<11&variable.np
+actions.tyrant+=/grimoire_felguard,if=buff.vilefiend.up|!talent.summon_vilefiend&(!talent.nether_portal|buff.nether_portal.up|cooldown.nether_portal.remains>30)&(buff.nether_portal.up|buff.dreadstalkers.up|soul_shard=5)&variable.np
+actions.tyrant+=/hand_of_guldan,if=soul_shard>2&(buff.vilefiend.up|!talent.summon_vilefiend&buff.dreadstalkers.up)&(soul_shard>2|buff.vilefiend.remains<gcd.max*2+2%spell_haste)
+actions.tyrant+=/demonbolt,cycle_targets=1,if=soul_shard<4&buff.demonic_core.up&(buff.vilefiend.up|!talent.summon_vilefiend&buff.dreadstalkers.up)
+actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<3&variable.pet_expire>action.summon_demonic_tyrant.execute_time+gcd.max*3|variable.pet_expire=0
+actions.tyrant+=/shadow_bolt
 ]]
-	local tyrant_cd, hog_ct = SummonDemonicTyrant:Cooldown(), HandOfGuldan:CastTime()
-	if HandOfGuldan:Usable() and HandOfGuldan:Previous(1) and HandOfGuldan:Previous(2) and not HandOfGuldan:Previous(3) and tyrant_cd < hog_ct then
+	if HandOfGuldan:Usable() and self.pet_expire > (Player.gcd + SummonDemonicTyrant:CastTime()) and self.pet_expire < (Player.gcd * 4) then
 		return HandOfGuldan
 	end
-	if SummonDemonicTyrant:Usable() then
-		if HandOfGuldan:Previous(1) and HandOfGuldan:Previous(2) and (HandOfGuldan:Previous(3) or HandOfGuldan:Previous(4)) then
+	if self.pet_expire > 0 and self.pet_expire < (SummonDemonicTyrant:CastTime() + Player.gcd + (DemonicCore:Up() and Player.gcd or ShadowBolt:CastTime())) then
+		self:items()
+		self:racials()
+		-- potion
+		if SummonDemonicTyrant:Usable() then
 			UseCooldown(SummonDemonicTyrant)
 		end
-		if Pet.tyrant_available_power >= 200 then
-			local imps_idle = not (Pet.WildImp:Casting() or Pet.WildImpID:Casting())
-			if HandOfGuldan:Usable() and imps_idle and (Player.soul_shards.current >= 2 or Pet.tyrant_available_power >= 250) and Player:ImpsIn(hog_ct + SummonDemonicTyrant:CastTime()) >= (Pet.imp_count - 2) then
-				return HandOfGuldan
-			end
-			if (HandOfGuldan:Previous(1) and (HandOfGuldan:Previous(2) or imps_idle)) or (Pet.tyrant_available_power >= 280 and imps_idle and Player:ImpsIn(SummonDemonicTyrant:CastTime()) >= Pet.imp_count) then
-				UseCooldown(SummonDemonicTyrant)
-			end
-		end
 	end
-	if Demonbolt:Usable() and Player.soul_shards.current >= 2 and DemonicCore:Up() and HandOfGuldan:Previous(1) and not (HandOfGuldan:Previous(3) and HandOfGuldan:Previous(5)) and tyrant_cd < (Player.gcd + hog_ct * 2) then
-		return Demonbolt
-	end
-	if HandOfGuldan:Usable() then
-		if Player.soul_shards.current >= 4 and Demonbolt:Previous(1) and HandOfGuldan:Previous(2) and tyrant_cd < (hog_ct * 2) then
-			return HandOfGuldan
-		end
-		if HandOfGuldan:Previous(1) and Demonbolt:Previous(2) and HandOfGuldan:Previous(3) and tyrant_cd < hog_ct then
-			return HandOfGuldan
-		end
-	end
-	if CallDreadstalkers:Usable() and DemonicCore:Remains() < 6 then
-		return CallDreadstalkers
-	end
-	if ImplosivePotential.known and ImplosivePotential:Remains() < 6 then
-		if Implosion:Usable() and Pet.imp_count >= 3 and (Player.soul_shards.current >= 3 or Player:ImpsIn(ShadowBolt:CastTime()) < 3) then
-			return Implosion
-		end
-		if HandOfGuldan:Usable() and Pet.imp_count < 3 and Player.soul_shards.current >= 3 and ImplosivePotential:Down() and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2)) then
-			return HandOfGuldan
-		end
-	end
-	if BilescourgeBombers:Usable() then
-		UseCooldown(BilescourgeBombers)
-	end
-	if CallDreadstalkers:Usable() then
-		return CallDreadstalkers
-	end
-	if Player.soul_shards.current >= 5 then
-		if SummonVilefiend:Usable() then
-			UseCooldown(SummonVilefiend)
-		elseif GrimoireFelguard:Usable() then
-			UseCooldown(GrimoireFelguard)
-		end
-		if HandOfGuldan:Usable() then
-			return HandOfGuldan
-		end
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Stack() >= 2 then
-		return Demonbolt
-	end
-	if Doom:Usable() and Doom:Refreshable() and Target.timeToDie > Doom:Remains() + 30 then
-		return Doom
-	end
-	return self:build_a_shard()
-end
-
-APL[SPEC.DEMONOLOGY].implosion = function(self)
---[[
-actions.implosion=implosion,if=(buff.wild_imps.stack>=6&(soul_shard<3|prev_gcd.1.call_dreadstalkers|buff.wild_imps.stack>=9|prev_gcd.1.bilescourge_bombers|(!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan))&!prev_gcd.1.hand_of_guldan&!prev_gcd.2.hand_of_guldan&buff.demonic_power.down)|(time_to_die<3&buff.wild_imps.stack>0)|(prev_gcd.2.call_dreadstalkers&buff.wild_imps.stack>2&!talent.demonic_calling.enabled)
-actions.implosion+=/bilescourge_bombers,if=talent.demonic_consumption.enabled
-actions.implosion+=/grimoire_felguard,if=cooldown.summon_demonic_tyrant.remains<13|!equipped.132369
-actions.implosion+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
-actions.implosion+=/summon_demonic_tyrant
-actions.implosion+=/hand_of_guldan,if=soul_shard>=5
-actions.implosion+=/hand_of_guldan,if=soul_shard>=3&(((prev_gcd.2.hand_of_guldan|buff.wild_imps.stack>=3)&buff.wild_imps.stack<9)|cooldown.summon_demonic_tyrant.remains<=gcd*2|buff.demonic_power.remains>gcd*2)
-actions.implosion+=/demonbolt,if=prev_gcd.1.hand_of_guldan&soul_shard>=1&(buff.wild_imps.stack<=3|prev_gcd.3.hand_of_guldan)&soul_shard<4&buff.demonic_core.up
-actions.implosion+=/summon_vilefiend,if=(cooldown.summon_demonic_tyrant.remains>40&spell_targets.implosion<=2)|cooldown.summon_demonic_tyrant.remains<12
-actions.implosion+=/bilescourge_bombers,if=cooldown.summon_demonic_tyrant.remains>9
-actions.implosion+=/soul_strike,if=soul_shard<5&buff.demonic_core.stack<=2
-actions.implosion+=/demonbolt,if=soul_shard<=3&buff.demonic_core.up&(buff.demonic_core.stack>=3|buff.demonic_core.remains<=gcd*5.7|spell_targets.implosion>=4&cooldown.summon_demonic_tyrant.remains>22)
-actions.implosion+=/doom,cycle_targets=1,max_cycle_targets=7,if=refreshable
-actions.implosion+=/call_action_list,name=build_a_shard
-]]
-	if Implosion:Usable() and ((Target.timeToDie < 3 and (not ImplosivePotential.known or Pet.imp_count >= 3)) or (Pet.imp_count >= 6 and (Player.soul_shards.current < 3 or CallDreadstalkers:Previous(1) or Pet.imp_count >= 9 or BilescourgeBombers:Previous(1) or not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2))) and not (HandOfGuldan:Previous(1) or HandOfGuldan:Previous(2) or DemonicPower:Up())) or (not DemonicCalling.known and Pet.imp_count > 2 and CallDreadstalkers:Previous(2))) then
+	if Implosion:Usable() and Pet.count > 2 and Player.enemies > (3 - (GrandWarlocksDesign.known and 1 or 0)) and Pet.Dreadstalker:Down() and Pet.Felguard:Down() and Pet.Vilefiend:Down() then
 		return Implosion
 	end
-	if DemonicConsumption.known and BilescourgeBombers:Usable() then
-		UseCooldown(BilescourgeBombers)
+	if ShadowBolt:Usable() and GrimoireFelguard:Previous() and Player:TimeInCombat() > 30 and (not NetherPortal.known or NetherPortal:Down()) and DemonicCore:Down() then
+		return ShadowBolt
 	end
-	if GrimoireFelguard:Usable() and SummonDemonicTyrant:Ready(13) then
-		UseCooldown(GrimoireFelguard)
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 4 and (not NetherPortal.known or NetherPortal:Down()) and (Pet.Vilefiend:Down() or (not SummonVilefiend.known and Pet.Dreadstalker:Down())) then
+		UseCooldown(PowerSiphon)
 	end
-	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
-		return CallDreadstalkers
+	if ShadowBolt:Usable() and Pet.Vilefiend:Down() and (not NetherPortal.known or NetherPortal:Down()) and Pet.Dreadstalker:Down() and Player.soul_shards.current < (5 - DemonicCore:Stack()) then
+		return ShadowBolt
 	end
-	if SummonDemonicTyrant:Usable() then
-		UseCooldown(SummonDemonicTyrant)
-	end
-	if HandOfGuldan:Usable() and Player.soul_shards.current >= 3 then
-		if Player.soul_shards.current >= 5 then
-			return HandOfGuldan
-		end
-		if ((HandOfGuldan:Previous(2) or Pet.imp_count >= 3) and Pet.imp_count < 9) or SummonDemonicTyrant:Ready(Player.gcd * 2) or DemonicPower:Remains() > (Player.gcd * 2) then
-			return HandOfGuldan
-		end
-	end
-	if Demonbolt:Usable() and HandOfGuldan:Previous(1) and between(Player.soul_shards.current, 1, 3) and (Pet.imp_count <= 3 or HandOfGuldan:Previous(3)) and DemonicCore:Up() then
-		return Demonbolt
-	end
-	if SummonVilefiend:Usable() and (SummonDemonicTyrant:Ready(12) or (Player.enemies <= 2 and not SummonDemonicTyrant:Ready(40))) then
-		UseCooldown(SummonVilefiend)
-	end
-	if BilescourgeBombers:Usable() and not SummonDemonicTyrant:Ready(9) then
-		UseCooldown(BilescourgeBombers)
-	end
-	if SoulStrike:Usable() and Player.soul_shards.current < 5 and DemonicCore:Stack() <= 2 then
-		return SoulStrike
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Up() and (DemonicCore:Stack() >= 3 or DemonicCore:Remains() <= (Player.gcd * 5.7) or Player.enemies >= 4 and not SummonDemonicTyrant:Ready(22)) then
-		return Demonbolt
-	end
-	if Doom:Usable() and Doom:Refreshable() and Target.timeToDie > (Doom:Remains() + 30) then
-		return Doom
-	end
-	return self:build_a_shard()
-end
-
-APL[SPEC.DEMONOLOGY].nether_portal_active = function(self)
---[[
-actions.nether_portal_active=bilescourge_bombers
-actions.nether_portal_active+=/grimoire_felguard,if=cooldown.summon_demonic_tyrant.remains<13|!equipped.132369
-actions.nether_portal_active+=/summon_vilefiend,if=cooldown.summon_demonic_tyrant.remains>40|cooldown.summon_demonic_tyrant.remains<12
-actions.nether_portal_active+=/call_dreadstalkers,if=(cooldown.summon_demonic_tyrant.remains<9&buff.demonic_calling.remains)|(cooldown.summon_demonic_tyrant.remains<11&!buff.demonic_calling.remains)|cooldown.summon_demonic_tyrant.remains>14
-actions.nether_portal_active+=/call_action_list,name=build_a_shard,if=soul_shard=1&(cooldown.call_dreadstalkers.remains<action.shadow_bolt.cast_time|(talent.bilescourge_bombers.enabled&cooldown.bilescourge_bombers.remains<action.shadow_bolt.cast_time))
-actions.nether_portal_active+=/hand_of_guldan,if=((cooldown.call_dreadstalkers.remains>action.demonbolt.cast_time)&(cooldown.call_dreadstalkers.remains>action.shadow_bolt.cast_time))&cooldown.nether_portal.remains>(165+action.hand_of_guldan.cast_time)
-actions.nether_portal_active+=/summon_demonic_tyrant,if=buff.nether_portal.remains<5&soul_shard=0
-actions.nether_portal_active+=/summon_demonic_tyrant,if=buff.nether_portal.remains<action.summon_demonic_tyrant.cast_time+0.5
-actions.nether_portal_active+=/demonbolt,if=buff.demonic_core.up&soul_shard<=3
-actions.nether_portal_active+=/call_action_list,name=build_a_shard
-]]
-	if BilescourgeBombers:Usable() then
-		UseCooldown(BilescourgeBombers)
-	end
-	if GrimoireFelguard:Usable() and SummonDemonicTyrant:Ready(13) then
-		UseCooldown(GrimoireFelguard)
-	end
-	if SummonVilefiend:Usable() and (SummonDemonicTyrant:Ready(12) or not SummonDemonicTyrant:Ready(40)) then
-		UseCooldown(SummonVilefiend)
-	end
-	if CallDreadstalkers:Usable() and (SummonDemonicTyrant:Ready(DemonicCalling:Up() and 9 or 11) or not SummonDemonicTyrant:Ready(14)) then
-		return CallDreadstalkers
-	end
-	if Player.soul_shards.current == 1 and (CallDreadstalkers:Ready(ShadowBolt:CastTime()) or (BilescourgeBombers.known and BilescourgeBombers:Ready(ShadowBolt:CastTime()))) then
-		local apl = self:build_a_shard()
-		if apl then return apl end
-	end
-	if HandOfGuldan:Usable() and not NetherPortal:Ready(165 + HandOfGuldan:CastTime()) and not CallDreadstalkers:Ready(Demonbolt:CastTime()) and not CallDreadstalkers:Ready(ShadowBolt:CastTime())  then
-		return HandOfGuldan
-	end
-	if SummonDemonicTyrant:Usable() and ((Player.soul_shards.current == 0 and NetherPortal:Remains() < 5) or (NetherPortal:Remains() < SummonDemonicTyrant:CastTime() + 0.5)) then
-		UseCooldown(SummonDemonicTyrant)
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current <= 3 and DemonicCore:Up() then
-		return Demonbolt
-	end
-	return self:build_a_shard()
-end
-
-APL[SPEC.DEMONOLOGY].nether_portal_building = function(self)
---[[
-actions.nether_portal_building=use_item,name=azsharas_font_of_power,if=cooldown.nether_portal.remains<=5*spell_haste
-actions.nether_portal_building+=/nether_portal,if=soul_shard>=5
-actions.nether_portal_building+=/call_dreadstalkers,if=time>=30
-actions.nether_portal_building+=/hand_of_guldan,if=time>=30&cooldown.call_dreadstalkers.remains>18&soul_shard>=3
-actions.nether_portal_building+=/power_siphon,if=time>=30&buff.wild_imps.stack>=2&buff.demonic_core.stack<=2&buff.demonic_power.down&soul_shard>=3
-actions.nether_portal_building+=/hand_of_guldan,if=time>=30&soul_shard>=5
-actions.nether_portal_building+=/call_action_list,name=build_a_shard
-]]
 	if NetherPortal:Usable() and Player.soul_shards.current >= 5 then
 		UseCooldown(NetherPortal)
 	end
-	if Player:TimeInCombat() >= 30 then
+	if SummonVilefiend:Usable() and self.np and SummonDemonicTyrant:Ready(13) and (Player.soul_shards.current >= 5 or NetherPortal:Up()) then
+		UseCooldown(SummonVilefiend)
+	end
+	if CallDreadstalkers:Usable() and self.np and SummonDemonicTyrant:Ready(11) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) and (NetherPortal:Up() or Pet.Felguard:Up() or Player.soul_shards.current >= 5 or (not GrimoireFelguard:Ready() and Pet.Vilefiend:Remains() < 9)) then
+		return CallDreadstalkers
+	end
+	if GrimoireFelguard:Usable() and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and self.np and (NetherPortal:Up() or Pet.Dreadstalker:Up() or Player.soul_shards.current >= 5))) then
+		return GrimoireFelguard
+	end
+	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and Pet.Dreadstalker:Up())) then
+		return HandOfGuldan
+	end
+	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and Pet.Dreadstalker:Up()) or DemonicCore:Remains() < (Player.gcd * 2)) then
+		return Demonbolt
+	end
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 3 and (self.pet_expire == 0 or self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3)) then
+		UseCooldown(PowerSiphon)
+	end
+	if Demonbolt:Usable() and Player.soul_shards.current < 5 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * 2) then
+		return Demonbolt
+	end
+	if ShadowBolt:Usable() then
+		return ShadowBolt
+	end
+end
+
+APL[SPEC.DEMONOLOGY].fight_end = function(self)
+--[[
+actions.fight_end=grimoire_felguard,if=fight_remains<20
+actions.fight_end+=/call_dreadstalkers,if=fight_remains<20
+actions.fight_end+=/summon_vilefiend,if=fight_remains<20
+actions.fight_end+=/nether_portal,if=fight_remains<30
+actions.fight_end+=/summon_demonic_tyrant,if=fight_remains<20
+actions.fight_end+=/demonic_strength,if=fight_remains<10
+actions.fight_end+=/power_siphon,if=buff.demonic_core.stack<3&fight_remains<20
+actions.fight_end+=/implosion,if=fight_remains<2*gcd.max
+]]
+	if Target.timeToDie < 20 then
+		if GrimoireFelguard:Usable() then
+			UseCooldown(GrimoireFelguard)
+		end
 		if CallDreadstalkers:Usable() then
 			return CallDreadstalkers
 		end
-		if Player.soul_shards.current >= 3 then
-			if HandOfGuldan:Usable() and not CallDreadstalkers:Ready(18) then
-				return HandOfGuldan
-			end
-			if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() <= 2 and DemonicPower:Down() then
-				UseCooldown(PowerSiphon)
-			end
-			if HandOfGuldan:Usable() and Player.soul_shards.current >= 5 then
-				return HandOfGuldan
-			end
+		if SummonVilefiend:Usable() then
+			UseCooldown(SummonVilefiend)
 		end
 	end
-	return self:build_a_shard()
+	if NetherPortal:Usable() and Target.timeToDie < 30 then
+		UseCooldown(NetherPortal)
+	end
+	if SummonDemonicTyrant:USable() and Target.timeToDie < 20 then
+		UseCooldown(SummonDemonicTyrant)
+	end
+	if DemonicStrength:Usable() and Target.timeToDie < 10 then
+		UseCooldown(DemonicStrength)
+	end
+	if PowerSiphon:Usable() and DemonicCore:Stack() < 3 and Target.timeToDie < 20 then
+		UseCooldown(PowerSiphon)
+	end
+	if Implosion:Usable() and Target.timeToDie < (2 * Player.gcd) then
+		return Implosion
+	end
+end
+
+APL[SPEC.DEMONOLOGY].racials = function(self)
+--[[
+actions.racials=berserking,use_off_gcd=1
+actions.racials+=/blood_fury
+actions.racials+=/fireblood
+actions.racials+=/ancestral_call
+]]
+
+end
+
+APL[SPEC.DEMONOLOGY].items = function(self)
+--[[
+actions.items=use_item,use_off_gcd=1,slot=trinket1,if=variable.trinket_1_buffs&!variable.trinket_1_manual&(!pet.demonic_tyrant.active&trinket.1.cast_time>0|!trinket.1.cast_time>0)&(pet.demonic_tyrant.active)&(variable.trinket_2_exclude|!trinket.2.has_cooldown|trinket.2.cooldown.remains|variable.trinket_priority=1)|trinket.1.proc.any_dps.duration>=fight_remains
+actions.items+=/use_item,use_off_gcd=1,slot=trinket2,if=variable.trinket_2_buffs&!variable.trinket_2_manual&(!pet.demonic_tyrant.active&trinket.2.cast_time>0|!trinket.2.cast_time>0)&(pet.demonic_tyrant.active)&(variable.trinket_1_exclude|!trinket.1.has_cooldown|trinket.1.cooldown.remains|variable.trinket_priority=2)|trinket.2.proc.any_dps.duration>=fight_remains
+actions.items+=/use_item,use_off_gcd=1,slot=trinket1,if=!variable.trinket_1_buffs&!variable.trinket_1_manual&(!variable.trinket_1_buffs&(trinket.2.cooldown.remains|!variable.trinket_2_buffs)|(trinket.1.cast_time>0&!pet.demonic_tyrant.active|!trinket.1.cast_time>0)|cooldown.demonic_tyrant.remains_expected>20)
+actions.items+=/use_item,use_off_gcd=1,slot=trinket2,if=!variable.trinket_2_buffs&!variable.trinket_2_manual&(!variable.trinket_2_buffs&(trinket.1.cooldown.remains|!variable.trinket_1_buffs)|(trinket.2.cast_time>0&!pet.demonic_tyrant.active|!trinket.2.cast_time>0)|cooldown.demonic_tyrant.remains_expected>20)
+actions.items+=/use_item,use_off_gcd=1,slot=main_hand,if=(!variable.trinket_1_buffs|trinket.1.cooldown.remains)&(!variable.trinket_2_buffs|trinket.2.cooldown.remains)
+actions.items+=/use_item,name=nymues_unraveling_spindle,if=pet.demonic_tyrant.active&!cooldown.demonic_strength.ready|fight_remains<22
+actions.items+=/use_item,slot=trinket1,if=!variable.trinket_1_buffs&(trinket.2.cooldown.remains|!variable.trinket_2_buffs)
+actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.cooldown.remains|!variable.trinket_1_buffs)
+]]
+	if Opt.trinket and Pet.tyrant_remains > 0 then
+		if Trinket1:Usable() then
+			return UseCooldown(Trinket1)
+		elseif Trinket2:Usable() then
+			return UseCooldown(Trinket2)
+		end
+	end
+end
+
+APL[SPEC.DEMONOLOGY].variables = function(self)
+--[[
+actions.variables=variable,name=tyrant_cd,op=setif,value=cooldown.invoke_power_infusion_0.remains,value_else=cooldown.summon_demonic_tyrant.remains,condition=((((fight_remains+time)%%120<=85&(fight_remains+time)%%120>=25)|time>=210)&variable.shadow_timings)&cooldown.invoke_power_infusion_0.duration>0&!talent.grand_warlocks_design
+actions.variables+=/variable,name=pet_expire,op=set,value=(buff.dreadstalkers.remains>?buff.vilefiend.remains)-gcd*0.5,if=buff.vilefiend.up&buff.dreadstalkers.up
+actions.variables+=/variable,name=pet_expire,op=set,value=(buff.dreadstalkers.remains>?buff.grimoire_felguard.remains)-gcd*0.5,if=!talent.summon_vilefiend&talent.grimoire_felguard&buff.dreadstalkers.up
+actions.variables+=/variable,name=pet_expire,op=set,value=(buff.dreadstalkers.remains)-gcd*0.5,if=!talent.summon_vilefiend&(!talent.grimoire_felguard|!set_bonus.tier30_2pc)&buff.dreadstalkers.up
+actions.variables+=/variable,name=pet_expire,op=set,value=0,if=!buff.vilefiend.up&talent.summon_vilefiend|!buff.dreadstalkers.up
+actions.variables+=/variable,name=np,op=set,value=(!talent.nether_portal|cooldown.nether_portal.remains>30|buff.nether_portal.up)
+actions.variables+=/variable,name=impl,op=set,value=0
+actions.variables+=/variable,name=impl,op=set,value=buff.tyrant.down,if=active_enemies>1+(talent.sacrificed_souls.enabled)
+actions.variables+=/variable,name=impl,op=set,value=buff.tyrant.remains<6,if=active_enemies>2+(talent.sacrificed_souls.enabled)&active_enemies<5+(talent.sacrificed_souls.enabled)
+actions.variables+=/variable,name=impl,op=set,value=buff.tyrant.remains<8,if=active_enemies>4+(talent.sacrificed_souls.enabled)
+actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.summon_demonic_tyrant.remains<20&variable.tyrant_cd<20&(buff.demonic_core.stack<=2|!buff.demonic_core.up)&cooldown.summon_vilefiend.remains<gcd.max*5&cooldown.call_dreadstalkers.remains<gcd.max*5
+]]
+	HandOfGuldan:Purge()
+	Pet.count = SummonedPets:Count() + (Pet.alive and 1 or 0)
+	Pet.imp_count = Pet.WildImp:Count() + (Pet.WildImpID and Pet.WildImpID:Count() or 0)
+	Pet.tyrant_cd = SummonDemonicTyrant:Cooldown()
+	Pet.tyrant_remains = Pet.DemonicTyrant:Remains()
+	Pet.tyrant_power = Pet.DemonicTyrant:Power()
+	Pet.tyrant_available_power = Pet.DemonicTyrant:AvailablePower()
+	if Pet.Dreadstalker:Up() then
+		if SummonVilefiend.known and Pet.Vilefiend:Up() then
+			self.pet_expire = min(Pet.Dreadstalker:Remains(), Pet.Vilefiend:Remains()) - Player.gcd * 0.5
+		end
+		if not SummonVilefiend.known and GrimoireFelguard.known then
+			self.pet_expire = min(Pet.Dreadstalker:Remains(), Pet.Felguard:Remains()) - Player.gcd * 0.5
+		end
+		if not SummonVilefiend.known and (not GrimoireFelguard.known or not Player.set_bonus.t30 >= 2) then
+			self.pet_expire = Pet.Dreadstalker:Remains() - Player.gcd * 0.5
+		end
+	end
+	if (SummonVilefiend.known and Pet.Vilefiend:Down()) or Pet.Dreadstalker:Down() then
+		self.pet_expire = 0
+	end
+	self.np = not NetherPortal.known or not NetherPortal:Ready(30) or NetherPortal:Up()
+	self.impl = 0
+	if Player.enemies > (1 + (SacrificedSouls.known and 1 or 0)) then
+		self.impl = Pet.tyrant_remains == 0
+	end
+	if Player.enemies > (2 + (SacrificedSouls.known and 1 or 0)) and Player.enemies < (5 + (SacrificedSouls.known and 1 or 0)) then
+		self.impl = Pet.tyrant_remains < 6
+	end
+	if Player.enemies > (4 + (SacrificedSouls.known and 1 or 0)) then
+		self.impl = Pet.tyrant_remains < 8
+	end
+	self.pool_cores_for_tyrant = SummonDemonicTyrant.known and SummonDemonicTyrant:Ready(20) and Pet.tyrant_cd < 20 and DemonicCore:Stack() <= 2 and SummonVilefiend:Ready(Player.gcd * 5) and CallDreadstalkers:Ready(Player.gcd * 5)
 end
 
 APL[SPEC.DESTRUCTION].Main = function(self)
 	self.infernal_up = Pet.Infernal:Up(true)
-	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up or (DarkSoulInstability.known and DarkSoulInstability:Up()))
+	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up)
 	self.havoc_remains = Havoc:HighestRemains()
 
 	if Player:TimeInCombat() == 0 then
@@ -3369,7 +3257,6 @@ actions.precombat+=/snapshot_stats
 actions.precombat+=/fleshcraft
 actions.precombat+=/use_item,name=shadowed_orb_of_torment
 actions.precombat+=/soul_fire
-actions.precombat+=/cataclysm
 actions.precombat+=/incinerate
 ]]
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
@@ -3385,9 +3272,6 @@ actions.precombat+=/incinerate
 			end
 		elseif not Pet.active then
 			return SummonImp
-		end
-		if Cataclysm:Usable() then
-			UseCooldown(Cataclysm)
 		end
 		if Player.soul_shards.deficit > 0 then
 			if SoulFire:Usable() then
@@ -3414,10 +3298,9 @@ actions.precombat+=/incinerate
 actions=call_action_list,name=havoc,if=havoc_active&active_enemies>1&active_enemies<5-talent.inferno.enabled+(talent.inferno.enabled&talent.internal_combustion.enabled)
 actions+=/fleshcraft,if=soulbind.volatile_solvent,cancel_if=buff.volatile_solvent_humanoid.up
 actions+=/conflagrate,if=talent.roaring_blaze.enabled&debuff.roaring_blaze.remains<1.5
-actions+=/cataclysm
 actions+=/call_action_list,name=aoe,if=active_enemies>2-(set_bonus.tier28_4pc&(!runeforge.madness_of_the_azjaqir.equipped|talent.inferno.enabled))
-actions+=/soul_fire,cycle_targets=1,if=refreshable&soul_shard<=4&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
-actions+=/immolate,cycle_targets=1,if=remains<3&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
+actions+=/soul_fire,cycle_targets=1,if=refreshable&soul_shard<=4&
+actions+=/immolate,cycle_targets=1,if=remains<3
 actions+=/immolate,if=talent.internal_combustion.enabled&action.chaos_bolt.in_flight&remains<duration*0.5
 actions+=/chaos_bolt,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
 actions+=/call_action_list,name=cds
@@ -3441,18 +3324,15 @@ actions+=/incinerate
 	if RoaringBlaze.known and Conflagrate:Usable() and RoaringBlaze:Remains() < 1.5 then
 		return Conflagrate
 	end
-	if Cataclysm:Usable() then
-		UseCooldown(Cataclysm)
-	end
 	if Player.enemies > (2 - (AvatarOfDestruction.known and (not MadnessOfTheAzjAqir.known or Inferno.known) and 1 or 0)) then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
-	if SoulFire:Usable() and SoulFire:Refreshable() and Player.soul_shards.current <= 4 and (not Catalysm.known or Cataclysm:Cooldown() > SoulFire:Remains()) then
+	if SoulFire:Usable() and SoulFire:Refreshable() and Player.soul_shards.current <= 4 then
 		return SoulFire
 	end
 	if Immolate:Usable() and Target.timeToDie > Immolate:Remains() then
-		if Immolate:Refreshable() and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
+		if Immolate:Refreshable() then
 			return Immolate
 		end
 		if InternalCombustion.known and ChaosBolt:Traveling() > 0 and Immolate:Remains() < (Immolate:Duration() * 0.5) then
@@ -3505,7 +3385,7 @@ APL[SPEC.DESTRUCTION].aoe = function(self)
 actions.aoe=rain_of_fire,if=pet.infernal.active&(!cooldown.havoc.ready|active_enemies>3)
 actions.aoe+=/rain_of_fire,if=(pet.infernal.active|pet.blasphemy.active)&soul_shard>=4
 actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
-actions.aoe+=/immolate,cycle_targets=1,if=active_enemies<5&remains<5&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>remains)
+actions.aoe+=/immolate,cycle_targets=1,if=active_enemies<5&remains<5
 actions.aoe+=/call_action_list,name=cds
 actions.aoe+=/havoc,cycle_targets=1,if=!(target=self.target)&active_enemies<4
 actions.aoe+=/rain_of_fire
@@ -3526,7 +3406,7 @@ actions.aoe+=/incinerate
 	if ChannelDemonfire:Usable() and Immolate:Remains() > ChannelDemonfire:CastTime() then
 		UseCooldown(ChannelDemonfire)
 	end
-	if Immolate:Usable() and Player.enemies < 5 and Immolate:Remains() < 5 and (not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
+	if Immolate:Usable() and Player.enemies < 5 and Immolate:Remains() < 5 then
 		return Immolate
 	end
 	if self.use_cds then
@@ -3576,12 +3456,6 @@ actions.cds+=/use_items,if=pet.infernal.active|time_to_die<21
 ]]
 	if SummonInfernal:Usable() then
 		return UseCooldown(SummonInfernal)
-	end
-	if DarkSoulInstability:Usable() and (self.infernal_up or SummonInfernal:Cooldown() > Target.timeToDie) then
-		return UseCooldown(DarkSoulInstability)
-	end
-	if Opt.pot and not Player:InArenaOrBattleground() and PotionOfSpectralIntellect:Usable() and self.infernal_up then
-		return UseCooldown(PotionOfSpectralIntellect)
 	end
 	if Opt.trinket and ((Target.boss and Target.timeToDie < 21) or self.infernal_up) then
 		if Trinket1:Usable() then
@@ -3948,7 +3822,7 @@ function UI:UpdateDisplay()
 			text_tl = Player.dot_count
 		end
 		if Opt.tyrant then
-			local _, unit, remains
+			local remains
 			text_tr = ''
 			for _, unit in next, Pet.Darkglare.active_units do
 				remains = unit.expires - Player.time
@@ -3968,7 +3842,7 @@ function UI:UpdateDisplay()
 			end
 		end
 		if Opt.tyrant then
-			if DemonicConsumption.known and Pet.tyrant_available_power > 0 and (Pet.tyrant_cd < 5 or SummonDemonicTyrant:Casting()) then
+			if ReignOfTyranny.known and Pet.tyrant_available_power > 0 and (Pet.tyrant_cd < 5 or SummonDemonicTyrant:Casting()) then
 				text_tr = format('%d%%\n', Pet.tyrant_available_power)
 			else
 				text_tr = ''
@@ -3977,7 +3851,7 @@ function UI:UpdateDisplay()
 			for _, unit in next, Pet.DemonicTyrant.active_units do
 				if unit.initial then
 					remains = unit.expires - Player.time
-					if unit.power > 0 and remains > 5 then
+					if unit.power > 100 and remains > 5 then
 						text_tr = format('%s%d%%\n', text_tr, unit.power)
 					elseif remains > 0 then
 						text_tr = format('%s%.1fs\n', text_tr, remains)
@@ -4256,13 +4130,6 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 		if event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 			ability.last_gained = Player.time
 		end
-		if dstGUID == Player.guid and ability == DemonicPower then
-			if event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
-				SummonedPets.empowered_ends = DemonicPower:Ends()
-			elseif event == 'SPELL_AURA_REMOVED' then
-				SummonedPets.empowered_ends = 0
-			end
-		end
 		return -- ignore buffs beyond here
 	end
 	if Opt.auto_aoe then
@@ -4409,6 +4276,7 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 
 	Player.set_bonus.t29 = (Player:Equipped(200333) and 1 or 0) + (Player:Equipped(200335) and 1 or 0) + (Player:Equipped(200336) and 1 or 0) + (Player:Equipped(200337) and 1 or 0) + (Player:Equipped(200338) and 1 or 0)
 	Player.set_bonus.t30 = (Player:Equipped(202531) and 1 or 0) + (Player:Equipped(202532) and 1 or 0) + (Player:Equipped(202533) and 1 or 0) + (Player:Equipped(202534) and 1 or 0) + (Player:Equipped(202536) and 1 or 0)
+	Player.set_bonus.t31 = (Player:Equipped(207270) and 1 or 0) + (Player:Equipped(207271) and 1 or 0) + (Player:Equipped(207272) and 1 or 0) + (Player:Equipped(207273) and 1 or 0) + (Player:Equipped(207275) and 1 or 0)
 
 	Player:UpdateKnown()
 end
