@@ -1547,6 +1547,25 @@ function SummonedPet:Clear()
 	end
 end
 
+function SummonedPet:Empower(seconds, units)
+	local count = 0
+	for guid, unit in next, self.active_units do
+		if unit.expires > Player.time then
+			unit.expires = unit.expires + seconds
+			unit.empower_expires = Player.time + seconds
+			count = count + 1
+			if units and count >= units then
+				break
+			end
+		end
+	end
+	return count
+end
+
+function SummonedPet:Empowered(unit)
+	return unit.empower_expires and (unit.empower_expires - Player.time) > Player.execute_remains
+end
+
 -- Summoned Pets
 Pet.Darkglare = SummonedPet:Add(103673, 20, SummonDarkglare)
 Pet.DemonicTyrant = SummonedPet:Add(135002, 15, SummonDemonicTyrant)
@@ -2199,12 +2218,8 @@ function PowerSiphon:CastSuccess(...)
 end
 
 function Implosion:Implode()
-	for guid in next, Pet.WildImp.active_units do
-		Pet.WildImp.active_units[guid] = nil
-	end
-	for guid in next, Pet.WildImpID.active_units do
-		Pet.WildImpID.active_units[guid] = nil
-	end
+	Pet.WildImp:Clear()
+	Pet.WildImpID:Clear()
 end
 
 function Implosion:CastSuccess(...)
@@ -2351,25 +2366,6 @@ end
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
-
-function SummonedPet:Empower(seconds, units)
-	local count = 0
-	for guid, unit in next, self.active_units do
-		if unit.expires > Player.time then
-			unit.expires = unit.expires + seconds
-			unit.empower_expires = Player.time + seconds
-			count = count + 1
-			if units and count >= units then
-				break
-			end
-		end
-	end
-	return count
-end
-
-function SummonedPet:Empowered(unit)
-	return unit.empower_expires and (unit.empower_expires - Player.time) > Player.execute_remains
-end
 
 function Pet.Darkglare:AddUnit(guid)
 	local unit = SummonedPet.AddUnit(self, guid)
