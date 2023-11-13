@@ -1580,6 +1580,7 @@ Pet.Darkhound = SummonedPet:Add(136408, 15, NetherPortal)
 Pet.EredarBrute = SummonedPet:Add(136405, 15, NetherPortal)
 Pet.EyeOfGuldan = SummonedPet:Add(136401, 15, NetherPortal)
 Pet.IllidariSatyr = SummonedPet:Add(136398, 15, NetherPortal)
+Pet.PitLord = SummonedPet:Add(196111, 10, NetherPortal)
 Pet.PrinceMalchezaar = SummonedPet:Add(136397, 15, NetherPortal)
 Pet.Shivarra = SummonedPet:Add(136406, 15, NetherPortal)
 Pet.Urzul = SummonedPet:Add(136402, 15, NetherPortal)
@@ -2392,7 +2393,13 @@ function Pet.DemonicTyrant:AddUnit(guid)
 			count = count + Pet.Felguard:Empower(15)
 		end
 		if Pet.WildImp.known then
-			count = count + Pet.WildImp:Empower(15, 10 + (ReignOfTyranny.known and 5 or 0))
+			local cap = 10 + (ReignOfTyranny.known and 5 or 0)
+			local empowered = Pet.WildImp:Empower(15, cap)
+			count = count + empowered
+			cap = cap - empowered
+			if Pet.WildImpID.known and cap > 0 then
+				count = count + Pet.WildImpID:Empower(15, cap)
+			end
 		end
 		if ReignOfTyranny.known then
 			unit.power = unit.power + (10 * count)
