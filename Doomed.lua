@@ -2137,7 +2137,8 @@ end
 HandOfGuldan.cast_shards = 0
 HandOfGuldan.imp_pool = {}
 
-function HandOfGuldan:CastSuccess()
+function HandOfGuldan:CastSuccess(...)
+	Ability.CastSuccess(self, ...)
 	if self.cast_shards >= 1 then
 		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.3
 	end
