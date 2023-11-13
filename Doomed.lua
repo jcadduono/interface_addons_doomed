@@ -1454,6 +1454,12 @@ function SummonedPets:Count()
 	return count
 end
 
+function SummonedPets:Clear()
+	for _, pet in next, self.known do
+		pet:Clear()
+	end
+end
+
 function SummonedPet:Add(unitId, duration, summonSpell)
 	local pet = {
 		unitId = unitId,
@@ -1531,6 +1537,12 @@ function SummonedPet:ExtendAll(seconds)
 		if unit.expires > Player.time then
 			unit.expires = unit.expires + seconds
 		end
+	end
+end
+
+function SummonedPet:Clear()
+	for guid in next, self.active_units do
+		self.active_units[guid] = nil
 	end
 end
 
@@ -4312,6 +4324,10 @@ function Events:SPELL_UPDATE_COOLDOWN()
 			start, duration = GetSpellCooldown(61304)
 		end
 		doomedPanel.swipe:SetCooldown(start, duration)
+	end
+	if Implosion.known and IsFlying() and GetSpellCount(Implosion.spellId) == 0 then
+		Pet.WildImp:Clear()
+		Pet.WildImpID:Clear()
 	end
 end
 
