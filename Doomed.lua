@@ -3146,7 +3146,7 @@ actions.fight_end+=/implosion,if=fight_remains<2*gcd.max
 	if NetherPortal:Usable() and Target.timeToDie < 30 then
 		UseCooldown(NetherPortal)
 	end
-	if SummonDemonicTyrant:USable() and Target.timeToDie < 20 then
+	if SummonDemonicTyrant:Usable() and Target.timeToDie < 20 then
 		UseCooldown(SummonDemonicTyrant)
 	end
 	if DemonicStrength:Usable() and Target.timeToDie < 10 then
