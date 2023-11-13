@@ -1089,6 +1089,9 @@ local SpellLock = Ability:Add(119910, false, true)
 SpellLock.cooldown_duration = 24
 SpellLock.player_triggered = true
 ------ Talents
+local FelDomination = Ability:Add(333889, true, true)
+FelDomination.buff_duration = 15
+FelDomination.cooldown_duration = 180
 local GrimoireOfSacrifice = Ability:Add(108503, true, true, 196099)
 GrimoireOfSacrifice.buff_duration = 3600
 GrimoireOfSacrifice.cooldown_duration = 30
@@ -1105,14 +1108,19 @@ local TormentedSoul = Ability:Add(386251, true, true)
 ------ Permanent Pets
 local SummonImp = Ability:Add(688, false, true)
 SummonImp.shard_cost = 1
+SummonImp.pet_family = 'Imp'
 local SummonFelhunter = Ability:Add(691, false, true)
 SummonFelhunter.shard_cost = 1
+SummonFelhunter.pet_family = 'Felhunter'
 local SummonVoidwalker = Ability:Add(697, false, true)
 SummonVoidwalker.shard_cost = 1
+SummonVoidwalker.pet_family = 'Voidwalker'
 local SummonSuccubus = Ability:Add(712, false, true)
 SummonSuccubus.shard_cost = 1
+SummonSuccubus.pet_family = 'Succubus'
 local SummonFelguard = Ability:Add(30146, false, true)
 SummonFelguard.shard_cost = 1
+SummonFelguard.pet_family = 'Felguard'
 ---- Affliction
 local Agony = Ability:Add(980, false, true)
 Agony.mana_cost = 1
@@ -2137,19 +2145,27 @@ function Corruption:Remains()
 	return Ability.Remains(self)
 end
 
-SummonImp.Up = function(self)
-	if self:Casting() then
-		return true
+function SummonImp:Remains()
+	if self:Casting() or (Pet.active and UnitCreatureFamily('pet') == self.pet_family) then
+		return 3600
 	end
-	if not Pet.active then
-		return false
-	end
-	return UnitCreatureFamily('pet') == self.pet_family
+	return 0
 end
-SummonFelhunter.Up = SummonImp.Up
-SummonVoidwalker.Up = SummonImp.Up
-SummonSuccubus.Up = SummonImp.Up
-SummonFelguard.Up = SummonImp.Up
+SummonFelhunter.Remains = SummonImp.Remains
+SummonVoidwalker.Remains = SummonImp.Remains
+SummonSuccubus.Remains = SummonImp.Remains
+SummonFelguard.Remains = SummonImp.Remains
+
+function SummonImp:ShardCost()
+	if FelDomination.known and FelDomination:Up() then
+		return 0
+	end
+	return Ability.ShardCost(self)
+end
+SummonFelhunter.ShardCost = SummonImp.ShardCost
+SummonVoidwalker.ShardCost = SummonImp.ShardCost
+SummonSuccubus.ShardCost = SummonImp.ShardCost
+SummonFelguard.ShardCost = SummonImp.ShardCost
 
 function HandOfGuldan:ShardCost()
 	return clamp(Player.soul_shards.current, 1, 3)
@@ -2271,6 +2287,7 @@ function DemonicStrength:Usable()
 	end
 	return Ability.Usable(self)
 end
+Guillotine.Usable = DemonicStrength.Usable
 
 function SpellLock:Usable()
 	if not SummonFelhunter:Up() then
@@ -2362,6 +2379,10 @@ end
 function SummonInfernal:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
 	self.summoning = true
+end
+
+function GrimoireOfSacrifice:Usable()
+	return Pet.alive and Ability.Usable(self)
 end
 
 -- End Ability Modifications
@@ -2603,16 +2624,16 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
 			return CreateHealthstone
 		end
-		if GrimoireOfSacrifice.known then
-			if GrimoireOfSacrifice:Remains() < 300 then
-				if Pet.active then
-					return GrimoireOfSacrifice
-				else
-					return SummonImp
-				end
+		if GrimoireOfSacrifice:Usable() then
+			return GrimoireOfSacrifice
+		end
+		if not Pet.active and (not GrimoireOfSacrifice.known or GrimoireOfSacrifice:Remains() < 300) then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
 			end
-		elseif not Pet.active then
-			return SummonImp
+			if SummonImp:Usable() then
+				return SummonImp
+			end
 		end
 		if Player.enemies >= 3 and SeedOfCorruption:Usable() and SeedOfCorruption:Down() then
 			return SeedOfCorruption
@@ -2625,16 +2646,16 @@ actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_c
 			return ShadowBolt
 		end
 	else
-		if GrimoireOfSacrifice.known then
-			if GrimoireOfSacrifice:Remains() < 300 then
-				if Pet.active then
-					UseExtra(GrimoireOfSacrifice)
-				else
-					UseExtra(SummonImp)
-				end
+		if GrimoireOfSacrifice:Usable() then
+			UseCooldown(GrimoireOfSacrifice)
+		end
+		if not Pet.active and (not GrimoireOfSacrifice.known or GrimoireOfSacrifice:Remains() < 10) then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
 			end
-		elseif not Pet.active then
-			UseExtra(SummonImp)
+			if SummonImp:Usable() then
+				UseExtra(SummonImp)
+			end
 		end
 	end
 --[[
@@ -2896,6 +2917,9 @@ actions.precombat+=/shadow_bolt
 			return CreateHealthstone
 		end
 		if not Pet.active then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
+			end
 			if SummonFelguard:Usable() then
 				return SummonFelguard
 			end
@@ -2913,6 +2937,9 @@ actions.precombat+=/shadow_bolt
 		end
 	else
 		if not Pet.active then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
+			end
 			if SummonFelguard:Usable() then
 				UseExtra(SummonFelguard)
 			end
@@ -3276,16 +3303,16 @@ actions.precombat+=/incinerate
 		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
 			return CreateHealthstone
 		end
-		if GrimoireOfSacrifice.known then
-			if GrimoireOfSacrifice:Remains() < 300 then
-				if Pet.active then
-					return GrimoireOfSacrifice
-				else
-					return SummonImp
-				end
+		if GrimoireOfSacrifice:Usable() then
+			return GrimoireOfSacrifice
+		end
+		if not Pet.active and (not GrimoireOfSacrifice.known or GrimoireOfSacrifice:Remains() < 300) then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
 			end
-		elseif not Pet.active then
-			return SummonImp
+			if SummonImp:Usable() then
+				return SummonImp
+			end
 		end
 		if Player.soul_shards.deficit > 0 then
 			if SoulFire:Usable() then
@@ -3296,16 +3323,16 @@ actions.precombat+=/incinerate
 			end
 		end
 	else
-		if GrimoireOfSacrifice.known then
-			if GrimoireOfSacrifice:Remains() < 300 then
-				if Pet.active then
-					UseExtra(GrimoireOfSacrifice)
-				else
-					UseExtra(SummonImp)
-				end
+		if GrimoireOfSacrifice:Usable() then
+			UseCooldown(GrimoireOfSacrifice)
+		end
+		if not Pet.active and (not GrimoireOfSacrifice.known or GrimoireOfSacrifice:Remains() < 10) then
+			if FelDomination:Usable() then
+				UseCooldown(FelDomination)
 			end
-		elseif not Pet.active then
-			UseExtra(SummonImp)
+			if SummonImp:Usable() then
+				UseExtra(SummonImp)
+			end
 		end
 	end
 --[[
