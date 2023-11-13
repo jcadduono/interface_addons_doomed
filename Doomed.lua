@@ -3226,7 +3226,7 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 		self.pet_expire = 0
 	end
 	self.np = not NetherPortal.known or not NetherPortal:Ready(30) or NetherPortal:Up()
-	self.impl = 0
+	self.impl = false
 	if Player.enemies > (1 + (SacrificedSouls.known and 1 or 0)) then
 		self.impl = Pet.tyrant_remains == 0
 	end
