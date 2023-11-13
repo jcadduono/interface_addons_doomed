@@ -3056,7 +3056,7 @@ actions.tyrant+=/call_action_list,name=items,if=variable.pet_expire>0&variable.p
 actions.tyrant+=/call_action_list,name=racials,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max,use_off_gcd=1
 actions.tyrant+=/potion,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max,use_off_gcd=1
 actions.tyrant+=/summon_demonic_tyrant,if=variable.pet_expire>0&variable.pet_expire<action.summon_demonic_tyrant.execute_time+(buff.demonic_core.down*action.shadow_bolt.execute_time+buff.demonic_core.up*gcd.max)+gcd.max
-actions.tyrant+=/implosion,if=pet_count>2&(buff.dreadstalkers.down&buff.grimoire_felguard.down&buff.vilefiend.down)&(active_enemies>3|active_enemies>2&talent.grand_warlocks_design)
+actions.tyrant+=/implosion,if=buff.wild_imps.stack>3&(buff.dreadstalkers.down&buff.grimoire_felguard.down&buff.vilefiend.down)&(active_enemies>3|active_enemies>2&talent.grand_warlocks_design)
 actions.tyrant+=/shadow_bolt,if=prev_gcd.1.grimoire_felguard&time>30&buff.nether_portal.down&buff.demonic_core.down
 actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<4&(!buff.vilefiend.up|!talent.summon_vilefiend&(!buff.dreadstalkers.up))&(buff.nether_portal.down)
 actions.tyrant+=/shadow_bolt,if=buff.vilefiend.down&buff.nether_portal.down&buff.dreadstalkers.down&soul_shard<5-buff.demonic_core.stack
@@ -3080,7 +3080,7 @@ actions.tyrant+=/shadow_bolt
 			UseCooldown(SummonDemonicTyrant)
 		end
 	end
-	if Implosion:Usable() and Pet.count > 2 and Player.enemies > (3 - (GrandWarlocksDesign.known and 1 or 0)) and Pet.Dreadstalker:Down() and Pet.Felguard:Down() and Pet.Vilefiend:Down() then
+	if Implosion:Usable() and Pet.imp_count > 3 and Player.enemies > (3 - (GrandWarlocksDesign.known and 1 or 0)) and Pet.Dreadstalker:Down() and Pet.Felguard:Down() and Pet.Vilefiend:Down() then
 		return Implosion
 	end
 	if ShadowBolt:Usable() and GrimoireFelguard:Previous() and Player:TimeInCombat() > 30 and (not NetherPortal.known or NetherPortal:Down()) and DemonicCore:Down() then
