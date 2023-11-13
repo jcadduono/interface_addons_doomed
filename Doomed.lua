@@ -2107,10 +2107,7 @@ end
 function Implosion:Usable()
 	return Pet.imp_count > 0 and Ability.Usable(self)
 end
-
-function PowerSiphon:Usable()
-	return Pet.imp_count > 0 and Ability.Usable(self)
-end
+PowerSiphon.Usable = Implosion.Usable
 
 function Corruption:Remains()
 	if SeedOfCorruption:Ticking() > 0 or SeedOfCorruption:Previous() then
@@ -2978,7 +2975,7 @@ actions+=/shadow_bolt
 		) then
 			return Demonbolt
 		end
-		if PowerSiphon:Usable() and DemonicCore:Down() and (
+		if PowerSiphon:Usable() and DemonicCore:Down() and Pet.imp_count >= 2 and (
 			DoomBrand:Down() or
 			(DoomBrand:Remains() < (Player.gcd + Demonbolt:TravelTime() + (HandOfGuldan:Traveling() and 3 or 0)))
 		) then
@@ -3164,7 +3161,7 @@ actions.fight_end+=/implosion,if=fight_remains<2*gcd.max
 	if DemonicStrength:Usable() and Target.timeToDie < 10 then
 		UseCooldown(DemonicStrength)
 	end
-	if PowerSiphon:Usable() and DemonicCore:Stack() < 3 and Target.timeToDie < 20 then
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 3 and Target.timeToDie < 20 then
 		UseCooldown(PowerSiphon)
 	end
 	if Implosion:Usable() and Target.timeToDie < (2 * Player.gcd) then
