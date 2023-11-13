@@ -1520,6 +1520,7 @@ end
 function SummonedPet:AddUnit(guid)
 	local unit = {
 		guid = guid,
+		spawn = Player.time,
 		expires = Player.time + self.duration,
 	}
 	self.active_units[guid] = unit
@@ -1553,7 +1554,7 @@ Pet.Dreadstalker = SummonedPet:Add(98035, 12, CallDreadstalkers)
 Pet.Felguard = SummonedPet:Add(17252, 17, GrimoireFelguard)
 Pet.Infernal = SummonedPet:Add(89, 30, SummonInfernal)
 Pet.Vilefiend = SummonedPet:Add(135816, 15, SummonVilefiend)
-Pet.WildImp = SummonedPet:Add(55659, 45, HandOfGuldan)
+Pet.WildImp = SummonedPet:Add(55659, 40, HandOfGuldan)
 ---- Nether Portal / Inner Demons
 Pet.Bilescourge = SummonedPet:Add(136404, 15, NetherPortal)
 Pet.Darkhound = SummonedPet:Add(136408, 15, NetherPortal)
@@ -2140,13 +2141,13 @@ HandOfGuldan.imp_pool = {}
 function HandOfGuldan:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
 	if self.cast_shards >= 1 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.3
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.7
 	end
 	if self.cast_shards >= 2 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.4
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.9
 	end
 	if self.cast_shards >= 3 then
-		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.5
+		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.1
 	end
 end
 
@@ -2168,26 +2169,26 @@ function InnerDemons:ImpSpawned()
 end
 
 function PowerSiphon:Sacrifice()
+	local energy, sacrifice
 	local energy_min = 1000
-	local energy, imp, sacrifice
-	for guid, unit in next, Pet.WildImp.active_units do
-		energy = unit.energy + (Pet.WildImp:Empowered(unit) and 100 or 0)
-		if energy < energy_min then
+	local imps = Pet.WildImp.active_units
+	for guid, unit in next, imps do
+		energy = unit.energy + (Pet.WildImp:Empowered(unit) and 200 or 0)
+		if energy < energy_min or (energy == energy_min and unit.spawn < sacrifice.spawn) then
 			energy_min = energy
-			sacrifice = guid
-			imp = Pet.WildImp
+			sacrifice = unit
 		end
 	end
 	for guid, unit in next, Pet.WildImpID.active_units do
-		energy = unit.energy + (Pet.WildImpID:Empowered(unit) and 100 or 0)
-		if energy < energy_min then
+		energy = unit.energy + (Pet.WildImpID:Empowered(unit) and 200 or 0)
+		if energy < energy_min or (energy == energy_min and unit.spawn < sacrifice.spawn) then
 			energy_min = energy
-			sacrifice = guid
-			imp = Pet.WildImpID
+			sacrifice = unit
+			imps = Pet.WildImpID.active_units
 		end
 	end
 	if sacrifice then
-		imp.active_units[sacrifice] = nil
+		imps[sacrifice.guid] = nil
 	end
 end
 
@@ -2457,8 +2458,8 @@ function Pet.WildImp:Count()
 			count = count + 1
 		end
 	end
-	for guid, unit in next, HandOfGuldan.imp_pool do
-		if (unit - Player.time) < Player.execute_remains then
+	for guid, spawn in next, HandOfGuldan.imp_pool do
+		if (spawn - Player.time) < Player.execute_remains then
 			count = count + 1
 		end
 	end
