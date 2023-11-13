@@ -3,5 +3,5 @@
 ## Notes: Doomed is an addon for warlocks that simplifies gameplay and maximizes DPS by doing all the decision making for you
 ## Author: jcadduono @ curseforge.com or Spy#1955 @ BattleTag
 ## SavedVariablesPerCharacter: Doomed
-## Version: 10.2.0-1
+## Version: 10.2.0-2
 Doomed.lua
