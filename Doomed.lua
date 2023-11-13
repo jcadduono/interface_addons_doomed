@@ -3218,7 +3218,7 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 		if not SummonVilefiend.known and GrimoireFelguard.known then
 			self.pet_expire = min(Pet.Dreadstalker:Remains(), Pet.Felguard:Remains()) - Player.gcd * 0.5
 		end
-		if not SummonVilefiend.known and (not GrimoireFelguard.known or not Player.set_bonus.t30 >= 2) then
+		if not SummonVilefiend.known and (not GrimoireFelguard.known or Player.set_bonus.t30 < 2) then
 			self.pet_expire = Pet.Dreadstalker:Remains() - Player.gcd * 0.5
 		end
 	end
