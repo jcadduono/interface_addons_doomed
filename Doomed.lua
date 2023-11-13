@@ -2889,7 +2889,7 @@ actions.precombat+=/shadow_bolt
 		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < 4) then
 			UseCooldown(PowerSiphon)
 		end
-		if Target.boss and Pet.count < 6 then
+		if Target.boss and Pet.count < 6 and Player.soul_shards.current <= 3 then
 			if Demonbolt:Usable() and DemonicCore:Down() then
 				return Demonbolt
 			end
