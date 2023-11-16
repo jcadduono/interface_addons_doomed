@@ -1002,6 +1002,13 @@ function Ability:CastLanded(dstGUID, event, missType)
 	elseif self.max_range < Target.estimated_range then
 		Target.estimated_range = self.max_range
 	end
+	if Opt.auto_aoe and self.auto_aoe then
+		if event == 'SPELL_MISSED' and (missType == 'EVADE' or (missType == 'IMMUNE' and not self.ignore_immune)) then
+			AutoAoe:Remove(dstGUID)
+		elseif event == self.auto_aoe.trigger or (self.auto_aoe.trigger == 'SPELL_AURA_APPLIED' and event == 'SPELL_AURA_REFRESH') then
+			self:RecordTargetHit(dstGUID)
+		end
+	end
 	if Opt.previous and Opt.miss_effect and event == 'SPELL_MISSED' and doomedPreviousPanel.ability == self then
 		doomedPreviousPanel.border:SetTexture(ADDON_PATH .. 'misseffect.blp')
 	end
@@ -1283,10 +1290,13 @@ local ShadowsBite = Ability:Add(387322, true, true, 272945)
 ShadowsBite.buff_duration = 8
 local SoulboundTyrant = Ability:Add(334585, false, true)
 SoulboundTyrant.talent_node = 71992
-local SoulStrike = Ability:Add(264057, false, true, 267964)
+local SoulStrike = Ability:Add(267964, false, true)
 SoulStrike.cooldown_duration = 10
 SoulStrike.shard_gain = 1
 SoulStrike.requires_pet = true
+SoulStrike.off_gcd = true
+SoulStrike.triggers_gcd = false
+SoulStrike.learn_spellId = 428344
 local SummonDemonicTyrant = Ability:Add(265187, true, true)
 SummonDemonicTyrant.buff_duration = 15
 SummonDemonicTyrant.cooldown_duration = 90
@@ -1309,6 +1319,8 @@ AxeToss.cooldown_duration = 30
 AxeToss.requires_pet = true
 AxeToss.triggers_gcd = false
 AxeToss.player_triggered = true
+local Dreadbite = Ability:Add(271971, false, false)
+Dreadbite:AutoAoe()
 local Felstorm = Ability:Add(89751, true, true, 89753)
 Felstorm.aura_target = 'pet'
 Felstorm.buff_duration = 5
@@ -1320,6 +1332,9 @@ Felstorm.requires_pet = true
 Felstorm.triggers_gcd = false
 Felstorm:AutoAoe()
 local FelFirebolt = Ability:Add(104318, false, false)
+local FiendishWrath = Ability:Add(386601, true, false)
+FiendishWrath.aura_target = 'pet'
+FiendishWrath.buff_duration = 6
 local LegionStrike = Ability:Add(30213, false, true)
 LegionStrike.requires_pet = true
 LegionStrike:AutoAoe()
@@ -1834,6 +1849,7 @@ function Player:UpdateKnown()
 		LegionStrike.known = true
 	end
 	SpellLock.known = SummonFelhunter.known
+	Dreadbite.known = Pet.Dreadstalker.known
 	FelFirebolt.known = Pet.WildImp.known
 	Immolation.known = Pet.Infernal.known
 	ImpendingRuin.known = RitualOfRuin.known
@@ -2282,12 +2298,13 @@ function SummonDemonicTyrant:ShardGain()
 end
 
 function DemonicStrength:Usable()
-	if Felstorm:Up() then
-		return false
-	end
-	return Ability.Usable(self)
+	return not (DemonicStrength:Up() or Guillotine:Up() or Felstorm:Up()) and Ability.Usable(self)
 end
 Guillotine.Usable = DemonicStrength.Usable
+
+function Guillotine:Remains()
+	return FiendishWrath:Remains()
+end
 
 function SpellLock:Usable()
 	if not SummonFelhunter:Up() then
@@ -2564,12 +2581,24 @@ function Pet.Infernal:AddUnit(guid)
 	return unit
 end
 
-function Pet.Infernal:CastLanded(unit, spellId, dstGUID, event, missType)
-	if (event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED') and Immolation:Match(spellId) then
-		Immolation:RecordTargetHit(dstGUID)
+function Pet.Infernal:CastLanded(unit, spellId, ...)
+	if Immolation:Match(spellId) then
+		Immolation:CastLanded(...)
 	end
 end
 Pet.Blasphemy.CastLanded = Pet.Infernal.CastLanded
+
+function Pet.Dreadstalker:CastLanded(unit, spellId, ...)
+	if Dreadbite:Match(spellId) then
+		Dreadbite:CastLanded(...)
+	end
+end
+
+function Pet.Felguard:CastLanded(unit, spellId, ...)
+	if Felstorm:Match(spellId) then
+		Felstorm:CastLanded(...)
+	end
+end
 
 -- End Summoned Pet Modifications
 
@@ -2917,7 +2946,7 @@ actions.precombat+=/shadow_bolt
 				return SummonFelguard
 			end
 		end
-		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < 4) then
+		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < (Player.gcd * 3)) and not Pet.Dreadstalker:Expiring(Player.gcd * 3) then
 			UseCooldown(PowerSiphon)
 		end
 		if Target.boss and Pet.count < 6 and Player.soul_shards.current <= 3 then
@@ -3134,7 +3163,7 @@ actions.tyrant+=/shadow_bolt
 	if Implosion:Usable() and Pet.imp_count > 3 and Player.enemies > (3 - (GrandWarlocksDesign.known and 1 or 0)) and Pet.Dreadstalker:Down() and Pet.Felguard:Down() and Pet.Vilefiend:Down() then
 		return Implosion
 	end
-	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 3 and (not NetherPortal.known or NetherPortal:Down()) and (Pet.Vilefiend:Down() or (not SummonVilefiend.known and Pet.Dreadstalker:Down())) then
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 2)) and (not NetherPortal.known or NetherPortal:Down()) and (Pet.Vilefiend:Down() or (not SummonVilefiend.known and Pet.Dreadstalker:Down())) then
 		UseCooldown(PowerSiphon)
 	end
 	if ShadowBolt:Usable() and Pet.Vilefiend:Down() and (not NetherPortal.known or NetherPortal:Down()) and Pet.Dreadstalker:Down() and Player.soul_shards.current < (5 - DemonicCore:Stack()) then
@@ -3155,13 +3184,13 @@ actions.tyrant+=/shadow_bolt
 	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3) and Pet.Dreadstalker:Up() and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
 		return Demonbolt
 	end
-	if ShadowBolt:Usable() and Player.soul_shards.current < 5 and not (HandOfGuldan:Previous() or Pet.imp_count > 2) and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 4) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
+	if ShadowBolt:Usable() and Player.soul_shards.current < 5 and Player:ImpsIn(self.pet_expire) < 3 and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 4) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
 		return ShadowBolt
 	end
 	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and Pet.Dreadstalker:Up())) then
 		return HandOfGuldan
 	end
-	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 3 and (self.pet_expire == 0 or self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3)) then
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 2)) and (self.pet_expire == 0 or self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3)) then
 		UseCooldown(PowerSiphon)
 	end
 	if Demonbolt:Usable() and Player.soul_shards.current < 5 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
@@ -3203,7 +3232,7 @@ actions.fight_end+=/implosion,if=fight_remains<2*gcd.max
 	if DemonicStrength:Usable() and Target.timeToDie < 10 then
 		UseCooldown(DemonicStrength)
 	end
-	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < 3 and Target.timeToDie < 20 then
+	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 2)) and Target.timeToDie < 20 then
 		UseCooldown(PowerSiphon)
 	end
 	if Implosion:Usable() and Target.timeToDie < (2 * Player.gcd) then
@@ -4066,6 +4095,7 @@ CombatEvent.TRIGGER = function(timeStamp, event, _, srcGUID, _, _, _, dstGUID, _
 	   e == 'SPELL_CAST_SUCCESS' or
 	   e == 'SPELL_CAST_FAILED' or
 	   e == 'SPELL_DAMAGE' or
+	   e == 'SPELL_ABSORBED' or
 	   e == 'SPELL_ENERGIZE' or
 	   e == 'SPELL_PERIODIC_DAMAGE' or
 	   e == 'SPELL_MISSED' or
@@ -4128,7 +4158,7 @@ CombatEvent.SPELL_SUMMON = function(event, srcGUID, dstGUID)
 end
 
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
-	if srcGUID ~= Player.guid then
+	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
 		local pet = SummonedPets:Find(srcGUID)
 		if pet then
 			local unit = pet.active_units[srcGUID]
@@ -4145,10 +4175,6 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 				--print(format('PET %d EVENT %s SPELL %s ID %d', pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 			end
 		end
-		return
-	end
-
-	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
 		return
 	end
 
@@ -4190,13 +4216,6 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			ability.last_gained = Player.time
 		end
 		return -- ignore buffs beyond here
-	end
-	if Opt.auto_aoe then
-		if event == 'SPELL_MISSED' and (missType == 'EVADE' or (missType == 'IMMUNE' and not ability.ignore_immune)) then
-			AutoAoe:Remove(dstGUID)
-		elseif ability.auto_aoe and (event == ability.auto_aoe.trigger or ability.auto_aoe.trigger == 'SPELL_AURA_APPLIED' and event == 'SPELL_AURA_REFRESH') then
-			ability:RecordTargetHit(dstGUID)
-		end
 	end
 	if event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 		ability:CastLanded(dstGUID, event, missType)
