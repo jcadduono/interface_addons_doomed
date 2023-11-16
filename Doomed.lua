@@ -3037,10 +3037,9 @@ actions+=/shadow_bolt
 		apl = self:fight_end()
 		if apl then return apl end
 	end
-	if self.use_cds and SummonDemonicTyrant:Usable(15) and (Pet.tyrant_cd < 15 or Target.timeToDie < 40 or PowerInfusion:Up()) and (Target.boss or Target.timeToDie > 25 or (Target.classification == 'elite' and Player.enemies > 1)) and (
-		(not SummonVilefiend.known or Pet.Vilefiend:Up() or SummonVilefiend:Ready(Player.gcd * 5)) and
-		(Pet.Dreadstalker:Up() or CallDreadstalkers:Ready(Player.gcd * 5)) and
-		(not GrimoireFelguard.known or Player.set_bonus.t30 < 2 or Pet.Felguard:Up() or not between(GrimoireFelguard:Cooldown(), 10, 25))
+	if self.use_cds and self.tyrant_condition and SummonDemonicTyrant:Usable(15) and (
+		(Pet.tyrant_cd < 15 or Target.timeToDie < 40 or PowerInfusion:Up()) and
+		(Target.boss or Target.timeToDie > 25 or (Target.classification == 'elite' and Player.enemies > 1))
 	) then
 		self.tyrant_prep = true
 	end
@@ -3084,7 +3083,7 @@ actions+=/shadow_bolt
 	if self.use_cds and Guillotine:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) and (not DemonicStrength.known or not DemonicStrength:Ready()) then
 		UseCooldown(Guillotine)
 	end
-	if CallDreadstalkers:Usable() and (not self.use_cds or not SummonDemonicTyrant:Ready(25) or Pet.tyrant_cd > 25 or (NetherPortal.known and NetherPortal:Up())) then
+	if CallDreadstalkers:Usable() and (not self.use_cds or not SummonDemonicTyrant:Ready(25) or Pet.tyrant_cd > 25 or (Player.set_bonus.t30 >= 2 and GrimoireFelguard.known and not GrimoireFelguard:Ready(25)) or (NetherPortal.known and NetherPortal:Up())) then
 		return CallDreadstalkers
 	end
 	if Implosion:Usable() and self.impl and Pet.imp_count > 8 and not Implosion:Previous() and (Pet.WildImp:RemainsUnder(3 * Player.haste_factor) + Pet.WildImpID:RemainsUnder(3 * Player.haste_factor)) > 0 then
@@ -3110,7 +3109,7 @@ actions+=/shadow_bolt
 		return Demonbolt
 	end
 	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (
-		Player.soul_shards.current >= 5 or
+		self.shard_capped or
 		(not CallDreadstalkers:Ready(Player.gcd * 4) and not SummonDemonicTyrant:Ready(17)) or
 		(Player.soul_shards.current == 4 and SoulStrike.known and SoulStrike:Ready(Player.gcd * 2) and GrandWarlocksDesign.known and Player.enemies == 1) or
 		not (Player.enemies == 1 and GrandWarlocksDesign.known)
@@ -3164,17 +3163,15 @@ actions.tyrant+=/demonbolt,cycle_targets=1,if=soul_shard<4&buff.demonic_core.up&
 actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<3&variable.pet_expire>action.summon_demonic_tyrant.execute_time+gcd.max*3|variable.pet_expire=0
 actions.tyrant+=/shadow_bolt
 ]]
-	if HandOfGuldan:Usable() and self.pet_expire > (0.3 + HandOfGuldan:CastTime() + SummonDemonicTyrant:CastTime()) and (
-		self.pet_expire < (Player.gcd * 4) or
-		HandOfGuldan:Previous() and Pet.imp_count >= 8
-	) then
+	if HandOfGuldan:Usable() and self.pet_expire > (0.2 + HandOfGuldan:CastTime() + SummonDemonicTyrant:CastTime()) and SummonDemonicTyrant:Ready(HandOfGuldan:CastTime()) and self.pet_expire < (Player.gcd * 4) then
 		return HandOfGuldan
 	end
 	if self.pet_expire > 0 and (
 		(self.pet_expire < (SummonDemonicTyrant:CastTime() + Player.gcd + (DemonicCore:Up() and Player.gcd or ShadowBolt:CastTime()))) or
-		(Player.soul_shards.current == 0 and HandOfGuldan:Previous() and (DemonicCore:Down() or HandOfGuldan:Previous(2))) or
-		(HandOfGuldan:Previous() and HandOfGuldan:Previous(2) and HandOfGuldan:Previous(3)) or
-		(Player:ImpsIn(SummonDemonicTyrant:CastTime()) >= 10)
+		(Player.soul_shards.current < 2 and (
+			(HandOfGuldan:Previous() and (DemonicCore:Down() or HandOfGuldan:Previous(2))) or
+			(Player:ImpsIn(SummonDemonicTyrant:CastTime()) >= 10 and DemonicCore:Down())
+		))
 	) then
 		self:items()
 		self:racials()
@@ -3195,35 +3192,39 @@ actions.tyrant+=/shadow_bolt
 	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 2)) and (not NetherPortal.known or NetherPortal:Down()) and (Pet.Vilefiend:Down() or (not SummonVilefiend.known and Pet.Dreadstalker:Down())) then
 		UseCooldown(PowerSiphon)
 	end
-	if NetherPortal:Usable() and Player.soul_shards.current >= 5 then
+	if NetherPortal:Usable() and self.shard_capped then
 		UseCooldown(NetherPortal)
 	end
-	if SummonVilefiend:Usable() and self.np and SummonDemonicTyrant:Ready(13) and (Player.soul_shards.current >= 5 or NetherPortal:Up()) then
+	if SummonVilefiend:Usable() and self.np and SummonDemonicTyrant:Ready(13) and (self.shard_capped or NetherPortal:Up()) then
 		UseCooldown(SummonVilefiend)
 	end
-	if CallDreadstalkers:Usable() and self.np and SummonDemonicTyrant:Ready(11) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) and (not GrimoireFelguard.known or Pet.Felguard:Up() or not between(GrimoireFelguard:Cooldown(), 6, 20)) and (Player.soul_shards.current >= 5 or NetherPortal:Up() or Pet.Felguard:Up() or (not GrimoireFelguard:Ready() and (DemonicCalling:Up() or Pet.Vilefiend:Remains() < 9))) then
+	if CallDreadstalkers:Usable() and self.np and SummonDemonicTyrant:Ready(11) and (
+		(SummonVilefiend.known and Pet.Vilefiend:Up() and (DemonicCalling:Up() or Pet.Vilefiend:Remains() < 9)) or
+		(
+			(not SummonVilefiend.known or not SummonVilefiend:Ready(20)) and
+			(not GrimoireFelguard.known or Pet.Felguard:Up() or GrimoireFelguard:Ready(6) or not GrimoireFelguard:Ready(20)) and
+			(self.shard_capped or NetherPortal:Up() or Pet.Felguard:Up())
+		)
+	) then
 		return CallDreadstalkers
 	end
-	if GrimoireFelguard:Usable() and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and self.np and (NetherPortal:Up() or Pet.Dreadstalker:Up() or Player.soul_shards.current >= 5))) then
+	if GrimoireFelguard:Usable() and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and self.np and (NetherPortal:Up() or Pet.Dreadstalker:Up() or self.shard_capped))) then
 		return GrimoireFelguard
 	end
-	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3) and Pet.Dreadstalker:Up() and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
+	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (0.2 + SummonDemonicTyrant:CastTime() + Player.gcd + HandOfGuldan:CastTime()) and Pet.Dreadstalker:Up() and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
 		return Demonbolt
 	end
-	if ShadowBolt:Usable() and Player.soul_shards.current < 5 and Player:ImpsIn(self.pet_expire) < 3 and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 4) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
+	if ShadowBolt:Usable() and not self.shard_capped and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * (3 + (DemonicCore:Stack() * 2))) and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
 		return ShadowBolt
 	end
-	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and Pet.Dreadstalker:Up())) then
+	if HandOfGuldan:Usable() and (self.shard_capped or (Player.soul_shards.current > 2 and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and Pet.Dreadstalker:Up())))) then
 		return HandOfGuldan
+	end
+	if Demonbolt:Usable() and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
+		return Demonbolt
 	end
 	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 2)) and (self.pet_expire == 0 or self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * 3)) then
 		UseCooldown(PowerSiphon)
-	end
-	if Demonbolt:Usable() and Player.soul_shards.current < 5 and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
-		return Demonbolt
-	end
-	if HandOfGuldan:Usable() and Player.soul_shards.current >= 5 then
-		return HandOfGuldan
 	end
 	if ShadowBolt:Usable() then
 		return ShadowBolt
@@ -3320,23 +3321,20 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 	Pet.tyrant_remains = Pet.DemonicTyrant:Remains()
 	Pet.tyrant_power = Pet.DemonicTyrant:Power()
 	Pet.tyrant_available_power = Pet.DemonicTyrant:AvailablePower()
-	if Pet.tyrant_cd > 15 then
+	if Pet.tyrant_cd > 20 then
 		self.tyrant_prep = false
 	end
 	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or Pet.tyrant_remains > 0)
-	if Pet.Dreadstalker:Up() then
-		if SummonVilefiend.known and Pet.Vilefiend:Up() then
-			self.pet_expire = min(Pet.Dreadstalker:Remains(), Pet.Vilefiend:Remains()) - Player.gcd * 0.5
+	self.shard_capped = Player.soul_shards.current >= (5 - ((SoulStrike.known and SoulStrike:Ready(Player.gcd * 2)) and 1 or 0))
+	self.pet_expire = Pet.Dreadstalker:Remains()
+	if self.pet_expire > 0 then
+		if Pet.Vilefiend:Up() then
+			self.pet_expire = min(self.pet_expire, Pet.Vilefiend:Remains())
 		end
-		if not SummonVilefiend.known and GrimoireFelguard.known then
-			self.pet_expire = min(Pet.Dreadstalker:Remains(), Pet.Felguard:Remains()) - Player.gcd * 0.5
+		if Pet.Felguard:Up() then
+			self.pet_expire = min(self.pet_expire, Pet.Felguard:Remains())
 		end
-		if not SummonVilefiend.known and (not GrimoireFelguard.known or Player.set_bonus.t30 < 2) then
-			self.pet_expire = Pet.Dreadstalker:Remains() - Player.gcd * 0.5
-		end
-	end
-	if (SummonVilefiend.known and Pet.Vilefiend:Down()) or Pet.Dreadstalker:Down() then
-		self.pet_expire = 0
+		self.pet_expire = max(0, self.pet_expire - Player.gcd * 0.5)
 	end
 	self.np = not NetherPortal.known or not NetherPortal:Ready(30) or NetherPortal:Up()
 	self.impl = false
@@ -3349,7 +3347,12 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 	if Player.enemies > (4 + (SacrificedSouls.known and 1 or 0)) then
 		self.impl = Pet.tyrant_remains < 8
 	end
-	self.pool_cores_for_tyrant = self.use_cds and SummonDemonicTyrant:Usable(20) and Pet.tyrant_cd < 20 and DemonicCore:Stack() <= 2 and SummonVilefiend:Ready(Player.gcd * 5) and CallDreadstalkers:Ready(Player.gcd * 5)
+	self.tyrant_condition = self.use_cds and Pet.tyrant_cd < 20 and (
+		(not SummonVilefiend.known or Pet.Vilefiend:Up() or SummonVilefiend:Ready(Player.gcd * 5)) and
+		(Pet.Dreadstalker:Up() or CallDreadstalkers:Ready(Player.gcd * 5)) and
+		(not GrimoireFelguard.known or Player.set_bonus.t30 < 2 or Pet.Felguard:Up() or GrimoireFelguard:Ready(15))
+	)
+	self.pool_cores_for_tyrant = self.tyrant_condition and SummonDemonicTyrant:Usable(20) and DemonicCore:Stack() <= 2
 end
 
 APL[SPEC.DEMONOLOGY].precombat_variables = function(self)
