@@ -3169,10 +3169,7 @@ actions.tyrant+=/shadow_bolt
 	end
 	if self.pet_expire > 0 and (
 		(self.pet_expire < (SummonDemonicTyrant:CastTime() + Player.gcd + (DemonicCore:Up() and Player.gcd or ShadowBolt:CastTime()))) or
-		(Player.soul_shards.current < 2 and (
-			(HandOfGuldan:Previous() and (DemonicCore:Down() or HandOfGuldan:Previous(2))) or
-			(Player:ImpsIn(SummonDemonicTyrant:CastTime()) >= 10 and DemonicCore:Down())
-		))
+		(Player.soul_shards.current < 2 and DemonicCore:Down() and Player:ImpsIn(SummonDemonicTyrant:CastTime()) >= 10)
 	) then
 		self:items()
 		self:racials()
