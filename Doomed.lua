@@ -2130,6 +2130,7 @@ function Target:Update()
 		doomedPanel:Show()
 		return true
 	end
+	UI:Disappear()
 end
 
 function Target:TimeToPct(pct)
@@ -2975,7 +2976,7 @@ actions.precombat+=/shadow_bolt
 				return SummonFelguard
 			end
 		end
-		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < (Player.gcd * 3)) and not Pet.Dreadstalker:Expiring(Player.gcd * 3) then
+		if PowerSiphon:Usable() and Pet.imp_count >= 2 and (DemonicCore:Stack() <= 2 or DemonicCore:Remains() < (Player.gcd * 3)) and Pet.Dreadstalker:Expiring(Player.gcd * 3) == 0 then
 			UseCooldown(PowerSiphon)
 		end
 		if Target.boss and Pet.count < 6 and Player.soul_shards.current <= 3 then
@@ -3195,6 +3196,12 @@ actions.tyrant+=/shadow_bolt
 	if NetherPortal:Usable() and self.shard_capped then
 		UseCooldown(NetherPortal)
 	end
+	if GrimoireFelguard:Usable() and (
+		(SummonVilefiend.known and (Pet.Vilefiend:Up() or SummonVilefiend:Ready(Player.gcd * 2))) or
+		(not SummonVilefiend.known and self.np and (NetherPortal:Up() or Pet.Dreadstalker:Up() or self.shard_capped))
+	) then
+		UseCooldown(GrimoireFelguard)
+	end
 	if SummonVilefiend:Usable() and self.np and SummonDemonicTyrant:Ready(13) and (self.shard_capped or NetherPortal:Up()) then
 		UseCooldown(SummonVilefiend)
 	end
@@ -3207,9 +3214,6 @@ actions.tyrant+=/shadow_bolt
 		)
 	) then
 		return CallDreadstalkers
-	end
-	if GrimoireFelguard:Usable() and (Pet.Vilefiend:Up() or (not SummonVilefiend.known and self.np and (NetherPortal:Up() or Pet.Dreadstalker:Up() or self.shard_capped))) then
-		return GrimoireFelguard
 	end
 	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (0.2 + SummonDemonicTyrant:CastTime() + Player.gcd + HandOfGuldan:CastTime()) and Pet.Dreadstalker:Up() and (not SummonVilefiend.known or Pet.Vilefiend:Up()) then
 		return Demonbolt
@@ -3328,10 +3332,10 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 	self.shard_capped = Player.soul_shards.current >= (5 - ((SoulStrike.known and SoulStrike:Ready(Player.gcd * 2)) and 1 or 0))
 	self.pet_expire = Pet.Dreadstalker:Remains()
 	if self.pet_expire > 0 then
-		if Pet.Vilefiend:Up() then
+		if SummonVilefiend.known and (Pet.Vilefiend:Up() or not SummonVilefiend:Ready(12)) then
 			self.pet_expire = min(self.pet_expire, Pet.Vilefiend:Remains())
 		end
-		if Pet.Felguard:Up() then
+		if GrimoireFelguard.known and (Pet.Felguard:Up() or not GrimoireFelguard:Ready(12)) then
 			self.pet_expire = min(self.pet_expire, Pet.Felguard:Remains())
 		end
 		self.pet_expire = max(0, self.pet_expire - Player.gcd * 0.5)
