@@ -1686,8 +1686,12 @@ local Healthstone = InventoryItem:Add(5512)
 Healthstone.created_by = CreateHealthstone
 Healthstone.max_charges = 3
 -- Equipment
+local IridalTheEarthsMaster = InventoryItem:Add(208321)
+IridalTheEarthsMaster.cooldown_duration = 180
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
+Trinket.NymuesUnravelingSpindle = InventoryItem:Add(208615)
+Trinket.NymuesUnravelingSpindle.cooldown_duration = 120
 -- End Inventory Items
 
 -- Start Abilities Functions
@@ -2428,6 +2432,10 @@ function DemonicPower:ApplyAura(guid)
 end
 DemonicPower.RefreshAura = DemonicPower.ApplyAura
 
+function IridalTheEarthsMaster:Usable(...)
+	return Target.health.pct < 35 and InventoryItem.Usable(self, ...)
+end
+
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
@@ -2899,7 +2907,7 @@ actions.fillers+=/shadow_bolt
 		if (Player.mana.pct > 5 and Player.health.pct < 20) or (Player.mana.pct > 20 and Player.health.pct < 40) then
 			return DrainLife
 		end
-		if RotAndDecay.known and Player.mana.pct > 50 and UnstableAffliction:Up() and Corruption:Remains() > 3 and Agony:Remains() > 3 and (not DrainSoul.known or Target.healthPercentage > 20) then
+		if RotAndDecay.known and Player.mana.pct > 50 and UnstableAffliction:Up() and Corruption:Remains() > 3 and Agony:Remains() > 3 and (not DrainSoul.known or Target.health.pct > 20) then
 			return DrainLife
 		end
 		if not DrainSoul.known and Target.timeToDie < ShadowBolt:CastTime() then
@@ -3289,12 +3297,20 @@ actions.items+=/use_item,name=nymues_unraveling_spindle,if=pet.demonic_tyrant.ac
 actions.items+=/use_item,slot=trinket1,if=!variable.trinket_1_buffs&(trinket.2.cooldown.remains|!variable.trinket_2_buffs)
 actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.cooldown.remains|!variable.trinket_1_buffs)
 ]]
-	if Opt.trinket and Pet.tyrant_remains > 0 then
+	if Opt.trinket and (Pet.tyrant_remains > 0 or (Target.boss and Target.timeToDie < 22)) then
 		if Trinket1:Usable() then
 			return UseCooldown(Trinket1)
 		elseif Trinket2:Usable() then
 			return UseCooldown(Trinket2)
+		elseif Trinket.NymuesUnravelingSpindle:Usable() and (not DemonicStrength.known or not DemonicStrength:Ready()) then
+			return UseCooldown(Trinket.NymuesUnravelingSpindle)
 		end
+	end
+	if IridalTheEarthsMaster:Usable() and (
+		(Pet.tyrant_remains == 0 and (not self.tyrant_prep or self.pet_expire == 0)) or
+		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
+	) then
+		return UseCooldown(IridalTheEarthsMaster)
 	end
 end
 
@@ -3548,7 +3564,7 @@ actions.aoe+=/incinerate
 	if Conflagrate:Usable() and Backdraft:Down() then
 		return Conflagrate
 	end
-	if Shadowburn:Usable() and Target.healthPercentage < 20 then
+	if Shadowburn:Usable() and Target.health.pct < 20 then
 		return Shadowburn
 	end
 	if Immolate:Usable() and Immolate:Refreshable() and Target.timeToDie > Immolate:Remains() then
