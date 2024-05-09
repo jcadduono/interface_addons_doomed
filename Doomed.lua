@@ -1,9 +1,23 @@
 local ADDON = 'Doomed'
+local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
+
+BINDING_CATEGORY_DOOMED = ADDON
+BINDING_NAME_DOOMED_TARGETMORE = "Toggle Targets +"
+BINDING_NAME_DOOMED_TARGETLESS = "Toggle Targets -"
+BINDING_NAME_DOOMED_TARGET1 = "Set Targets to 1"
+BINDING_NAME_DOOMED_TARGET2 = "Set Targets to 2"
+BINDING_NAME_DOOMED_TARGET3 = "Set Targets to 3"
+BINDING_NAME_DOOMED_TARGET4 = "Set Targets to 4"
+BINDING_NAME_DOOMED_TARGET5 = "Set Targets to 5+"
+
+local function log(...)
+	print(ADDON, '-', ...)
+end
+
 if select(2, UnitClass('player')) ~= 'WARLOCK' then
-	DisableAddOn(ADDON)
+	log('[|cFFFF0000Error|r]', 'Not loading because you are not the correct class! Consider disabling', ADDON, 'for this character.')
 	return
 end
-local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
 
 -- reference heavily accessed global functions from local scope for performance
 local min = math.min
@@ -49,7 +63,6 @@ Doomed = {}
 local Opt -- use this as a local table reference to Doomed
 
 SLASH_Doomed1, SLASH_Doomed2 = '/doom', '/doomed'
-BINDING_HEADER_DOOMED = ADDON
 
 local function InitOpts()
 	local function SetDefaults(t, ref)
@@ -247,6 +260,7 @@ local Player = {
 		t29 = 0, -- Scalesworn Cultist's Habit
 		t30 = 0, -- Sinister Savant's Cursethreads
 		t31 = 0, -- Devout Ashdevil's Pactweave
+		t32 = 0, -- Sinister Savant's Cursethreads (Awakened)
 	},
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
@@ -257,6 +271,24 @@ local Player = {
 	},
 	main_freecast = false,
 	dot_count = 0,
+}
+
+-- base mana pool max for each level
+Player.BaseMana = {
+	260,	270,	285,	300,	310,	--  5
+	330,	345,	360,	380,	400,	-- 10
+	430,	465,	505,	550,	595,	-- 15
+	645,	700,	760,	825,	890,	-- 20
+	965,	1050,	1135,	1230,	1335,	-- 25
+	1445,	1570,	1700,	1845,	2000,	-- 30
+	2165,	2345,	2545,	2755,	2990,	-- 35
+	3240,	3510,	3805,	4125,	4470,	-- 40
+	4845,	5250,	5690,	6170,	6685,	-- 45
+	7245,	7855,	8510,	9225,	10000,	-- 50
+	11745,	13795,	16205,	19035,	22360,	-- 55
+	26265,	30850,	36235,	42565,	50000,	-- 60
+	58730,	68985,	81030,	95180,	111800,	-- 65
+	131325,	154255,	181190,	212830,	250000,	-- 70
 }
 
 -- current pet information
@@ -280,7 +312,6 @@ local Pet = {
 -- current target information
 local Target = {
 	boss = false,
-	guid = 0,
 	health = {
 		current = 0,
 		loss_per_sec = 0,
@@ -292,152 +323,15 @@ local Target = {
 	estimated_range = 30,
 }
 
--- base mana pool max for each level
-local BaseMana = {
-	260,	270,	285,	300,	310,	--  5
-	330,	345,	360,	380,	400,	-- 10
-	430,	465,	505,	550,	595,	-- 15
-	645,	700,	760,	825,	890,	-- 20
-	965,	1050,	1135,	1230,	1335,	-- 25
-	1445,	1570,	1700,	1845,	2000,	-- 30
-	2165,	2345,	2545,	2755,	2990,	-- 35
-	3240,	3510,	3805,	4125,	4470,	-- 40
-	4845,	5250,	5690,	6170,	6685,	-- 45
-	7245,	7855,	8510,	9225,	10000,	-- 50
-	11745,	13795,	16205,	19035,	22360,	-- 55
-	26265,	30850,	36235,	42565,	50000,	-- 60
-	58730,	68985,	81030,	95180,	111800,	-- 65
-	131325,	154255,	181190,	212830,	250000,	-- 70
+-- target dummy unit IDs (count these units as bosses)
+Target.Dummies = {
+	[194643] = true,
+	[194648] = true,
+	[198594] = true,
+	[194644] = true,
+	[194649] = true,
+	[197833] = true,
 }
-
-local doomedPanel = CreateFrame('Frame', 'doomedPanel', UIParent)
-doomedPanel:SetPoint('CENTER', 0, -169)
-doomedPanel:SetFrameStrata('BACKGROUND')
-doomedPanel:SetSize(64, 64)
-doomedPanel:SetMovable(true)
-doomedPanel:SetUserPlaced(true)
-doomedPanel:RegisterForDrag('LeftButton')
-doomedPanel:SetScript('OnDragStart', doomedPanel.StartMoving)
-doomedPanel:SetScript('OnDragStop', doomedPanel.StopMovingOrSizing)
-doomedPanel:Hide()
-doomedPanel.icon = doomedPanel:CreateTexture(nil, 'BACKGROUND')
-doomedPanel.icon:SetAllPoints(doomedPanel)
-doomedPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedPanel.border = doomedPanel:CreateTexture(nil, 'ARTWORK')
-doomedPanel.border:SetAllPoints(doomedPanel)
-doomedPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
-doomedPanel.border:Hide()
-doomedPanel.dimmer = doomedPanel:CreateTexture(nil, 'BORDER')
-doomedPanel.dimmer:SetAllPoints(doomedPanel)
-doomedPanel.dimmer:SetColorTexture(0, 0, 0, 0.6)
-doomedPanel.dimmer:Hide()
-doomedPanel.swipe = CreateFrame('Cooldown', nil, doomedPanel, 'CooldownFrameTemplate')
-doomedPanel.swipe:SetAllPoints(doomedPanel)
-doomedPanel.swipe:SetDrawBling(false)
-doomedPanel.swipe:SetDrawEdge(false)
-doomedPanel.text = CreateFrame('Frame', nil, doomedPanel)
-doomedPanel.text:SetAllPoints(doomedPanel)
-doomedPanel.text.tl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.tl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.tl:SetPoint('TOPLEFT', doomedPanel, 'TOPLEFT', 2.5, -3)
-doomedPanel.text.tl:SetJustifyH('LEFT')
-doomedPanel.text.tr = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.tr:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.tr:SetPoint('TOPRIGHT', doomedPanel, 'TOPRIGHT', -2.5, -3)
-doomedPanel.text.tr:SetJustifyH('RIGHT')
-doomedPanel.text.bl = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.bl:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.bl:SetPoint('BOTTOMLEFT', doomedPanel, 'BOTTOMLEFT', 2.5, 3)
-doomedPanel.text.bl:SetJustifyH('LEFT')
-doomedPanel.text.br = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.br:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedPanel.text.br:SetPoint('BOTTOMRIGHT', doomedPanel, 'BOTTOMRIGHT', -2.5, 3)
-doomedPanel.text.br:SetJustifyH('RIGHT')
-doomedPanel.text.center = doomedPanel.text:CreateFontString(nil, 'OVERLAY')
-doomedPanel.text.center:SetFont('Fonts\\FRIZQT__.TTF', 10, 'OUTLINE')
-doomedPanel.text.center:SetAllPoints(doomedPanel.text)
-doomedPanel.text.center:SetJustifyH('CENTER')
-doomedPanel.text.center:SetJustifyV('CENTER')
-doomedPanel.button = CreateFrame('Button', nil, doomedPanel)
-doomedPanel.button:SetAllPoints(doomedPanel)
-doomedPanel.button:RegisterForClicks('LeftButtonDown', 'RightButtonDown', 'MiddleButtonDown')
-local doomedPreviousPanel = CreateFrame('Frame', 'doomedPreviousPanel', UIParent)
-doomedPreviousPanel:SetFrameStrata('BACKGROUND')
-doomedPreviousPanel:SetSize(64, 64)
-doomedPreviousPanel:SetMovable(true)
-doomedPreviousPanel:SetUserPlaced(true)
-doomedPreviousPanel:RegisterForDrag('LeftButton')
-doomedPreviousPanel:SetScript('OnDragStart', doomedPreviousPanel.StartMoving)
-doomedPreviousPanel:SetScript('OnDragStop', doomedPreviousPanel.StopMovingOrSizing)
-doomedPreviousPanel:Hide()
-doomedPreviousPanel.icon = doomedPreviousPanel:CreateTexture(nil, 'BACKGROUND')
-doomedPreviousPanel.icon:SetAllPoints(doomedPreviousPanel)
-doomedPreviousPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedPreviousPanel.border = doomedPreviousPanel:CreateTexture(nil, 'ARTWORK')
-doomedPreviousPanel.border:SetAllPoints(doomedPreviousPanel)
-doomedPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
-local doomedCooldownPanel = CreateFrame('Frame', 'doomedCooldownPanel', UIParent)
-doomedCooldownPanel:SetFrameStrata('BACKGROUND')
-doomedCooldownPanel:SetSize(64, 64)
-doomedCooldownPanel:SetMovable(true)
-doomedCooldownPanel:SetUserPlaced(true)
-doomedCooldownPanel:RegisterForDrag('LeftButton')
-doomedCooldownPanel:SetScript('OnDragStart', doomedCooldownPanel.StartMoving)
-doomedCooldownPanel:SetScript('OnDragStop', doomedCooldownPanel.StopMovingOrSizing)
-doomedCooldownPanel:Hide()
-doomedCooldownPanel.icon = doomedCooldownPanel:CreateTexture(nil, 'BACKGROUND')
-doomedCooldownPanel.icon:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedCooldownPanel.border = doomedCooldownPanel:CreateTexture(nil, 'ARTWORK')
-doomedCooldownPanel.border:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
-doomedCooldownPanel.dimmer = doomedCooldownPanel:CreateTexture(nil, 'BORDER')
-doomedCooldownPanel.dimmer:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.dimmer:SetColorTexture(0, 0, 0, 0.6)
-doomedCooldownPanel.dimmer:Hide()
-doomedCooldownPanel.swipe = CreateFrame('Cooldown', nil, doomedCooldownPanel, 'CooldownFrameTemplate')
-doomedCooldownPanel.swipe:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.swipe:SetDrawBling(false)
-doomedCooldownPanel.swipe:SetDrawEdge(false)
-doomedCooldownPanel.text = doomedCooldownPanel:CreateFontString(nil, 'OVERLAY')
-doomedCooldownPanel.text:SetFont('Fonts\\FRIZQT__.TTF', 12, 'OUTLINE')
-doomedCooldownPanel.text:SetAllPoints(doomedCooldownPanel)
-doomedCooldownPanel.text:SetJustifyH('CENTER')
-doomedCooldownPanel.text:SetJustifyV('CENTER')
-local doomedInterruptPanel = CreateFrame('Frame', 'doomedInterruptPanel', UIParent)
-doomedInterruptPanel:SetFrameStrata('BACKGROUND')
-doomedInterruptPanel:SetSize(64, 64)
-doomedInterruptPanel:SetMovable(true)
-doomedInterruptPanel:SetUserPlaced(true)
-doomedInterruptPanel:RegisterForDrag('LeftButton')
-doomedInterruptPanel:SetScript('OnDragStart', doomedInterruptPanel.StartMoving)
-doomedInterruptPanel:SetScript('OnDragStop', doomedInterruptPanel.StopMovingOrSizing)
-doomedInterruptPanel:Hide()
-doomedInterruptPanel.icon = doomedInterruptPanel:CreateTexture(nil, 'BACKGROUND')
-doomedInterruptPanel.icon:SetAllPoints(doomedInterruptPanel)
-doomedInterruptPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedInterruptPanel.border = doomedInterruptPanel:CreateTexture(nil, 'ARTWORK')
-doomedInterruptPanel.border:SetAllPoints(doomedInterruptPanel)
-doomedInterruptPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
-doomedInterruptPanel.swipe = CreateFrame('Cooldown', nil, doomedInterruptPanel, 'CooldownFrameTemplate')
-doomedInterruptPanel.swipe:SetAllPoints(doomedInterruptPanel)
-doomedInterruptPanel.swipe:SetDrawBling(false)
-doomedInterruptPanel.swipe:SetDrawEdge(false)
-local doomedExtraPanel = CreateFrame('Frame', 'doomedExtraPanel', UIParent)
-doomedExtraPanel:SetFrameStrata('BACKGROUND')
-doomedExtraPanel:SetSize(64, 64)
-doomedExtraPanel:SetMovable(true)
-doomedExtraPanel:SetUserPlaced(true)
-doomedExtraPanel:RegisterForDrag('LeftButton')
-doomedExtraPanel:SetScript('OnDragStart', doomedExtraPanel.StartMoving)
-doomedExtraPanel:SetScript('OnDragStop', doomedExtraPanel.StopMovingOrSizing)
-doomedExtraPanel:Hide()
-doomedExtraPanel.icon = doomedExtraPanel:CreateTexture(nil, 'BACKGROUND')
-doomedExtraPanel.icon:SetAllPoints(doomedExtraPanel)
-doomedExtraPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-doomedExtraPanel.border = doomedExtraPanel:CreateTexture(nil, 'ARTWORK')
-doomedExtraPanel.border:SetAllPoints(doomedExtraPanel)
-doomedExtraPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 
 -- Start AoE
 
@@ -638,10 +532,10 @@ function Ability:Usable(seconds, pool)
 	if not self.known then
 		return false
 	end
-	if self.mana_cost > 0 and self:ManaCost() > Player.mana.current then
+	if self:ManaCost() > Player.mana.current then
 		return false
 	end
-	if self.shard_cost > 0 and self:ShardCost() > Player.soul_shards.current then
+	if self:ShardCost() > Player.soul_shards.current then
 		return false
 	end
 	if self.requires_charge and self:Charges() == 0 then
@@ -653,7 +547,7 @@ function Ability:Usable(seconds, pool)
 	return self:Ready(seconds)
 end
 
-function Ability:Remains(offGCD)
+function Ability:Remains()
 	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
@@ -666,7 +560,7 @@ function Ability:Remains(offGCD)
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
-			return max(0, expires - Player.ctime - (offGCD and 0 or Player.execute_remains))
+			return max(0, expires - Player.ctime - (self.off_gcd and 0 or Player.execute_remains))
 		end
 	end
 	return 0
@@ -954,7 +848,7 @@ function Ability:CastSuccess(dstGUID)
 	if self.requires_pet then
 		Pet.stuck = false
 	end
-	if self.pet_spell and not self.player_triggered then
+	if self.ignore_cast or (self.pet_spell and not self.player_triggered) then
 		return
 	end
 	Player.last_ability = self
@@ -1051,7 +945,7 @@ function Ability:ApplyAura(guid)
 	return aura
 end
 
-function Ability:RefreshAura(guid)
+function Ability:RefreshAura(guid, extend)
 	if AutoAoe.blacklist[guid] then
 		return
 	end
@@ -1060,14 +954,14 @@ function Ability:RefreshAura(guid)
 		return self:ApplyAura(guid)
 	end
 	local duration = self:Duration()
-	aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + duration))
+	aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + (extend or duration)))
 	return aura
 end
 
-function Ability:RefreshAuraAll()
+function Ability:RefreshAuraAll(extend)
 	local duration = self:Duration()
 	for guid, aura in next, self.aura_targets do
-		aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + duration))
+		aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + (extend or duration)))
 	end
 end
 
@@ -1454,8 +1348,9 @@ RiteOfRuvaraad.buff_duration = 17
 
 -- PvP talents
 local RotAndDecay = Ability:Add(212371, false, true)
--- Trinket Effects
-
+-- Trinket effects
+local SolarMaelstrom = Ability:Add(422146, false, true) -- Belor'relos
+SolarMaelstrom:AutoAoe()
 -- Class cooldowns
 
 -- Aliases
@@ -1631,6 +1526,7 @@ function InventoryItem:Add(itemId)
 		name = name,
 		icon = icon,
 		can_use = false,
+		off_gcd = true,
 	}
 	setmetatable(item, self)
 	inventoryItems[#inventoryItems + 1] = item
@@ -1654,13 +1550,16 @@ function InventoryItem:Count()
 end
 
 function InventoryItem:Cooldown()
-	local startTime, duration
+	local start, duration
 	if self.equip_slot then
-		startTime, duration = GetInventoryItemCooldown('player', self.equip_slot)
+		start, duration = GetInventoryItemCooldown('player', self.equip_slot)
 	else
-		startTime, duration = GetItemCooldown(self.itemId)
+		start, duration = GetItemCooldown(self.itemId)
 	end
-	return startTime == 0 and 0 or duration - (Player.ctime - startTime)
+	if start == 0 then
+		return 0
+	end
+	return max(0, duration - (Player.ctime - start) - (self.off_gcd and 0 or Player.execute_remains))
 end
 
 function InventoryItem:Ready(seconds)
@@ -1686,12 +1585,21 @@ local Healthstone = InventoryItem:Add(5512)
 Healthstone.created_by = CreateHealthstone
 Healthstone.max_charges = 3
 -- Equipment
+local DreambinderLoomOfTheGreatCycle = InventoryItem:Add(208616)
+DreambinderLoomOfTheGreatCycle.cooldown_duration = 120
+DreambinderLoomOfTheGreatCycle.off_gcd = false
 local IridalTheEarthsMaster = InventoryItem:Add(208321)
 IridalTheEarthsMaster.cooldown_duration = 180
+IridalTheEarthsMaster.off_gcd = false
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
+Trinket.BelorrelosTheSuncaller = InventoryItem:Add(207172)
+Trinket.BelorrelosTheSuncaller.cast_spell = SolarMaelstrom
+Trinket.BelorrelosTheSuncaller.cooldown_duration = 120
+Trinket.BelorrelosTheSuncaller.off_gcd = false
 Trinket.NymuesUnravelingSpindle = InventoryItem:Add(208615)
 Trinket.NymuesUnravelingSpindle.cooldown_duration = 120
+Trinket.NymuesUnravelingSpindle.off_gcd = false
 -- End Inventory Items
 
 -- Start Abilities Functions
@@ -1811,10 +1719,6 @@ function Player:UpdateTime(timeStamp)
 end
 
 function Player:UpdateKnown()
-	self.mana.base = BaseMana[self.level]
-	self.mana.max = UnitPowerMax('player', 0)
-	self.soul_shards.max = UnitPowerMax('player', 7)
-
 	local node
 	local configId = C_ClassTalents.GetActiveConfigID()
 	for _, ability in next, Abilities.all do
@@ -1861,7 +1765,7 @@ function Player:UpdateKnown()
 	Immolation.known = Pet.Infernal.known
 	DemonicPower.known = Pet.DemonicTyrant.known
 	ImpendingRuin.known = RitualOfRuin.known
-	DoomBrand.known = Player.set_bonus.t31 >= 2
+	DoomBrand.known = Player.set_bonus.t31 >= 2 or Player.set_bonus.t32 >= 2
 	RiteOfRuvaraad.known = Player.set_bonus.t30 >= 4
 
 	Abilities:Update()
@@ -1892,11 +1796,15 @@ function Player:UpdateChannelInfo()
 		return
 	end
 	local ability = Abilities.bySpellId[spellId]
-	if ability and ability == channel.ability then
-		channel.chained = true
+	if ability then
+		if ability == channel.ability then
+			channel.chained = true
+		end
+		channel.interrupt_if = ability.interrupt_if
 	else
-		channel.ability = ability
+		channel.interrupt_if = nil
 	end
+	channel.ability = ability
 	channel.ticks = 0
 	channel.start = start / 1000
 	channel.ends = ends / 1000
@@ -2011,7 +1919,6 @@ function Player:Init()
 	doomedPreviousPanel.ability = nil
 	self.guid = UnitGUID('player')
 	self.name = UnitName('player')
-	self.level = UnitLevel('player')
 	_, self.instance = IsInInstance()
 	Events:GROUP_ROSTER_UPDATE()
 	Events:PLAYER_SPECIALIZATION_CHANGED('player')
@@ -2094,6 +2001,7 @@ function Target:Update()
 	local guid = UnitGUID('target')
 	if not guid then
 		self.guid = nil
+		self.uid = nil
 		self.boss = false
 		self.stunnable = true
 		self.classification = 'normal'
@@ -2113,6 +2021,7 @@ function Target:Update()
 	end
 	if guid ~= self.guid then
 		self.guid = guid
+		self.uid = tonumber(guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)') or 0)
 		self:UpdateHealth(true)
 	end
 	self.boss = false
@@ -2127,6 +2036,9 @@ function Target:Update()
 	if not self.player and self.classification ~= 'minus' and self.classification ~= 'normal' then
 		self.boss = self.level >= (Player.level + 3)
 		self.stunnable = self.level < (Player.level + 2)
+	end
+	if self.Dummies[self.uid] then
+		self.boss = true
 	end
 	if self.hostile or Opt.always_on then
 		UI:UpdateCombat()
@@ -2147,10 +2059,7 @@ function Target:TimeToPct(pct)
 end
 
 function Target:Stunned()
-	if AxeToss:Up() then
-		return true
-	end
-	return false
+	return AxeToss:Up() or Shadowfury:Up()
 end
 
 -- End Target Functions
@@ -2328,12 +2237,10 @@ function AxeToss:Usable()
 	return Ability.Usable(self)
 end
 
-function MortalCoil:Usable()
-	if not Target.stunnable then
-		return false
-	end
-	return Ability.Usable(self)
+function Shadowfury:Usable()
+	return Target.stunnable and Ability.Usable(self)
 end
+MortalCoil.Usable = Shadowfury.Usable
 
 function InevitableDemise:Stack()
 	if DrainLife:Previous() or DrainLife:Channeling() then
@@ -3306,6 +3213,12 @@ actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.c
 			return UseCooldown(Trinket.NymuesUnravelingSpindle)
 		end
 	end
+	if DreambinderLoomOfTheGreatCycle:Usable() and (
+		(Pet.tyrant_remains == 0 and (not self.tyrant_prep or self.pet_expire == 0)) or
+		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
+	) then
+		return UseCooldown(DreambinderLoomOfTheGreatCycle)
+	end
 	if IridalTheEarthsMaster:Usable() and (
 		(Pet.tyrant_remains == 0 and (not self.tyrant_prep or self.pet_expire == 0)) or
 		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
@@ -3598,6 +3511,12 @@ actions.cds+=/use_items,if=pet.infernal.active|time_to_die<21
 			return UseCooldown(Trinket2)
 		end
 	end
+	if DreambinderLoomOfTheGreatCycle:Usable() then
+		return UseCooldown(DreambinderLoomOfTheGreatCycle)
+	end
+	if IridalTheEarthsMaster:Usable() then
+		return UseCooldown(IridalTheEarthsMaster)
+	end
 end
 
 APL[SPEC.DESTRUCTION].havoc = function(self)
@@ -3645,6 +3564,9 @@ APL.Interrupt = function(self)
 	end
 	if MortalCoil:Usable() then
 		return MortalCoil
+	end
+	if Shadowfury:Usable() then
+		return Shadowfury
 	end
 end
 
@@ -3738,7 +3660,7 @@ function UI:CreateOverlayGlows()
 			end
 		end
 	end
-	UI:UpdateGlowColorAndScale()
+	self:UpdateGlowColorAndScale()
 end
 
 function UI:UpdateGlows()
@@ -3774,6 +3696,18 @@ end
 
 function UI:UpdateDraggable()
 	local draggable = not (Opt.locked or Opt.snap or Opt.aoe)
+	doomedPanel:SetMovable(not Opt.snap)
+	doomedPreviousPanel:SetMovable(not Opt.snap)
+	doomedCooldownPanel:SetMovable(not Opt.snap)
+	doomedInterruptPanel:SetMovable(not Opt.snap)
+	doomedExtraPanel:SetMovable(not Opt.snap)
+	if not Opt.snap then
+		doomedPanel:SetUserPlaced(true)
+		doomedPreviousPanel:SetUserPlaced(true)
+		doomedCooldownPanel:SetUserPlaced(true)
+		doomedInterruptPanel:SetUserPlaced(true)
+		doomedExtraPanel:SetUserPlaced(true)
+	end
 	doomedPanel:EnableMouse(draggable or Opt.aoe)
 	doomedPanel.button:SetShown(Opt.aoe)
 	doomedPreviousPanel:EnableMouse(draggable)
@@ -3889,7 +3823,13 @@ function UI:Disappear()
 	Player.cd = nil
 	Player.interrupt = nil
 	Player.extra = nil
-	UI:UpdateGlows()
+	self:UpdateGlows()
+end
+
+function UI:Reset()
+	doomedPanel:ClearAllPoints()
+	doomedPanel:SetPoint('CENTER', 0, -169)
+	self:SnapAllPanels()
 end
 
 function UI:UpdateDisplay()
@@ -3946,9 +3886,6 @@ function UI:UpdateDisplay()
 			elseif channel.interruptible then
 				dim = false
 			end
-		end
-		if Player.main and Player.main.cwc then
-			dim = false
 		end
 	end
 	if Player.spec == SPEC.AFFLICTION then
@@ -4116,12 +4053,12 @@ function Events:ADDON_LOADED(name)
 		UI:UpdateAlpha()
 		UI:UpdateScale()
 		if firstRun then
-			print('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
-			print('Type |cFFFFD000' .. SLASH_Doomed1 .. '|r for a list of commands.')
+			log('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
+			log('Type |cFFFFD000' .. SLASH_Doomed1 .. '|r for a list of commands.')
 			UI:SnapAllPanels()
 		end
 		if UnitLevel('player') < 10 then
-			print('[|cFFFFD000Warning|r] ' .. ADDON .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
+			log('[|cFFFFD000Warning|r]', ADDON, 'is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 	end
 end
@@ -4218,7 +4155,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 				elseif (event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH') and pet.CastLanded then
 					pet:CastLanded(unit, spellId, dstGUID, event, missType)
 				end
-				--print(format('PET %d EVENT %s SPELL %s ID %d', pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+				--log(format('PET %d EVENT %s SPELL %s ID %d', pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 			end
 		end
 		return
@@ -4234,7 +4171,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 
 	local ability = spellId and Abilities.bySpellId[spellId]
 	if not ability then
-		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+		--log(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 		return
 	end
 
@@ -4290,9 +4227,18 @@ end
 
 function Events:UNIT_HEALTH(unitId)
 	if unitId == 'player' then
-		Player.health.current = UnitHealth('player')
-		Player.health.max = UnitHealthMax('player')
+		Player.health.current = UnitHealth(unitId)
+		Player.health.max = UnitHealthMax(unitId)
 		Player.health.pct = Player.health.current / Player.health.max * 100
+	end
+end
+
+function Events:UNIT_MAXPOWER(unitId)
+	if unitId == 'player' then
+		Player.level = UnitLevel(unitId)
+		Player.mana.base = Player.BaseMana[Player.level]
+		Player.mana.max = UnitPowerMax(unitId, 0)
+		Player.soul_shards.max = UnitPowerMax(unitId, 7)
 	end
 end
 
@@ -4401,6 +4347,7 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 	Player.set_bonus.t29 = (Player:Equipped(200333) and 1 or 0) + (Player:Equipped(200335) and 1 or 0) + (Player:Equipped(200336) and 1 or 0) + (Player:Equipped(200337) and 1 or 0) + (Player:Equipped(200338) and 1 or 0)
 	Player.set_bonus.t30 = (Player:Equipped(202531) and 1 or 0) + (Player:Equipped(202532) and 1 or 0) + (Player:Equipped(202533) and 1 or 0) + (Player:Equipped(202534) and 1 or 0) + (Player:Equipped(202536) and 1 or 0)
 	Player.set_bonus.t31 = (Player:Equipped(207270) and 1 or 0) + (Player:Equipped(207271) and 1 or 0) + (Player:Equipped(207272) and 1 or 0) + (Player:Equipped(207273) and 1 or 0) + (Player:Equipped(207275) and 1 or 0)
+	Player.set_bonus.t32 = (Player:Equipped(217211) and 1 or 0) + (Player:Equipped(217212) and 1 or 0) + (Player:Equipped(217213) and 1 or 0) + (Player:Equipped(217214) and 1 or 0) + (Player:Equipped(217215) and 1 or 0)
 
 	Player:UpdateKnown()
 end
@@ -4415,6 +4362,7 @@ function Events:PLAYER_SPECIALIZATION_CHANGED(unitId)
 	Events:PLAYER_EQUIPMENT_CHANGED()
 	Events:PLAYER_REGEN_ENABLED()
 	Events:UNIT_HEALTH('player')
+	Events:UNIT_MAXPOWER('player')
 	InnerDemons.next_imp = nil
 	UI.OnResourceFrameShow()
 	Target:Update()
@@ -4531,7 +4479,7 @@ local function Status(desc, opt, ...)
 	else
 		opt_view = opt and '|cFF00C000On|r' or '|cFFC00000Off|r'
 	end
-	print(ADDON, '-', desc .. ':', opt_view, ...)
+	log(desc .. ':', opt_view, ...)
 end
 
 SlashCmdList[ADDON] = function(msg, editbox)
@@ -4557,7 +4505,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 			else
 				Opt.snap = false
 				Opt.locked = false
-				doomedPanel:ClearAllPoints()
+				UI:Reset()
 			end
 			UI:UpdateDraggable()
 			UI.OnResourceFrameShow()
@@ -4807,9 +4755,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		return Status('Show Tyrant/Infernal/Darkglare power/remains (topright)', Opt.tyrant)
 	end
 	if msg[1] == 'reset' then
-		doomedPanel:ClearAllPoints()
-		doomedPanel:SetPoint('CENTER', 0, -169)
-		UI:SnapAllPanels()
+		UI:Reset()
 		return Status('Position has been reset to', 'default')
 	end
 	print(ADDON, '(version: |cFFFFD000' .. GetAddOnMetadata(ADDON, 'Version') .. '|r) - Commands:')
