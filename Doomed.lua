@@ -988,7 +988,6 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 DrainLife.hasted_ticks = true
-local GrandWarlocksDesign = Ability:Add(387084, true, true)
 local SpellLock = Ability:Add(119910, false, true)
 SpellLock.cooldown_duration = 24
 SpellLock.player_triggered = true
@@ -996,6 +995,7 @@ SpellLock.player_triggered = true
 local FelDomination = Ability:Add(333889, true, true)
 FelDomination.buff_duration = 15
 FelDomination.cooldown_duration = 180
+local GrandWarlocksDesign = Ability:Add(387084, true, true)
 local GrimoireOfSacrifice = Ability:Add(108503, true, true, 196099)
 GrimoireOfSacrifice.buff_duration = 3600
 GrimoireOfSacrifice.cooldown_duration = 30
@@ -1255,36 +1255,80 @@ LegionStrike.triggers_gcd = false
 LegionStrike.off_gcd = true
 LegionStrike:AutoAoe()
 ---- Destruction
------- Base Abilities
-local Conflagrate = Ability:Add(17962, false, true)
-Conflagrate.cooldown_duration = 12.96
-Conflagrate.mana_cost = 1
-Conflagrate.shard_gain = 0.5
-Conflagrate.requires_charge = true
-Conflagrate.hasted_cooldown = true
 local Immolate = Ability:Add(348, false, true, 157736)
 Immolate.buff_duration = 18
 Immolate.mana_cost = 1.5
 Immolate.tick_interval = 3
 Immolate.hasted_ticks = true
 Immolate.triggers_combat = true
-Immolate:AutoAoe(false, 'cast')
+Immolate:AutoAoe(false, 'apply')
 Immolate:TrackAuras()
-local Incinerate = Ability:Add(29722, false, true)
-Incinerate.mana_cost = 2
-Incinerate.shard_gain = 0.2
-Incinerate.triggers_combat = true
-Incinerate:SetVelocity(25)
+------ Talents
+local AvatarOfDestruction = Ability:Add(387159, false, true)
+local Backdraft = Ability:Add(196406, true, true, 117828)
+Backdraft.buff_duration = 10
+local Backlash = Ability:Add(387384, true, true, 387385)
+Backlash.buff_duration = 15
+local BurnToAshes = Ability:Add(387153, true, true, 387154)
+BurnToAshes.buff_duration = 20
+BurnToAshes.max_stack = 6
+BurnToAshes.talent_node = 71964
+local Cataclysm = Ability:Add(152108, false, true)
+Cataclysm.mana_cost = 1
+Cataclysm.cooldown_duration = 30
+local ChannelDemonfire = Ability:Add(196447, false, true)
+ChannelDemonfire.cooldown_duration = 25
+ChannelDemonfire.mana_cost = 1.5
+ChannelDemonfire.triggers_combat = true
+local ChaosBolt = Ability:Add(116858, false, true)
+ChaosBolt.shard_cost = 2
+ChaosBolt.triggers_combat = true
+ChaosBolt:SetVelocity(20)
+local Chaosbringer = Ability:Add(422057, false, true)
+Chaosbringer.talent_node = 71967
+local ChaosIncarnate = Ability:Add(387275, false, true)
+local Conflagrate = Ability:Add(17962, false, true)
+Conflagrate.cooldown_duration = 12.96
+Conflagrate.mana_cost = 1
+Conflagrate.shard_gain = 0.5
+Conflagrate.requires_charge = true
+Conflagrate.hasted_cooldown = true
+local CrashingChaos = Ability:Add(417234, true, true, 417282)
+CrashingChaos.buff_duration = 45
+local CryHavoc = Ability:Add(387522, false, true, 387547)
+CryHavoc:AutoAoe()
+local Decimation = Ability:Add(387176, false, true)
+local DiabolicEmbers = Ability:Add(387173, false, true)
+local Eradication = Ability:Add(196412, false, true, 196414)
+Eradication.buff_duration = 7
+Eradication.talent_node = 71984
+local FireAndBrimstone = Ability:Add(196408, false, true)
+FireAndBrimstone.talent_node = 71982
 local Havoc = Ability:Add(80240, false, true)
 Havoc.buff_duration = 12
 Havoc.cooldown_duration = 30
 Havoc.mana_cost = 2
 Havoc:AutoAoe(false, 'cast')
 Havoc:TrackAuras()
-local ChaosBolt = Ability:Add(116858, false, true)
-ChaosBolt.shard_cost = 2
-ChaosBolt.triggers_combat = true
-ChaosBolt:SetVelocity(20)
+local ImpendingRuin = Ability:Add(387158, true, true) -- Ritual of Ruin progress
+ImpendingRuin.buff_duration = 3600
+ImpendingRuin.max_stack = 15
+local ImprovedImmolate = Ability:Add(387093, false, true)
+ImprovedImmolate.talent_node = 71976
+local Incinerate = Ability:Add(29722, false, true)
+Incinerate.mana_cost = 2
+Incinerate.shard_gain = 0.2
+Incinerate.triggers_combat = true
+Incinerate:SetVelocity(25)
+local Inferno = Ability:Add(270545, false, true)
+local InternalCombustion = Ability:Add(266134, false, true)
+local MasterRitualist = Ability:Add(387165, false, true)
+MasterRitualist.talent_node = 71962
+local Pandemonium = Ability:Add(387509, false, true)
+local RagingDemonfire = Ability:Add(387166, false, true)
+RagingDemonfire.talent_node = 72063
+local RainOfChaos = Ability:Add(266086, true, true, 266087)
+RainOfChaos.buff_duration = 30
 local RainOfFire = Ability:Add(5740, false, true, 42223)
 RainOfFire.buff_duration = 8
 RainOfFire.shard_cost = 3
@@ -1292,36 +1336,14 @@ RainOfFire.tick_interval = 1
 RainOfFire.hasted_duration = true
 RainOfFire.hasted_ticks = true
 RainOfFire:AutoAoe(true)
-local SummonInfernal = Ability:Add(1122, false, true, 22703)
-SummonInfernal.cooldown_duration = 180
-SummonInfernal.mana_cost = 2
-SummonInfernal:AutoAoe(true)
------- Pet Abilities
-local Immolation = Ability:Add(20153, false, false)
-Immolation:AutoAoe()
------- Talents
-local ChannelDemonfire = Ability:Add(196447, false, true)
-ChannelDemonfire.cooldown_duration = 25
-ChannelDemonfire.mana_cost = 1.5
-ChannelDemonfire.triggers_combat = true
-local Eradication = Ability:Add(196412, false, true, 196414)
-Eradication.buff_duration = 7
-local FireAndBrimstone = Ability:Add(196408, false, true)
-local Flashover = Ability:Add(267115, false, true)
-local Inferno = Ability:Add(270545, false, true)
-local InternalCombustion = Ability:Add(266134, false, true)
-local RainOfChaos = Ability:Add(266086, true, true, 266087)
-RainOfChaos.buff_duration = 30
-local ReverseEntropy = Ability:Add(205148, false, true, 266030)
+local ReverseEntropy = Ability:Add(205148, true, true, 266030)
 ReverseEntropy.buff_duration = 8
+local RitualOfRuin = Ability:Add(387156, true, true, 387157)
+RitualOfRuin.buff_duration = 30
 local RoaringBlaze = Ability:Add(205184, false, true, 265931)
 RoaringBlaze.buff_duration = 8
-local SoulFire = Ability:Add(6353, false, true)
-SoulFire.cooldown_duration = 45
-SoulFire.mana_cost = 2
-SoulFire.shard_gain = 1
-SoulFire.triggers_combat = true
-SoulFire:SetVelocity(24)
+local Ruin = Ability:Add(387103, false, true)
+Ruin.talent_node = 72062
 local Shadowburn = Ability:Add(17877, false, true)
 Shadowburn.buff_duration = 5
 Shadowburn.cooldown_duration = 12
@@ -1329,16 +1351,19 @@ Shadowburn.mana_cost = 1
 Shadowburn.shard_cost = 1
 Shadowburn.hasted_cooldown = true
 Shadowburn.requires_charge = true
-local AvatarOfDestruction = Ability:Add(387159, false, true)
-local ImpendingRuin = Ability:Add(387158, true, true)
-ImpendingRuin.buff_duration = 3600
-local RitualOfRuin = Ability:Add(387156, true, true, 387157)
-RitualOfRuin.buff_duration = 30
-local MadnessOfTheAzjAqir = Ability:Add(387400, true, true, 387409)
-MadnessOfTheAzjAqir.buff_duration = 5
------- Procs
-local Backdraft = Ability:Add(196406, true, true, 117828)
-Backdraft.buff_duration = 10
+local SoulFire = Ability:Add(6353, false, true)
+SoulFire.cooldown_duration = 45
+SoulFire.mana_cost = 2
+SoulFire.shard_gain = 1
+SoulFire.triggers_combat = true
+SoulFire:SetVelocity(24)
+local SummonInfernal = Ability:Add(1122, false, true, 22703)
+SummonInfernal.cooldown_duration = 180
+SummonInfernal.mana_cost = 2
+SummonInfernal:AutoAoe(true)
+------ Pet Abilities
+local Immolation = Ability:Add(20153, false, false)
+Immolation:AutoAoe()
 -- Tier set bonuses
 local DoomBrand = Ability:Add(423583, true, true, 423584) -- T31 2pc
 DoomBrand.buff_duration = 20
@@ -2078,6 +2103,33 @@ function Corruption:Remains()
 	return Ability.Remains(self)
 end
 
+function Immolate:Duration()
+	local duration = self.buff_duration
+	if ImprovedImmolate.known then
+		duration = duration + (3 * ImprovedImmolate.rank)
+	end
+	return duration
+end
+
+function Immolate:Remains()
+	if Cataclysm.known and Cataclysm:Casting() then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
+function Incinerate:Free()
+	return Backlash.known and Backlash:Up()
+end
+
+function Havoc:Duration()
+	local duration = self.buff_duration
+	if Pandemonium.known then
+		duration = duration + 3
+	end
+	return duration
+end
+
 function SummonImp:Remains()
 	if self:Casting() or (Pet.active and UnitCreatureFamily('pet') == self.pet_family) then
 		return 3600
@@ -2205,6 +2257,24 @@ function SummonDemonicTyrant:CastSuccess(...)
 	self.summoning = true
 end
 SummonDarkglare.CastSuccess = SummonDemonicTyrant.CastSuccess
+SummonInfernal.CastSuccess = SummonDemonicTyrant.CastSuccess
+
+function SummonDemonicTyrant:CooldownDuration()
+	local duration = self.cooldown_duration
+	if GrandWarlocksDesign.known then
+		duration = duration - 30
+	end
+	return duration
+end
+SummonDarkglare.CooldownDuration = SummonDemonicTyrant.CooldownDuration
+
+function SummonInfernal:CooldownDuration()
+	local duration = self.cooldown_duration
+	if GrandWarlocksDesign.known then
+		duration = duration - 60
+	end
+	return duration
+end
 
 function SummonDemonicTyrant:ShardGain()
 	local gain = self.shard_gain
@@ -2250,25 +2320,32 @@ function InevitableDemise:Stack()
 end
 
 function RitualOfRuin:Remains()
-	if ImpendingRuin:Stack() >= 10 then
+	if ImpendingRuin:Stack() >= ImpendingRuin:MaxStack() then
 		return self:Duration()
+	end
+	if ChaosBolt:Casting() then
+		return 0
 	end
 	return Ability.Remains(self)
 end
 
-function ImpendingRuin:Stack()
-	local stack = Ability.Stack(self)
-	if Player.cast.ability then
-		stack = stack + Ability.ShardCost(Player.cast.ability)
+function ImpendingRuin:MaxStack()
+	local stack = self.max_stack
+	if MasterRitualist.known then
+		stack = stack - ceil(2.5 * MasterRitualist.rank)
 	end
-	return clamp(stack, 0, 10)
+	return stack
 end
 
-function ChaosBolt:CastTime()
-	if RitualOfRuin.known and RitualOfRuin:Up() then
+function ImpendingRuin:Stack()
+	if Ability.Remains(RitualOfRuin) > 0 then
 		return 0
 	end
-	return Ability.CastTime(self)
+	local stack = Ability.Stack(self)
+	if Player.cast.ability then
+		stack = stack + Player.cast.ability.shard_cost
+	end
+	return clamp(stack, 0, self:MaxStack())
 end
 
 function ChaosBolt:ShardCost()
@@ -2281,7 +2358,7 @@ RainOfFire.ShardCost = ChaosBolt.ShardCost
 
 function Backdraft:Stack()
 	local stack = Ability.Stack(self)
-	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting()) then
+	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting() or SoulFire:Casting()) then
 		stack = stack - 1
 	end
 	return stack
@@ -2293,6 +2370,35 @@ function Backdraft:Remains()
 	end
 	return Ability.Remains(self)
 end
+CrashingChaos.Remains = Backdraft.Remains
+
+function BurnToAshes:Stack()
+	local stack = Ability.Stack(self)
+	if ChaosBolt:Casting() then
+		stack = stack + 2
+	elseif Incinerate:Casting() then
+		stack = stack - 1
+	end
+	return clamp(stack, 0, self.max_stack)
+end
+
+function BurnToAshes:Remains()
+	if ChaosBolt:Casting() then
+		return self:Duration()
+	end
+	if self:Stack() == 0 then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function CrashingChaos:Stack()
+	local stack = Ability.Stack(self)
+	if stack > 0 and ChaosBolt:Casting() then
+		stack = stack - 1
+	end
+	return stack
+end
 
 function Eradication:Remains()
 	if ChaosBolt:Casting() or ChaosBolt:Traveling() > 0 then
@@ -2301,16 +2407,12 @@ function Eradication:Remains()
 	return Ability.Remains(self)
 end
 
-function MadnessOfTheAzjAqir:Remains()
-	if ChaosBolt:Casting() then
-		return self:Duration()
+function SoulFire:Cooldown()
+	local remains = Ability.Cooldown(self)
+	if Decimation.known and Incinerate:Casting() and Target.health.pct <= 50 then
+		remains = remains - 5
 	end
-	return Ability.Remains(self)
-end
-
-function SummonInfernal:CastSuccess(...)
-	Ability.CastSuccess(self, ...)
-	self.summoning = true
+	return max(0, remains)
 end
 
 function GrimoireOfSacrifice:Usable()
@@ -3371,7 +3473,7 @@ actions+=/incinerate
 	if RoaringBlaze.known and Conflagrate:Usable() and RoaringBlaze:Remains() < 1.5 then
 		return Conflagrate
 	end
-	if Player.enemies > (2 - (AvatarOfDestruction.known and (not MadnessOfTheAzjAqir.known or Inferno.known) and 1 or 0)) then
+	if Player.enemies > (2 - (AvatarOfDestruction.known and 1 or 0)) then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
@@ -3399,7 +3501,7 @@ actions+=/incinerate
 		UseExtra(Havoc)
 	end
 	self.pool_soul_shards = (Player.enemies > 1 and Havoc:Ready(10)) or (RainOfChaos.known and RitualOfRuin:Up())
-	if Conflagrate:Usable() and Backdraft:Down() and Player.soul_shards.current >= (1.5 - 0.3 * (Flashover.known and 1 or 0)) and not self.pool_soul_shards then
+	if Conflagrate:Usable() and Backdraft:Down() and Player.soul_shards.current >= 1.5 and not self.pool_soul_shards then
 		return Conflagrate
 	end
 	if ChaosBolt:Usable() and (
@@ -3410,7 +3512,7 @@ actions+=/incinerate
 	) then
 		return ChaosBolt
 	end
-	if Shadowburn:Usable() and (not self.pool_soul_shards or Player.soul_shards.current >= 4.5) then
+	if Shadowburn:Usable() and Target.health.pct < 20 and (not self.pool_soul_shards or Player.soul_shards.current >= 4.5) then
 		return Shadowburn
 	end
 	if ChaosBolt:Usable() and (
