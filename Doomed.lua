@@ -312,6 +312,7 @@ local Pet = {
 -- current target information
 local Target = {
 	boss = false,
+	dummy = false,
 	health = {
 		current = 0,
 		loss_per_sec = 0,
@@ -325,12 +326,14 @@ local Target = {
 
 -- target dummy unit IDs (count these units as bosses)
 Target.Dummies = {
+	[189617] = true,
+	[189632] = true,
 	[194643] = true,
-	[194648] = true,
-	[198594] = true,
 	[194644] = true,
+	[194648] = true,
 	[194649] = true,
 	[197833] = true,
+	[198594] = true,
 }
 
 -- Start AoE
@@ -2031,7 +2034,11 @@ function Target:UpdateHealth(reset)
 	self.timeToDieMax = self.health.current / Player.health.max * 10
 	self.health.pct = self.health.max > 0 and (self.health.current / self.health.max * 100) or 100
 	self.health.loss_per_sec = (self.health.history[1] - self.health.current) / 5
-	self.timeToDie = self.health.loss_per_sec > 0 and min(self.timeToDieMax, self.health.current / self.health.loss_per_sec) or self.timeToDieMax
+	self.timeToDie = (
+		(self.dummy and 600) or
+		(self.health.loss_per_sec > 0 and min(self.timeToDieMax, self.health.current / self.health.loss_per_sec)) or
+		self.timeToDieMax
+	)
 end
 
 function Target:Update()
@@ -2043,6 +2050,7 @@ function Target:Update()
 		self.guid = nil
 		self.uid = nil
 		self.boss = false
+		self.dummy = false
 		self.stunnable = true
 		self.classification = 'normal'
 		self.player = false
@@ -2065,6 +2073,7 @@ function Target:Update()
 		self:UpdateHealth(true)
 	end
 	self.boss = false
+	self.dummy = false
 	self.stunnable = true
 	self.classification = UnitClassification('target')
 	self.player = UnitIsPlayer('target')
@@ -2079,6 +2088,7 @@ function Target:Update()
 	end
 	if self.Dummies[self.uid] then
 		self.boss = true
+		self.dummy = true
 	end
 	if self.hostile or Opt.always_on then
 		UI:UpdateCombat()
