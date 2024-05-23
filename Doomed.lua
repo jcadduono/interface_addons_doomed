@@ -3549,7 +3549,7 @@ actions+=/incinerate
 		if Cataclysm:Usable() then
 			UseCooldown(Cataclysm)
 		end
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and (Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Travling() > 0 and 5 or 0)) > (3 * Player.haste_factor) and (not RoaringBlaze.known or Conflagrate:Remains() > (3 * Player.haste_factor)) then
+		if RagingDemonfire.known and ChannelDemonfire:Usable() and (Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) and (not RoaringBlaze.known or Conflagrate:Remains() > (3 * Player.haste_factor)) then
 			UseCooldown(ChannelDemonfire)
 		end
 		if SoulFire:Usable() and Player.soul_shards.current <= 3.5 and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
@@ -3562,8 +3562,8 @@ actions+=/incinerate
 	if Immolate:Usable() and Target.timeToDie > 8 and (
 		Immolate:Remains() < 3 or
 		((Immolate:Remains() - ChaosBolt:CastTime()) < 5 and InternalCombustion.known and ChaosBolt:Usable()) or
-		((Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Travling() > 0 and 5 or 0)) < (Immolate:Duration() * 0.3))
-	) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (Immolate:Remains() - (InternalCombusion.known and 5 or 0))) then
+		((Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) < (Immolate:Duration() * 0.3))
+	) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (Immolate:Remains() - (InternalCombustion.known and 5 or 0))) then
 		return Immolate
 	end
 	if self.use_cds then
