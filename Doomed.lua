@@ -641,23 +641,45 @@ function Ability:Ticking()
 end
 
 function Ability:HighestRemains()
+	local highest
 	if self.traveling then
 		for _, cast in next, self.traveling do
 			if Player.time - cast.start < self.max_range / self.velocity then
-				return self:Duration()
+				highest = self:Duration()
 			end
 		end
 	end
-	local remains, highest = 0, 0
 	if self.aura_targets then
+		local remains
 		for _, aura in next, self.aura_targets do
-			remains = aura.expires - Player.time - Player.execute_remains
-			if remains > highest then
+			remains = max(0, aura.expires - Player.time - Player.execute_remains)
+			if remains > 0 and (not highest or remains > highest) then
 				highest = remains
 			end
 		end
 	end
-	return highest
+	return highest or 0
+end
+
+function Ability:LowestRemains()
+	local lowest
+	if self.traveling then
+		for _, cast in next, self.traveling do
+			if Player.time - cast.start < self.max_range / self.velocity then
+				lowest = self:Duration()
+			end
+		end
+	end
+	if self.aura_targets then
+		local remains
+		for _, aura in next, self.aura_targets do
+			remains = max(0, aura.expires - Player.time - Player.execute_remains)
+			if remains > 0 and (not lowest or remains < lowest) then
+				lowest = remains
+			end
+		end
+	end
+	return lowest or 0
 end
 
 function Ability:TickTime()
@@ -4250,7 +4272,7 @@ end
 
 function UI:UpdateDisplay()
 	Timer.display = 0
-	local border, dim, dim_cd, border, text_center, text_tl, text_tr, text_cd
+	local border, dim, dim_cd, text_center, text_cd, text_tl, text_tr
 	local channel = Player.channel
 
 	if Opt.dimmer then
