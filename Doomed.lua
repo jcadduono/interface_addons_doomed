@@ -3558,6 +3558,7 @@ actions+=/channel_demonfire,if=!(talent.diabolic_embers&talent.avatar_of_destruc
 actions+=/dimensional_rift
 actions+=/chaos_bolt,if=fight_remains<5&fight_remains>cast_time+travel_time
 actions+=/conflagrate,if=charges>(max_charges-1)|fight_remains<gcd.max*charges
+actions+=/conflagrate,if=talent.backdraft&soul_shard>1.5&charges_fractional>1.5&buff.backdraft.down
 actions+=/incinerate
 ]]
 	if (Player.enemies >= (3 - (Inferno.known and not Chaosbringer.known and 1 or 0))) and not (not Inferno.known and Chaosbringer.known and ChaosIncarnate.known and Player.enemies < 4) and not self.cleave_apl then
@@ -3637,7 +3638,8 @@ actions+=/incinerate
 	end
 	if Conflagrate:Usable() and (
 		Conflagrate:Charges() > (Conflagrate:MaxCharges() - 1) or
-		(Target.boss and Target.timeToDie < (Player.gcd * Conflagrate:Charges()))
+		(Target.boss and Target.timeToDie < (Player.gcd * Conflagrate:Charges())) or
+		(Backdraft.known and Player.soul_shards.current > 1.5 and Conflagrate:ChargesFractional() > 1.5 and Backdraft:Down())
 	) then
 		return Conflagrate
 	end
