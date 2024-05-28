@@ -2173,6 +2173,14 @@ function Incinerate:Free()
 	return Backlash.known and Backlash:Up()
 end
 
+function Incinerate:ShardGain()
+	local gain = self.shard_gain
+	if DiabolicEmbers.known then
+		gain = gain + (gain * 1.00)
+	end
+	return gain
+end
+
 function Havoc:Duration()
 	local duration = self.buff_duration
 	if Pandemonium.known then
