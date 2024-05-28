@@ -2433,6 +2433,13 @@ function ChaosBolt:ShardCost()
 end
 RainOfFire.ShardCost = ChaosBolt.ShardCost
 
+function ChaosBolt:ShardGain()
+	if RitualOfRuin.known and Ability.Remains(RitualOfRuin) > 0 then
+		return Ability.ShardCost(self)
+	end
+	return 0
+end
+
 function Backdraft:Stack()
 	local stack = Ability.Stack(self)
 	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting() or SoulFire:Casting()) then
