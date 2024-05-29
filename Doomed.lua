@@ -3961,7 +3961,7 @@ actions.items+=/use_item,use_off_gcd=1,slot=trinket2,if=!variable.trinket_2_buff
 actions.items+=/use_item,use_off_gcd=1,slot=main_hand
 ]]
 	if Opt.trinket and self.use_cds then
-		if Trinket.BelorrelosTheSuncaller:Usable() and ((Target.boss and Target.timeToDie < 21) or (Player.TimeInCombat() > 20 and not SummonInfernal:Ready(20)) or not (Trinket1:Usable() or Trinket2:Usable())) then
+		if Trinket.BelorrelosTheSuncaller:Usable() and ((Target.boss and Target.timeToDie < 21) or (Player:TimeInCombat() > 20 and not SummonInfernal:Ready(20)) or not (Trinket1:Usable() or Trinket2:Usable())) then
 			return UseCooldown(Trinket.BelorrelosTheSuncaller)
 		end
 		if (self.infernal_active or (Target.boss and Target.timeToDie < 21)) then
