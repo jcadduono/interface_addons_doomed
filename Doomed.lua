@@ -1051,6 +1051,7 @@ MortalCoil.mana_cost = 2
 MortalCoil.buff_duration = 3
 MortalCoil.cooldown_duration = 45
 MortalCoil:SetVelocity(24)
+local PactOfGluttony = Ability:Add(386689, true, true)
 local SoulConduit = Ability:Add(215941, true, true)
 local SummonSoulkeeper = Ability:Add(386244, true, true, 386256)
 SummonSoulkeeper.buff_duration = 10
@@ -1320,7 +1321,6 @@ Backlash.buff_duration = 15
 local BurnToAshes = Ability:Add(387153, true, true, 387154)
 BurnToAshes.buff_duration = 20
 BurnToAshes.max_stack = 6
-BurnToAshes.talent_node = 71964
 local Cataclysm = Ability:Add(152108, false, true)
 Cataclysm.mana_cost = 1
 Cataclysm.cooldown_duration = 30
@@ -1337,8 +1337,6 @@ local ChaosBolt = Ability:Add(116858, false, true)
 ChaosBolt.shard_cost = 2
 ChaosBolt.triggers_combat = true
 ChaosBolt:SetVelocity(20)
-local Chaosbringer = Ability:Add(422057, false, true)
-Chaosbringer.talent_node = 71967
 local ChaosIncarnate = Ability:Add(387275, false, true)
 local Conflagrate = Ability:Add(17962, false, true)
 Conflagrate.cooldown_duration = 12.96
@@ -1358,9 +1356,7 @@ DimensionalRift.shard_gain = 0.3
 DimensionalRift.requires_charge = true
 local Eradication = Ability:Add(196412, false, true, 196414)
 Eradication.buff_duration = 7
-Eradication.talent_node = 71984
 local FireAndBrimstone = Ability:Add(196408, false, true)
-FireAndBrimstone.talent_node = 71982
 local Havoc = Ability:Add(80240, false, true)
 Havoc.buff_duration = 12
 Havoc.cooldown_duration = 30
@@ -1369,9 +1365,7 @@ Havoc:AutoAoe(false, 'cast')
 Havoc:TrackAuras()
 local ImpendingRuin = Ability:Add(387158, true, true) -- Ritual of Ruin progress
 ImpendingRuin.buff_duration = 3600
-ImpendingRuin.max_stack = 15
-local ImprovedImmolate = Ability:Add(387093, false, true)
-ImprovedImmolate.talent_node = 71976
+ImpendingRuin.max_stack = 20
 local Incinerate = Ability:Add(29722, false, true)
 Incinerate.mana_cost = 2
 Incinerate.shard_gain = 0.2
@@ -1380,13 +1374,11 @@ Incinerate:SetVelocity(25)
 local Inferno = Ability:Add(270545, false, true)
 local InternalCombustion = Ability:Add(266134, false, true)
 local MasterRitualist = Ability:Add(387165, false, true)
-MasterRitualist.talent_node = 71962
 local Mayhem = Ability:Add(387506, false, true)
 local Pandemonium = Ability:Add(387509, false, true)
 local Pyrogenics = Ability:Add(387095, false, true, 387096)
 Pyrogenics.buff_duration = 2
 local RagingDemonfire = Ability:Add(387166, false, true)
-RagingDemonfire.talent_node = 72063
 local RainOfChaos = Ability:Add(266086, true, true, 266087)
 RainOfChaos.buff_duration = 30
 local RainOfFire = Ability:Add(5740, false, true, 42223)
@@ -1403,7 +1395,7 @@ RitualOfRuin.buff_duration = 30
 local RoaringBlaze = Ability:Add(205184, false, true, 265931)
 RoaringBlaze.buff_duration = 8
 local Ruin = Ability:Add(387103, false, true)
-Ruin.talent_node = 72062
+local ScaldingFlames = Ability:Add(388832, false, true)
 local Shadowburn = Ability:Add(17877, false, true)
 Shadowburn.buff_duration = 5
 Shadowburn.cooldown_duration = 12
@@ -1663,6 +1655,9 @@ function InventoryItem:Usable(seconds)
 end
 
 -- Inventory Items
+local DemonicHealthstone = InventoryItem:Add(224464)
+DemonicHealthstone.created_by = CreateHealthstone
+DemonicHealthstone.max_charges = 3
 local Healthstone = InventoryItem:Add(5512)
 Healthstone.created_by = CreateHealthstone
 Healthstone.max_charges = 3
@@ -1831,10 +1826,16 @@ function Player:UpdateKnown()
 		end
 	end
 
+
+	ShadowBolt = ShadowBoltDemonology
+	if self.spec == SPEC.DESTRUCTION then
+		ShadowBolt.known = false
+		Corruption.known = false
+		Incinerate.known = true
+		Immolate.known = true
+	end
 	if ShadowBoltAffliction.known then
 		ShadowBolt = ShadowBoltAffliction
-	elseif ShadowBoltDemonology.known then
-		ShadowBolt = ShadowBoltDemonology
 	end
 	if DrainSoul.known then
 		ShadowBolt.known = false
@@ -2176,8 +2177,8 @@ end
 
 function Immolate:Duration()
 	local duration = self.buff_duration
-	if ImprovedImmolate.known then
-		duration = duration + (3 * ImprovedImmolate.rank)
+	if ScaldingFlames.known then
+		duration = duration + 3
 	end
 	return duration
 end
@@ -2429,7 +2430,7 @@ end
 function ImpendingRuin:MaxStack()
 	local stack = self.max_stack
 	if MasterRitualist.known then
-		stack = stack - ceil(2.5 * MasterRitualist.rank)
+		stack = stack - 5
 	end
 	return stack
 end
@@ -2788,6 +2789,13 @@ APL[SPEC.AFFLICTION].Main = function(self)
 	self.use_cds = Target.boss or Target.timeToDie > Opt.cd_ttd or (SoulRot.known and SoulRot:Ticking() > 0) or (DarkSoulMisery.known and DarkSoulMisery:Up()) or SummonDarkglare:Up()
 	self.use_seed = (SowTheSeeds.known and Player.enemies >= 3) or (SiphonLife.known and Player.enemies >= 5) or Player.enemies >= 8
 	Player.dot_count = Agony:Ticking() + Corruption:Ticking() + UnstableAffliction:Ticking() + (SiphonLife.known and SiphonLife:Ticking() or 0) + (PhantomSingularity.known and PhantomSingularity:Ticking() or 0) + (VileTaint.known and VileTaint:Ticking() or 0)
+	if Player.health.pct < Opt.heal then
+		if DemonicHealthstone:Usable() then
+			UseExtra(DemonicHealthstone)
+		elseif Healthstone:Usable() then
+			UseExtra(Healthstone)
+		end
+	end
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -2803,7 +2811,7 @@ actions.precombat+=/seed_of_corruption,if=spell_targets.seed_of_corruption_aoe>=
 actions.precombat+=/haunt
 actions.precombat+=/shadow_bolt,if=!talent.haunt.enabled&spell_targets.seed_of_corruption_aoe<3&!equipped.169314
 ]]
-		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
+		if Opt.healthstone and CreateHealthstone:Usable() and (Healthstone:Charges() + DemonicHealthstone:Charges()) == 0 then
 			return CreateHealthstone
 		end
 		if GrimoireOfSacrifice:Usable() then
@@ -3072,6 +3080,13 @@ end
 
 APL[SPEC.DEMONOLOGY].Main = function(self)
 	self:variables()
+	if Player.health.pct < Opt.heal then
+		if DemonicHealthstone:Usable() then
+			UseExtra(DemonicHealthstone)
+		elseif Healthstone:Usable() then
+			UseExtra(Healthstone)
+		end
+	end
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -3095,7 +3110,7 @@ actions.precombat+=/power_siphon
 actions.precombat+=/demonbolt,if=!buff.power_siphon.up
 actions.precombat+=/shadow_bolt
 ]]
-		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
+		if Opt.healthstone and CreateHealthstone:Usable() and (Healthstone:Charges() + DemonicHealthstone:Charges()) == 0 then
 			return CreateHealthstone
 		end
 		if not Pet.active then
@@ -3504,6 +3519,13 @@ end
 
 APL[SPEC.DESTRUCTION].Main = function(self)
 	self:variables()
+	if Player.health.pct < Opt.heal then
+		if DemonicHealthstone:Usable() then
+			UseExtra(DemonicHealthstone)
+		elseif Healthstone:Usable() then
+			UseExtra(Healthstone)
+		end
+	end
 
 	if Player:TimeInCombat() == 0 then
 --[[
@@ -3529,7 +3551,7 @@ actions.precombat+=/soul_fire
 actions.precombat+=/cataclysm,if=raid_event.adds.in>15
 actions.precombat+=/incinerate
 ]]
-		if Opt.healthstone and Healthstone:Charges() == 0 and CreateHealthstone:Usable() then
+		if Opt.healthstone and CreateHealthstone:Usable() and (Healthstone:Charges() + DemonicHealthstone:Charges()) == 0 then
 			return CreateHealthstone
 		end
 		if GrimoireOfSacrifice:Usable() then
@@ -3567,7 +3589,7 @@ actions.precombat+=/incinerate
 	end
 --[[
 actions=call_action_list,name=variables
-actions+=/call_action_list,name=aoe,if=(active_enemies>=3-(talent.inferno&!talent.chaosbringer))&!(!talent.inferno&talent.chaosbringer&talent.chaos_incarnate&active_enemies<4)&!variable.cleave_apl
+actions+=/call_action_list,name=aoe,if=(active_enemies>=3-talent.inferno)&!variable.cleave_apl
 actions+=/call_action_list,name=cleave,if=active_enemies!=1|variable.cleave_apl
 actions+=/call_action_list,name=ogcd
 actions+=/call_action_list,name=items
@@ -3581,7 +3603,7 @@ actions+=/channel_demonfire,if=dot.immolate.remains>cast_time&set_bonus.tier30_4
 actions+=/chaos_bolt,if=cooldown.summon_infernal.remains=0&soul_shard>4&talent.crashing_chaos
 actions+=/summon_infernal
 actions+=/chaos_bolt,if=pet.infernal.active|pet.blasphemy.active|soul_shard>=4
-actions+=/channel_demonfire,if=talent.ruin.rank>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
+actions+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
 actions+=/chaos_bolt,if=buff.rain_of_chaos.remains>cast_time
 actions+=/chaos_bolt,if=buff.backdraft.up
 actions+=/channel_demonfire,if=!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
@@ -3591,7 +3613,7 @@ actions+=/conflagrate,if=charges>(max_charges-1)|fight_remains<gcd.max*charges
 actions+=/conflagrate,if=talent.backdraft&soul_shard>1.5&charges_fractional>1.5&buff.backdraft.down
 actions+=/incinerate
 ]]
-	if (Player.enemies >= (3 - (Inferno.known and not Chaosbringer.known and 1 or 0))) and not (not Inferno.known and Chaosbringer.known and ChaosIncarnate.known and Player.enemies < 4) and not self.cleave_apl then
+	if (Player.enemies >= (3 - (Inferno.known and 1 or 0))) and not self.cleave_apl then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
@@ -3648,7 +3670,7 @@ actions+=/incinerate
 	if ChaosBolt:Usable() and (Pet.infernal_count > 0 or Player.soul_shards.current >= 4) then
 		return ChaosBolt
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and Ruin.rank > 1 and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and Immolate:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and Immolate:Remains() > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
 	if ChaosBolt:Usable() and (
@@ -3686,7 +3708,7 @@ actions.aoe+=/call_action_list,name=havoc,if=havoc_active&havoc_remains>gcd.max&
 actions.aoe+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
 actions.aoe+=/rain_of_fire,if=pet.infernal.active|pet.blasphemy.active
 actions.aoe+=/rain_of_fire,if=fight_remains<12
-actions.aoe+=/rain_of_fire,if=soul_shard>=(4.5-0.1*active_dot.immolate)&time>5
+actions.aoe+=/rain_of_fire,if=soul_shard>=(4.5-talent.inferno-0.1*active_dot.immolate)&time>5
 actions.aoe+=/chaos_bolt,if=soul_shard>3.5-(0.1*active_enemies)&!talent.rain_of_fire
 actions.aoe+=/cataclysm,if=raid_event.adds.in>15
 actions.aoe+=/havoc,target_if=min:((-target.time_to_die)<?-15)+dot.immolate.remains+99*(self.target=target),if=(!cooldown.summon_infernal.up|!talent.summon_infernal|(talent.inferno&active_enemies>4))&target.time_to_die>8
@@ -3720,7 +3742,7 @@ actions.aoe+=/incinerate
 	if RainOfFire:Usable() and (
 		Pet.infernal_count > 0 or
 		(Target.boss and Target.timeToDie < 12) or
-		(Player.soul_shards.current >= (4.5 - (0.1 * Immolate:Ticking())) and Player:TimeInCombat() > 5)
+		(Player.soul_shards.current >= (4.5 - (Inferno.known and 1 or 0) - (0.1 * Immolate:Ticking())) and Player:TimeInCombat() > 5)
 	) then
 		return RainOfFire
 	end
@@ -3799,7 +3821,7 @@ actions.cleave+=/havoc,target_if=min:((-target.time_to_die)<?-15)+dot.immolate.r
 actions.cleave+=/dimensional_rift,if=soul_shard<4.5&variable.pool_soul_shards
 actions.cleave+=/chaos_bolt,if=pet.infernal.active|pet.blasphemy.active|soul_shard>=4
 actions.cleave+=/summon_infernal
-actions.cleave+=/channel_demonfire,if=talent.ruin.rank>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))
+actions.cleave+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))
 actions.cleave+=/chaos_bolt,if=soul_shard>3.5
 actions.cleave+=/chaos_bolt,if=buff.rain_of_chaos.remains>cast_time
 actions.cleave+=/chaos_bolt,if=buff.backdraft.up
@@ -3867,7 +3889,7 @@ actions.cleave+=/incinerate
 		if SummonInfernal:Usable() then
 			UseCooldown(SummonInfernal)
 		end
-		if ChannelDemonfire:Usable() and Ruin.rank > 1 and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) then
+		if ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) then
 			UseCooldown(ChannelDemonfire)
 		end
 	end
@@ -3916,12 +3938,12 @@ APL[SPEC.DESTRUCTION].havoc = function(self)
 --[[
 actions.havoc=conflagrate,if=talent.backdraft&buff.backdraft.down&soul_shard>=1&soul_shard<=4
 actions.havoc+=/soul_fire,if=cast_time<havoc_remains&soul_shard<2.5
-actions.havoc+=/channel_demonfire,if=soul_shard<4.5&talent.raging_demonfire.rank=2
+actions.havoc+=/channel_demonfire,if=soul_shard<4.5&talent.raging_demonfire
 actions.havoc+=/immolate,target_if=min:dot.immolate.remains+100*debuff.havoc.remains,if=(((dot.immolate.refreshable&variable.havoc_immo_time<5.4)&target.time_to_die>5)|((dot.immolate.remains<2&dot.immolate.remains<havoc_remains)|!dot.immolate.ticking|variable.havoc_immo_time<2)&target.time_to_die>11)&soul_shard<4.5
 actions.havoc+=/chaos_bolt,if=((talent.cry_havoc&!talent.inferno)|!talent.rain_of_fire)&cast_time<havoc_remains
-actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains&(active_enemies<=3-talent.inferno+(talent.chaosbringer&!talent.inferno))
+actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains&(active_enemies<=3-talent.inferno)
 actions.havoc+=/rain_of_fire,if=active_enemies>=3&talent.inferno
-actions.havoc+=/rain_of_fire,if=(active_enemies>=4-talent.inferno+talent.chaosbringer)
+actions.havoc+=/rain_of_fire,if=active_enemies>=4-talent.inferno
 actions.havoc+=/rain_of_fire,if=active_enemies>2&(talent.avatar_of_destruction|(talent.rain_of_chaos&buff.rain_of_chaos.up))&talent.inferno.enabled
 actions.havoc+=/channel_demonfire,if=soul_shard<4.5
 actions.havoc+=/conflagrate,if=!talent.backdraft
@@ -3934,7 +3956,7 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	if SoulFire:Usable() and SoulFire:CastTime() < self.havoc_remains and Player.soul_shards.current < 2.5 then
 		return SoulFire
 	end
-	if ChannelDemonfire:Usable() and Player.soul_shards.current < 4.5 and RagingDemonfire.rank >= 2 then
+	if ChannelDemonfire:Usable() and Player.soul_shards.current < 4.5 and RagingDemonfire.known then
 		UseCooldown(ChannelDemonfire)
 	end
 	if Immolate:Usable() and Player.soul_shards.current < 4.5 and (
@@ -3949,13 +3971,13 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	end
 	if ChaosBolt:Usable() and ChaosBolt:CastTime() < self.havoc_remains and (
 		(not RainOfFire.known or (CryHavoc.known and not Inferno.known)) or
-		(Player.enemies <= (3 - (Inferno.known and 1 or 0) + (Chaosbringer.known and not Inferno.known and 1 or 0)))
+		(Player.enemies <= (3 - (Inferno.known and 1 or 0)))
 	) then
 		return ChaosBolt
 	end
 	if RainOfFire:Usable() and (
 		(Player.enemies >= 3 and Inferno.known) or
-		(Player.enemies >= (4 - (Inferno.known and 1 or 0) + (Chaosbringer.known and 1 or 0))) or
+		(Player.enemies >= (4 - (Inferno.known and 1 or 0))) or
 		(Player.enemies > 2 and Inferno.known and (AvatarOfDestruction.known or (RainOfChaos.known and RainOfChaos:Up())))
 	) then
 		return RainOfFire
