@@ -24,6 +24,8 @@ local min = math.min
 local max = math.max
 local ceil = math.ceil
 local floor = math.floor
+local GetActionInfo = _G.GetActionInfo
+local GetBindingKey = _G.GetBindingKey
 local GetPowerRegenForPowerType = _G.GetPowerRegenForPowerType
 local GetSpellCharges = C_Spell.GetSpellCharges
 local GetSpellCooldown = C_Spell.GetSpellCooldown
@@ -125,6 +127,7 @@ local function InitOpts()
 		cooldown = true,
 		spell_swipe = true,
 		dimmer = true,
+		keybinds = true,
 		miss_effect = true,
 		boss_only = false,
 		interrupt = true,
@@ -145,6 +148,7 @@ end
 local UI = {
 	anchor = {},
 	buttons = {},
+	remains_list = {},
 }
 
 -- combat event related functions container
@@ -1632,8 +1636,13 @@ Pet.Overfiend = SummonedPet:Add(217429, 8, AvatarOfDestruction)
 
 -- Start Inventory Items
 
-local InventoryItem, inventoryItems, Trinket = {}, {}, {}
+local InventoryItem, Trinket = {}, {}
 InventoryItem.__index = InventoryItem
+
+local InventoryItems = {
+	all = {},
+	byItemId = {},
+}
 
 function InventoryItem:Add(itemId)
 	local name, _, _, _, _, _, _, _, _, icon = GetItemInfo(itemId)
@@ -1645,7 +1654,8 @@ function InventoryItem:Add(itemId)
 		off_gcd = true,
 	}
 	setmetatable(item, self)
-	inventoryItems[#inventoryItems + 1] = item
+	InventoryItems.all[#InventoryItems.all + 1] = item
+	InventoryItems.byItemId[itemId] = item
 	return item
 end
 
@@ -2620,9 +2630,12 @@ function ImpGangBoss:ApplyAura(guid)
 end
 
 function DemonicPower:ApplyAura(guid)
-	local pet = SummonedPets:Find(guid)
-	if pet then
-		pet:Empower(guid, self:Duration())
+	local uid = ToUID(guid)
+	if uid then
+		local pet = SummonedPets.byUnitId[uid]
+		if pet then
+			pet:Empower(guid, self:Duration())
+		end
 	end
 	if ReignOfTyranny.known then
 		for guid, unit in next, Pet.DemonicTyrant.active_units do
@@ -3269,20 +3282,6 @@ actions+=/shadow_bolt
 	if self.use_cds and SummonVilefiend:Usable() and not SummonDemonicTyrant:Ready(45) then
 		UseCooldown(SummonVilefiend)
 	end
-	if DoomBrand.known then
-		if Demonbolt:Usable() and DemonicCore:Up() and not Demonbolt:Previous() and (
-			((not SoulStrike.known or not SoulStrike:Ready(Player.gcd * 2)) and Player.soul_shards.current < 4) or
-			Player.soul_shards.current < (4 - (Player.enemies > 2 and 1 or 0))
-		) then
-			return Demonbolt
-		end
-		if PowerSiphon:Usable() and DemonicCore:Down() and Pet.imp_count >= 2 and (
-			DoomBrand:Down() or
-			(DoomBrand:Remains() < (Player.gcd + Demonbolt:TravelTime() + (HandOfGuldan:Traveling() and 3 or 0)))
-		) then
-			UseCooldown(PowerSiphon)
-		end
-	end
 	if self.use_cds and DemonicStrength:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) then
 		UseCooldown(DemonicStrength)
 	end
@@ -3324,7 +3323,6 @@ actions+=/shadow_bolt
 			(Player.soul_shards.current < 4 and not SoulStrike.known) or
 			(SoulStrike.known and not SoulStrike:Ready(Player.gcd * 2))
 		)) or
-		(DoomBrand.known and DoomBrand:Remains() > 10 and Player.soul_shards.current < 4) or
 		(Target.boss and Target.timeToDie < (DemonicCore:Stack() * Player.gcd)) or
 		(PowerSiphon.known and PowerSiphon:Ready(4) and Player.soul_shards.current < 4)
 	) then
@@ -4201,6 +4199,9 @@ function UI:ScanActionButtons()
 		self.buttons[#self.buttons + 1] = _G['MultiBarRightButton' .. i]
 		self.buttons[#self.buttons + 1] = _G['MultiBarBottomLeftButton' .. i]
 		self.buttons[#self.buttons + 1] = _G['MultiBarBottomRightButton' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBar5Button' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBar6Button' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBar7Button' .. i]
 	end
 	for i = 1, 10 do
 		self.buttons[#self.buttons + 1] = _G['PetActionButton' .. i]
@@ -4250,6 +4251,91 @@ function UI:UpdateGlows()
 	end
 end
 
+UI.KeybindPatterns = {
+	['ALT%-'] = 'a-',
+	['CTRL%-'] = 'c-',
+	['SHIFT%-'] = 's-',
+	['META%-'] = 'm-',
+	['NUMPAD'] = 'NP',
+	['PLUS'] = '%+',
+	['MINUS'] = '%-',
+	['MULTIPLY'] = '%*',
+	['DIVIDE'] = '%/',
+	['BACKSPACE'] = 'BS',
+	['BUTTON'] = 'MB',
+	['CLEAR'] = 'Clr',
+	['DELETE'] = 'Del',
+	['END'] = 'End',
+	['HOME'] = 'Home',
+	['INSERT'] = 'Ins',
+	['MOUSEWHEELDOWN'] = 'MwD',
+	['MOUSEWHEELUP'] = 'MwU',
+	['PAGEDOWN'] = 'PgDn',
+	['PAGEUP'] = 'PgUp',
+	['CAPSLOCK'] = 'Caps',
+	['NUMLOCK'] = 'NumL',
+	['SCROLLLOCK'] = 'ScrL',
+	['SPACEBAR'] = 'Space',
+	['SPACE'] = 'Space',
+	['TAB'] = 'Tab',
+	['DOWNARROW'] = 'Down',
+	['LEFTARROW'] = 'Left',
+	['RIGHTARROW'] = 'Right',
+	['UPARROW'] = 'Up',
+}
+
+function UI:GetButtonKeybind(button)
+	local bind = button.bindingAction or (button.config and button.config.keyBoundTarget)
+	if bind then
+		local key = GetBindingKey(bind)
+		if key then
+			key = key:gsub(' ', ''):upper()
+			for pattern, short in next, self.KeybindPatterns do
+				key = key:gsub(pattern, short)
+			end
+			return key
+		end
+	end
+end
+
+function UI:GetButtonAction(button)
+	local action = (button.CalculateAction and button:CalculateAction()) or button:GetAttribute('action') or 0
+	if action > 0 then
+		local actionType, id, subType = GetActionInfo(action)
+		if id and id > 0 then
+			if (actionType == 'item' or (actionType == 'macro' and subType == 'item')) then
+				return 'item', id
+			elseif (actionType == 'spell' or (actionType == 'macro' and subType == 'spell')) then
+				return 'spell', id
+			end
+		end
+	end
+end
+
+function UI:UpdateBindings()
+	for i, item in next, InventoryItems.all do
+		item.keybind = nil
+	end
+	for a, ability in next, Abilities.all do
+		ability.keybind = nil
+	end
+	if not Opt.keybinds then
+		return
+	end
+	local bind, action, id
+	for b, button in next, self.buttons do
+		bind = self:GetButtonKeybind(button)
+		if bind then
+			local action, id = self:GetButtonAction(button)
+			if action == 'item' and InventoryItems.byItemId[id] then
+				InventoryItems.byItemId[id].keybind = bind
+			elseif action =='spell' and Abilities.bySpellId[id] then
+				Abilities.bySpellId[id].keybind = bind
+			end
+		end
+	end
+end
+
 function UI:UpdateDraggable()
 	local draggable = not (Opt.locked or Opt.snap or Opt.aoe)
 	doomedPanel:SetMovable(not Opt.snap)
@@ -4282,8 +4368,10 @@ end
 
 function UI:UpdateScale()
 	doomedPanel:SetSize(64 * Opt.scale.main, 64 * Opt.scale.main)
+	doomedPanel.text:SetScale(Opt.scale.main)
 	doomedPreviousPanel:SetSize(64 * Opt.scale.previous, 64 * Opt.scale.previous)
 	doomedCooldownPanel:SetSize(64 * Opt.scale.cooldown, 64 * Opt.scale.cooldown)
+	doomedCooldownPanel.text:SetScale(Opt.scale.cooldown)
 	doomedInterruptPanel:SetSize(64 * Opt.scale.interrupt, 64 * Opt.scale.interrupt)
 	doomedExtraPanel:SetSize(64 * Opt.scale.extra, 64 * Opt.scale.extra)
 end
@@ -4390,7 +4478,7 @@ end
 
 function UI:UpdateDisplay()
 	Timer.display = 0
-	local border, dim, dim_cd, text_cd, text_center, text_tl, text_tr
+	local border, dim, dim_cd, text_center, text_tl, text_tr, text_bl, text_cd_center, text_cd_tr
 	local channel = Player.channel
 
 	if Opt.dimmer then
@@ -4411,13 +4499,19 @@ function UI:UpdateDisplay()
 		if Player.main_freecast then
 			border = 'freecast'
 		end
+		if Opt.keybinds and Player.main.keybind then
+			text_tr = Player.main.keybind
+		end
 	end
 	if Player.cd then
 		if Player.cd.requires_react then
 			local react = Player.cd:React()
 			if react > 0 then
-				text_cd = format('%.1f', react)
+				text_cd_center = format('%.1f', react)
 			end
+		end
+		if Opt.keybinds and Player.cd.keybind then
+			text_cd_tr = Player.cd.keybind
 		end
 	end
 	if Player.wait_time then
@@ -4449,12 +4543,10 @@ function UI:UpdateDisplay()
 			text_tl = Player.dot_count
 		end
 		if Opt.tyrant then
-			local remains
-			text_tr = ''
 			for _, unit in next, Pet.Darkglare.active_units do
 				remains = unit.expires - Player.time
 				if remains > 0 then
-					text_tr = format('%s%.1fs\n', text_tr, remains)
+					self.remains_list[#self.remains_list + 1] = remains
 				end
 			end
 		end
@@ -4469,35 +4561,24 @@ function UI:UpdateDisplay()
 			end
 		end
 		if Opt.tyrant then
+			text_bl = ''
 			if ReignOfTyranny.known and (Pet.tyrant_cd < 5 or SummonDemonicTyrant:Casting()) then
-				text_tr = format('%d%%\n', Pet.tyrant_available_power)
-			else
-				text_tr = ''
+				text_bl = format('%s\n%d%%', text_bl, Pet.tyrant_available_power)
 			end
 			local remains
 			for _, unit in next, Pet.DemonicTyrant.active_units do
-				if unit.initial then
-					remains = unit.expires - Player.time
-					if unit.power > 100 and remains > 5 then
-						text_tr = format('%s%d%%\n', text_tr, unit.power)
-					elseif remains > 0 then
-						text_tr = format('%s%.1fs\n', text_tr, remains)
-					end
-				end
-			end
-			for _, unit in next, Pet.DemonicTyrant.active_units do
-				if not unit.initial then
-					remains = unit.expires - Player.time
-					if remains > 0 then
-						text_tr = format('%s%.1fs\n', text_tr, remains)
-					end
+				remains = unit.expires - Player.time
+				if unit.initial and unit.power > 100 and remains > 5 then
+					text_bl = format('%s\n%d%%', text_bl, unit.power)
+				elseif remains > 0 then
+					self.remains_list[#self.remains_list + 1] = remains
 				end
 			end
 		end
 	elseif Player.spec == SPEC.DESTRUCTION then
 		if Opt.pet_count then
 			if Opt.pet_count == 'imps' then
-				if Pet.imp_count > 0 then
+				if Pet.infernal_count > 0 then
 					text_tl = Pet.infernal_count
 				end
 			elseif Pet.count > 0 then
@@ -4505,30 +4586,25 @@ function UI:UpdateDisplay()
 			end
 		end
 		if Opt.tyrant then
-			local remains
-			text_tr = ''
 			for _, unit in next, Pet.Infernal.active_units do
-				if unit.initial then
-					remains = unit.expires - Player.time
-					if remains > 0 then
-						text_tr = format('%s%.1fs\n', text_tr, remains)
-					end
-				end
-			end
-			for _, unit in next, Pet.Infernal.active_units do
-				if not unit.initial then
-					remains = unit.expires - Player.time
-					if remains > 0 then
-						text_tr = format('%s%.1fs\n', text_tr, remains)
-					end
+				remains = unit.expires - Player.time
+				if remains > 0 then
+					self.remains_list[#self.remains_list + 1] = remains
 				end
 			end
 			for _, unit in next, Pet.Overfiend.active_units do
 				remains = unit.expires - Player.time
 				if remains > 0 then
-					text_tr = format('%s%.1fs\n', text_tr, remains)
+					self.remains_list[#self.remains_list + 1] = remains
 				end
 			end
+		end
+	end
+	if #self.remains_list > 0 then
+		table.sort(self.remains_list)
+		for i = #self.remains_list, 1, -1 do
+			text_bl = format('%.1fs\n%s', self.remains_list[i], text_bl or '')
+			self.remains_list[i] = nil
 		end
 	end
 	if border ~= doomedPanel.border.overlay then
@@ -4540,9 +4616,10 @@ function UI:UpdateDisplay()
 	doomedPanel.text.center:SetText(text_center)
 	doomedPanel.text.tl:SetText(text_tl)
 	doomedPanel.text.tr:SetText(text_tr)
-	--doomedPanel.text.bl:SetText(format('%.1fs', Target.timeToDie))
-	doomedCooldownPanel.text:SetText(text_cd)
+	doomedPanel.text.bl:SetText(text_bl)
 	doomedCooldownPanel.dimmer:SetShown(dim_cd)
+	doomedCooldownPanel.text.center:SetText(text_cd_center)
+	doomedCooldownPanel.text.tr:SetText(text_cd_tr)
 end
 
 function UI:UpdateCombat()
@@ -4933,19 +5010,19 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 			Trinket2.itemId = 0
 		end
 	end
-	for i = 1, #inventoryItems do
-		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId or 0)
-		inventoryItems[i].can_use = inventoryItems[i].name and true or false
+	for _, i in next, InventoryItems.all do
+		i.name, _, _, _, _, _, _, _, equipType, i.icon = GetItemInfo(i.itemId or 0)
+		i.can_use = i.name and true or false
 		if equipType and equipType ~= '' then
 			hasCooldown = 0
-			_, inventoryItems[i].equip_slot = Player:Equipped(inventoryItems[i].itemId)
-			if inventoryItems[i].equip_slot then
-				_, _, hasCooldown = GetInventoryItemCooldown('player', inventoryItems[i].equip_slot)
+			_, i.equip_slot = Player:Equipped(i.itemId)
+			if i.equip_slot then
+				_, _, hasCooldown = GetInventoryItemCooldown('player', i.equip_slot)
 			end
-			inventoryItems[i].can_use = hasCooldown == 1
+			i.can_use = hasCooldown == 1
 		end
-		if Player.item_use_blacklist[inventoryItems[i].itemId] then
-			inventoryItems[i].can_use = false
+		if Player.item_use_blacklist[i.itemId] then
+			i.can_use = false
 		end
 	end
 
@@ -5001,6 +5078,11 @@ end
 
 function Events:ACTIONBAR_SLOT_CHANGED()
 	UI:UpdateGlows()
+	UI:UpdateBindings()
+end
+
+function Events:UPDATE_BINDINGS()
+	UI:UpdateBindings()
 end
 
 function Events:GROUP_ROSTER_UPDATE()
@@ -5260,6 +5342,12 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		end
 		return Status('Dim main ability icon when you don\'t have enough resources to use it', Opt.dimmer)
 	end
+	if startsWith(msg[1], 'key') or startsWith(msg[1], 'bind') then
+		if msg[2] then
+			Opt.keybinds = msg[2] == 'on'
+		end
+		return Status('Show keybinding text on main ability icon (topright)', Opt.keybinds)
+	end
 	if msg[1] == 'miss' then
 		if msg[2] then
 			Opt.miss_effect = msg[2] == 'on'
@@ -5362,7 +5450,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		if msg[2] then
 			Opt.tyrant = msg[2] == 'on'
 		end
-		return Status('Show Tyrant/Infernal/Darkglare power/remains (topright)', Opt.tyrant)
+		return Status('Show Tyrant/Infernal/Darkglare power/remains (bottomleft)', Opt.tyrant)
 	end
 	if msg[1] == 'reset' then
 		UI:Reset()
@@ -5381,6 +5469,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		'always |cFF00C000on|r/|cFFC00000off|r - show the ' .. ADDON .. ' UI without a target',
 		'cd |cFF00C000on|r/|cFFC00000off|r - use ' .. ADDON .. ' for cooldown management',
 		'swipe |cFF00C000on|r/|cFFC00000off|r - show spell casting swipe animation on main ability icon',
+		'keybind |cFF00C000on|r/|cFFC00000off|r - show keybinding text on main ability icon (topright)',
 		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough resources to use it',
 		'miss |cFF00C000on|r/|cFFC00000off|r - red border around previous ability when it fails to hit',
 		'aoe |cFF00C000on|r/|cFFC00000off|r - allow clicking main ability icon to toggle amount of targets (disables moving)',
@@ -5395,7 +5484,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		'heal |cFFFFD000[percent]|r - health percentage threshold to recommend self healing spells (default is 60%, 0 to disable)',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
 		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFFFD000infernals|r/|cFFC00000off|r  - Show summoned pet counter (topleft)',
-		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Tyrant/Infernal/Darkglare power/remains (topright)',
+		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Tyrant/Infernal/Darkglare power/remains (bottomleft)',
 		'|cFFFFD000reset|r - reset the location of the ' .. ADDON .. ' UI to default',
 	} do
 		print('  ' .. SLASH_Doomed1 .. ' ' .. cmd)
