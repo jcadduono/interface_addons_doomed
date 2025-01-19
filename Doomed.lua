@@ -144,7 +144,7 @@ end
 -- UI related functions container
 local UI = {
 	anchor = {},
-	glows = {},
+	buttons = {},
 }
 
 -- combat event related functions container
@@ -212,6 +212,7 @@ local APL = {
 
 -- current player information
 local Player = {
+	initialized = false,
 	time = 0,
 	time_diff = 0,
 	ctime = 0,
@@ -2051,14 +2052,16 @@ end
 
 function Player:Init()
 	local _
-	if #UI.glows == 0 then
+	if not self.initialized then
+		UI:ScanActionButtons()
 		UI:DisableOverlayGlows()
 		UI:CreateOverlayGlows()
 		UI:HookResourceFrame()
+		self.guid = UnitGUID('player')
+		self.name = UnitName('player')
+		self.initialized = true
 	end
 	doomedPreviousPanel.ability = nil
-	self.guid = UnitGUID('player')
-	self.name = UnitName('player')
 	_, self.instance = IsInInstance()
 	Events:GROUP_ROSTER_UPDATE()
 	Events:PLAYER_SPECIALIZATION_CHANGED('player')
@@ -4135,8 +4138,8 @@ hooksecurefunc('ActionButton_ShowOverlayGlow', UI.DenyOverlayGlow) -- Disable Bl
 function UI:UpdateGlowColorAndScale()
 	local w, h, glow
 	local r, g, b = Opt.glow.color.r, Opt.glow.color.g, Opt.glow.color.b
-	for i = 1, #self.glows do
-		glow = self.glows[i]
+	for i, button in next, self.buttons do
+		glow = button['glow' .. ADDON]
 		w, h = glow.button:GetSize()
 		glow:SetSize(w * 1.4, h * 1.4)
 		glow:SetPoint('TOPLEFT', glow.button, 'TOPLEFT', -w * 0.2 * Opt.scale.glow, h * 0.2 * Opt.scale.glow)
@@ -4157,60 +4160,70 @@ function UI:DisableOverlayGlows()
 	end
 end
 
-function UI:CreateOverlayGlows()
-	local GenerateGlow = function(button)
-		if button then
-			local glow = CreateFrame('Frame', nil, button, 'ActionBarButtonSpellActivationAlert')
-			glow:Hide()
-			glow.ProcStartAnim:Play() -- will bug out if ProcLoop plays first
-			glow.button = button
-			self.glows[#self.glows + 1] = glow
-		end
-	end
-	for i = 1, 12 do
-		GenerateGlow(_G['ActionButton' .. i])
-		GenerateGlow(_G['MultiBarLeftButton' .. i])
-		GenerateGlow(_G['MultiBarRightButton' .. i])
-		GenerateGlow(_G['MultiBarBottomLeftButton' .. i])
-		GenerateGlow(_G['MultiBarBottomRightButton' .. i])
-	end
-	for i = 1, 10 do
-		GenerateGlow(_G['PetActionButton' .. i])
-	end
+function UI:ScanActionButtons()
+	wipe(self.buttons)
 	if Bartender4 then
 		for i = 1, 120 do
-			GenerateGlow(_G['BT4Button' .. i])
+			self.buttons[#self.buttons + 1] = _G['BT4Button' .. i]
 		end
-	end
-	if Dominos then
-		for i = 1, 60 do
-			GenerateGlow(_G['DominosActionButton' .. i])
+		for i = 1, 10 do
+			self.buttons[#self.buttons + 1] = _G['BT4PetButton' .. i]
 		end
+		return
 	end
 	if ElvUI then
 		for b = 1, 6 do
 			for i = 1, 12 do
-				GenerateGlow(_G['ElvUI_Bar' .. b .. 'Button' .. i])
+				self.buttons[#self.buttons + 1] = _G['ElvUI_Bar' .. b .. 'Button' .. i]
 			end
 		end
+		return
 	end
 	if LUI then
 		for b = 1, 6 do
 			for i = 1, 12 do
-				GenerateGlow(_G['LUIBarBottom' .. b .. 'Button' .. i])
-				GenerateGlow(_G['LUIBarLeft' .. b .. 'Button' .. i])
-				GenerateGlow(_G['LUIBarRight' .. b .. 'Button' .. i])
+				self.buttons[#self.buttons + 1] = _G['LUIBarBottom' .. b .. 'Button' .. i]
+				self.buttons[#self.buttons + 1] = _G['LUIBarLeft' .. b .. 'Button' .. i]
+				self.buttons[#self.buttons + 1] = _G['LUIBarRight' .. b .. 'Button' .. i]
 			end
 		end
+		return
+	end
+	if Dominos then
+		for i = 1, 60 do
+			self.buttons[#self.buttons + 1] = _G['DominosActionButton' .. i]
+		end
+		-- fallthrough because Dominos re-uses Blizzard action buttons
+	end
+	for i = 1, 12 do
+		self.buttons[#self.buttons + 1] = _G['ActionButton' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBarLeftButton' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBarRightButton' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBarBottomLeftButton' .. i]
+		self.buttons[#self.buttons + 1] = _G['MultiBarBottomRightButton' .. i]
+	end
+	for i = 1, 10 do
+		self.buttons[#self.buttons + 1] = _G['PetActionButton' .. i]
+	end
+end
+
+function UI:CreateOverlayGlows()
+	local glow
+	for i, button in next, self.buttons do
+		glow = button['glow' .. ADDON] or CreateFrame('Frame', nil, button, 'ActionBarButtonSpellActivationAlert')
+		glow:Hide()
+		glow.ProcStartAnim:Play() -- will bug out if ProcLoop plays first
+		glow.button = button
+		button['glow' .. ADDON] = glow
 	end
 	self:UpdateGlowColorAndScale()
 end
 
 function UI:UpdateGlows()
 	local glow, icon
-	for i = 1, #self.glows do
-		glow = self.glows[i]
-		icon = glow.button.icon:GetTexture()
+	for i, button in next, self.buttons do
+		glow = button['glow' .. ADDON]
+		icon = button.icon:GetTexture()
 		if icon and glow.button.icon:IsVisible() and (
 			(Opt.glow.main and Player.main and icon == Player.main.icon) or
 			(Opt.glow.cooldown and Player.cd and icon == Player.cd.icon) or
