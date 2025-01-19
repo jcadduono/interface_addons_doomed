@@ -1449,7 +1449,15 @@ Immolation:AutoAoe()
 ---- Diabolist
 
 ---- Hellcaller
-
+local Wither = Ability:Add(445468, false, true, 445474)
+Wither.buff_duration = 18
+Wither.mana_cost = 1.5
+Wither.tick_interval = 2
+Wither.hasted_ticks = true
+Wither.triggers_combat = true
+Wither.learn_spellId = 445465
+Wither:AutoAoe(false, 'apply')
+Wither:Track()
 ---- Soul Harvester
 
 -- Tier set bonuses
@@ -1879,6 +1887,10 @@ function Player:UpdateKnown()
 	Immolation.known = Pet.Infernal.known
 	DemonicPower.known = Pet.DemonicTyrant.known
 	ImpendingRuin.known = RitualOfRuin.known
+	if Wither.known then
+		Immolate.known = false
+		Corruption.known = false
+	end
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -2216,6 +2228,21 @@ function Immolate:Remains()
 	return Ability.Remains(self)
 end
 
+function Wither:Duration()
+	local duration = self.buff_duration
+	if ScaldingFlames.known then
+		duration = duration + 3
+	end
+	return duration
+end
+
+function Wither:Remains()
+	if Cataclysm.known and Cataclysm:Casting() then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
 function Incinerate:Free()
 	return Backlash.known and Backlash:Up()
 end
@@ -2505,7 +2532,7 @@ end
 
 function Backdraft:Stack()
 	local stack = Ability.Stack(self)
-	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting() or SoulFire:Casting()) then
+	if stack > 0 and (ChaosBolt:Casting() or Immolate:Casting() or SoulFire:Casting() or Wither:Casting()) then
 		stack = stack - 1
 	end
 	return stack
@@ -3643,7 +3670,7 @@ actions+=/incinerate
 		if Cataclysm:Usable() then
 			UseCooldown(Cataclysm)
 		end
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and (Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) and (not RoaringBlaze.known or Conflagrate:Remains() > (3 * Player.haste_factor)) then
+		if RagingDemonfire.known and ChannelDemonfire:Usable() and (self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) and (not RoaringBlaze.known or Conflagrate:Remains() > (3 * Player.haste_factor)) then
 			UseCooldown(ChannelDemonfire)
 		end
 		if SoulFire:Usable() and Player.soul_shards.current <= 3.5 and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
@@ -3653,12 +3680,12 @@ actions+=/incinerate
 			UseCooldown(SoulFire)
 		end
 	end
-	if Immolate:Usable() and Target.timeToDie > 8 and (
-		Immolate:Remains() < 3 or
-		((Immolate:Remains() - ChaosBolt:CastTime()) < 5 and InternalCombustion.known and ChaosBolt:Usable()) or
-		((Immolate:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) < (Immolate:Duration() * 0.3))
-	) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (Immolate:Remains() - (InternalCombustion.known and 5 or 0))) then
-		return Immolate
+	if self.dot:Usable() and Target.timeToDie > 8 and (
+		self.dot:Remains() < 3 or
+		((self.dot:Remains() - ChaosBolt:CastTime()) < 5 and InternalCombustion.known and ChaosBolt:Usable()) or
+		((self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) < (self.dot:Duration() * 0.3))
+	) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (self.dot:Remains() - (InternalCombustion.known and 5 or 0))) then
+		return self.dot
 	end
 	if self.use_cds then
 		if CrashingChaos.known and ChaosBolt:Usable() and SummonInfernal:Ready() and Player.soul_shards.current > 4 then
@@ -3671,7 +3698,7 @@ actions+=/incinerate
 	if ChaosBolt:Usable() and (Pet.infernal_count > 0 or Player.soul_shards.current >= 4) then
 		return ChaosBolt
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and Immolate:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and self.dot:Remains() > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
 	if ChaosBolt:Usable() and (
@@ -3680,7 +3707,7 @@ actions+=/incinerate
 	) then
 		return ChaosBolt
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and Immolate:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and ChannelDemonfire:Usable() and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and self.dot:Remains() > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
 	if self.use_cds and DimensionalRift:Usable() then
@@ -3699,6 +3726,13 @@ actions+=/incinerate
 	if Incinerate:Usable() then
 		return Incinerate
 	end
+end
+
+APL[SPEC.DESTRUCTION].precombat_variables = function(self)
+	self.dot = (
+		(Immolate.known and Immolate) or
+		(Wither.known and Wither)
+	)
 end
 
 APL[SPEC.DESTRUCTION].aoe = function(self)
@@ -3743,7 +3777,7 @@ actions.aoe+=/incinerate
 	if RainOfFire:Usable() and (
 		Pet.infernal_count > 0 or
 		(Target.boss and Target.timeToDie < 12) or
-		(Player.soul_shards.current >= (4.5 - (Inferno.known and 1 or 0) - (0.1 * Immolate:Ticking())) and Player:TimeInCombat() > 5)
+		(Player.soul_shards.current >= (4.5 - (Inferno.known and 1 or 0) - (0.1 * self.dot:Ticking())) and Player:TimeInCombat() > 5)
 	) then
 		return RainOfFire
 	end
@@ -3756,11 +3790,11 @@ actions.aoe+=/incinerate
 	if self.use_cds and Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready() or (Inferno.known and Player.enemies> 4)) then
 		UseCooldown(Havoc)
 	end
-	if Immolate:Usable() and Target.timeToDie > 18 and Immolate:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (not RagingDemonfire.known or ChannelDemonfire:Cooldown() > Immolate:Remains() or Player:TimeInCombat() < 5) and Immolate:Ticking() <= 4 then
-		return Immolate
+	if self.dot:Usable() and Target.timeToDie > 18 and self.dot:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not RagingDemonfire.known or ChannelDemonfire:Cooldown() > self.dot:Remains() or Player:TimeInCombat() < 5) and self.dot:Ticking() <= 4 then
+		return self.dot
 	end
 	if self.use_cds then
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and Immolate:Remains() > (3 * Player.haste_factor) then
+		if RagingDemonfire.known and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
 			UseCooldown(ChannelDemonfire)
 		end
 		if SummonSoulkeeper:Usable() and (TormentedSoul:Stack() >= 10 or (Target.boss and Target.timeToDie < 10 and TormentedSoul:Stack() > 3)) then
@@ -3773,19 +3807,19 @@ actions.aoe+=/incinerate
 	if RainOfFire:Usable() and Player.enemies <= 4 and (not Pyrogenics.known or Pyrogenics:Down()) then
 		return RainOfFire
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and Immolate:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
-	if Immolate:Usable() and Target.timeToDie > 10 and self.havoc_remains == 0 and Immolate:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) then
-		return Immolate
+	if self.dot:Usable() and Target.timeToDie > 10 and self.havoc_remains == 0 and self.dot:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) then
+		return self.dot
 	end
-	if Immolate:Usable() and Target.timeToDie > 11 and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (
-		(Immolate:Refreshable() and self.havoc_immo_time < 5.4) or
-		(Immolate:Remains() < 2 and Immolate:Remains() < self.havoc_remains) or
-		Immolate:Down() or
+	if self.dot:Usable() and Target.timeToDie > 11 and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (
+		(self.dot:Refreshable() and self.havoc_immo_time < 5.4) or
+		(self.dot:Remains() < 2 and self.dot:Remains() < self.havoc_remains) or
+		self.dot:Down() or
 		(self.havoc_immo_time < 2 and self.havoc_remains > 0)
 	) then
-		return Immolate
+		return self.dot
 	end
 	if self.use_cds then
 		if DimensionalRift:Usable() then
@@ -3859,7 +3893,7 @@ actions.cleave+=/incinerate
 		if Cataclysm:Usable() then
 			UseCooldown(Cataclysm)
 		end
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and Immolate:Ticking() >= 2 then
+		if RagingDemonfire.known and ChannelDemonfire:Usable() and self.dot:Ticking() >= 2 then
 			UseCooldown(ChannelDemonfire)
 		end
 		if SoulFire:Usable() and Player.soul_shards.current <= 3.5 and not self.pool_soul_shards and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
@@ -3869,8 +3903,8 @@ actions.cleave+=/incinerate
 			UseCooldown(SoulFire)
 		end
 	end
-	if Immolate:Usable() and Target.timeToDie > 15 and Immolate:Refreshable() and (Immolate:Down() or Immolate:Remains() < Havoc:Cooldown()) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Immolate:Remains()) and (not SoulFire.known or (SoulFire:Cooldown() + (not Mayhem.known and SoulFire:CastTime() or 0)) > Immolate:Remains()) then
-		return Immolate
+	if self.dot:Usable() and Target.timeToDie > 15 and self.dot:Refreshable() and (self.dot:Down() or self.dot:Remains() < Havoc:Cooldown()) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not SoulFire.known or (SoulFire:Cooldown() + (not Mayhem.known and SoulFire:CastTime() or 0)) > self.dot:Remains()) then
+		return self.dot
 	end
 	if self.use_cds then
 		if Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready()) then
@@ -3960,15 +3994,15 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	if ChannelDemonfire:Usable() and Player.soul_shards.current < 4.5 and RagingDemonfire.known then
 		UseCooldown(ChannelDemonfire)
 	end
-	if Immolate:Usable() and Player.soul_shards.current < 4.5 and (
-		(Immolate:Refreshable() and self.havoc_immo_time < 5.4 and Target.timeToDie > 5) or
+	if self.dot:Usable() and Player.soul_shards.current < 4.5 and (
+		(self.dot:Refreshable() and self.havoc_immo_time < 5.4 and Target.timeToDie > 5) or
 		(Target.timeToDie > 11 and (
-			(Immolate:Remains() < 2 and Immolate:Remains() < self.havoc_remains) or
-			Immolate:Down() or
+			(self.dot:Remains() < 2 and self.dot:Remains() < self.havoc_remains) or
+			self.dot:Down() or
 			self.havoc_immo_time < 2
 		))
 	) then
-		return Immolate
+		return self.dot
 	end
 	if ChaosBolt:Usable() and ChaosBolt:CastTime() < self.havoc_remains and (
 		not RainOfFire.known or
@@ -4051,7 +4085,7 @@ actions.variables+=/variable,name=trinket_2_will_lose_cast,value=((floor((fight_
 	self.infernal_up = Pet.Infernal:Up(true)
 	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up)
 	self.havoc_remains = Havoc:HighestRemains()
-	self.havoc_immo_time = self.havoc_remains > 0 and Havoc:DotRemains(Immolate) or 0
+	self.havoc_immo_time = self.havoc_remains > 0 and Havoc:DotRemains(self.dot) or 0
 	self.infernal_active = self.infernal_up or (SummonInfernal:CooldownDuration() - SummonInfernal:Cooldown()) < 20
 end
 
