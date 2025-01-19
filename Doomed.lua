@@ -1992,8 +1992,24 @@ function Player:Update()
 	self.mana.regen = GetPowerRegenForPowerType(0)
 	self.mana.current = UnitPower('player', 0) + (self.mana.regen * self.execute_remains)
 	if self.spec == SPEC.DESTRUCTION then
-		Pet.infernal_count = Pet.Infernal:Count() + (AvatarOfDestruction.known and Pet.Overfiend:Count() or 0)
-		self.soul_shards.current = (UnitPower('player', 7, true) + (Pet.infernal_count * 2 * self.execute_remains)) / 10
+		Pet.count = SummonedPets:Count()
+		Pet.infernal_count = Pet.Infernal:Count()
+		self.soul_shards.current = (
+			UnitPower('player', 7, true) +
+			(self.execute_remains * (
+				Pet.infernal_count +
+				(Immolate.known and Immolate:Ticking() or 0) +
+				(Wither.known and Wither:Ticking() or 0)
+			))
+		) / 10
+	elseif self.spec == SPEC.DEMONOLOGY then
+		HandOfGuldan:Purge()
+		Pet.count = SummonedPets:Count() + (Pet.alive and 1 or 0)
+		Pet.imp_count = Pet.WildImp:Count() + Pet.WildImpID:Count()
+		Pet.tyrant_cd = SummonDemonicTyrant:Cooldown()
+		Pet.tyrant_remains = Pet.DemonicTyrant:Remains()
+		Pet.tyrant_power = Pet.DemonicTyrant:Power()
+		Pet.tyrant_available_power = Pet.DemonicTyrant:AvailablePower()
 	else
 		self.soul_shards.current = UnitPower('player', 7)
 	end
@@ -3504,13 +3520,6 @@ actions.variables+=/variable,name=impl,op=set,value=buff.tyrant.remains<6,if=act
 actions.variables+=/variable,name=impl,op=set,value=buff.tyrant.remains<8,if=active_enemies>4+(talent.sacrificed_souls.enabled)
 actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.summon_demonic_tyrant.remains<20&variable.tyrant_cd<20&(buff.demonic_core.stack<=2|!buff.demonic_core.up)&cooldown.summon_vilefiend.remains<gcd.max*5&cooldown.call_dreadstalkers.remains<gcd.max*5
 ]]
-	HandOfGuldan:Purge()
-	Pet.count = SummonedPets:Count() + (Pet.alive and 1 or 0)
-	Pet.imp_count = Pet.WildImp:Count() + Pet.WildImpID:Count()
-	Pet.tyrant_cd = SummonDemonicTyrant:Cooldown()
-	Pet.tyrant_remains = Pet.DemonicTyrant:Remains()
-	Pet.tyrant_power = Pet.DemonicTyrant:Power()
-	Pet.tyrant_available_power = Pet.DemonicTyrant:AvailablePower()
 	if Pet.tyrant_cd > 20 then
 		self.tyrant_prep = false
 	end
@@ -4473,8 +4482,14 @@ function UI:UpdateDisplay()
 			end
 		end
 	elseif Player.spec == SPEC.DESTRUCTION then
-		if Opt.pet_count and Pet.infernal_count > 0 then
-			text_tl = Pet.infernal_count
+		if Opt.pet_count then
+			if Opt.pet_count == 'imps' then
+				if Pet.imp_count > 0 then
+					text_tl = Pet.infernal_count
+				end
+			elseif Pet.count > 0 then
+				text_tl = Pet.count
+			end
 		end
 		if Opt.tyrant then
 			local remains
@@ -5322,13 +5337,13 @@ SlashCmdList[ADDON] = function(msg, editbox)
 	end
 	if startsWith(msg[1], 'pet') then
 		if msg[2] then
-			if startsWith(msg[2], 'imp') then
+			if startsWith(msg[2], 'i') then
 				Opt.pet_count = 'imps'
 			else
 				Opt.pet_count = msg[2] == 'on'
 			end
 		end
-		return Status('Show summoned pet counter (topleft)', Opt.pet_count == 'imps' and 'Wild Imps only' or Opt.pet_count)
+		return Status('Show summoned pet counter (topleft)', Opt.pet_count == 'imps' and 'Wild Imps or Infernals only' or Opt.pet_count)
 	end
 	if startsWith(msg[1], 'tyr') then
 		if msg[2] then
@@ -5366,7 +5381,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		'trinket |cFF00C000on|r/|cFFC00000off|r - show on-use trinkets in cooldown UI',
 		'heal |cFFFFD000[percent]|r - health percentage threshold to recommend self healing spells (default is 60%, 0 to disable)',
 		'healthstone |cFF00C000on|r/|cFFC00000off|r - show Create Healthstone reminder out of combat',
-		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFC00000off|r  - Show summoned pet counter (topleft)',
+		'pets |cFF00C000on|r/|cFFFFD000imps|r/|cFFFFD000infernals|r/|cFFC00000off|r  - Show summoned pet counter (topleft)',
 		'tyrant |cFF00C000on|r/|cFFC00000off|r  - Show Tyrant/Infernal/Darkglare power/remains (topright)',
 		'|cFFFFD000reset|r - reset the location of the ' .. ADDON .. ' UI to default',
 	} do
