@@ -25,7 +25,6 @@ local max = math.max
 local ceil = math.ceil
 local floor = math.floor
 local GetPowerRegenForPowerType = _G.GetPowerRegenForPowerType
-local GetShapeshiftForm = _G.GetShapeshiftForm
 local GetSpellCharges = C_Spell.GetSpellCharges
 local GetSpellCooldown = C_Spell.GetSpellCooldown
 local GetSpellInfo = C_Spell.GetSpellInfo
@@ -164,7 +163,7 @@ local Abilities = {
 	bySpellId = {},
 	velocity = {},
 	autoAoe = {},
-	trackAuras = {},
+	tracked = {},
 }
 
 -- summoned pet template
@@ -184,6 +183,9 @@ local AutoAoe = {
 	blacklist = {},
 	ignored_units = {},
 }
+
+-- methods for tracking ticking debuffs on targets
+local TrackedAuras = {}
 
 -- timers for updating combat/display/hp info
 local Timer = {
@@ -270,10 +272,6 @@ local Player = {
 		last_taken = 0,
 	},
 	set_bonus = {
-		t29 = 0, -- Scalesworn Cultist's Habit
-		t30 = 0, -- Sinister Savant's Cursethreads
-		t31 = 0, -- Devout Ashdevil's Pactweave
-		t32 = 0, -- Sinister Savant's Cursethreads (Awakened)
 		t33 = 0, -- Rites of the Hexflame Coven
 	},
 	previous_gcd = {},-- list of previous GCD abilities
@@ -289,20 +287,22 @@ local Player = {
 
 -- base mana pool max for each level
 Player.BaseMana = {
-	260,	270,	285,	300,	310,	--  5
-	330,	345,	360,	380,	400,	-- 10
-	430,	465,	505,	550,	595,	-- 15
-	645,	700,	760,	825,	890,	-- 20
-	965,	1050,	1135,	1230,	1335,	-- 25
-	1445,	1570,	1700,	1845,	2000,	-- 30
-	2165,	2345,	2545,	2755,	2990,	-- 35
-	3240,	3510,	3805,	4125,	4470,	-- 40
-	4845,	5250,	5690,	6170,	6685,	-- 45
-	7245,	7855,	8510,	9225,	10000,	-- 50
-	11745,	13795,	16205,	19035,	22360,	-- 55
-	26265,	30850,	36235,	42565,	50000,	-- 60
-	58730,	68985,	81030,	95180,	111800,	-- 65
-	131325,	154255,	181190,	212830,	250000,	-- 70
+	260,     270,     285,     300,     310,     -- 5
+	330,     345,     360,     380,     400,     -- 10
+	430,     465,     505,     550,     595,     -- 15
+	645,     700,     760,     825,     890,     -- 20
+	965,     1050,    1135,    1230,    1335,    -- 25
+	1445,    1570,    1700,    1845,    2000,    -- 30
+	2165,    2345,    2545,    2755,    2990,    -- 35
+	3240,    3510,    3805,    4125,    4470,    -- 40
+	4845,    5250,    5690,    6170,    6685,    -- 45
+	7245,    7855,    8510,    9225,    10000,   -- 50
+	11745,   13795,   16205,   19035,   22360,   -- 55
+	26265,   30850,   36235,   42565,   50000,   -- 60
+	58730,   68985,   81030,   95180,   111800,  -- 65
+	131325,  154255,  181190,  212830,  250000,  -- 70
+	293650,  344930,  405160,  475910,  559015,  -- 75
+	656630,  771290,  905970,  1064170, 2500000, -- 80
 }
 
 -- current pet information
@@ -311,6 +311,11 @@ local Pet = {
 	alive = false,
 	stuck = false,
 	health = {
+		current = 0,
+		max = 100,
+		pct = 0,
+	},
+	mana = {
 		current = 0,
 		max = 100,
 	},
@@ -348,6 +353,14 @@ Target.Dummies = {
 	[194649] = true,
 	[197833] = true,
 	[198594] = true,
+	[219250] = true,
+	[225983] = true,
+	[225984] = true,
+	[225985] = true,
+	[225976] = true,
+	[225977] = true,
+	[225978] = true,
+	[225982] = true,
 }
 
 -- Start AoE
@@ -583,6 +596,10 @@ function Ability:Remains()
 	return 0
 end
 
+function Ability:React()
+	return self:Remains()
+end
+
 function Ability:Expiring(seconds)
 	local remains = self:Remains()
 	return remains > 0 and remains < (seconds or Player.gcd)
@@ -744,6 +761,14 @@ function Ability:Stack()
 	return 0
 end
 
+function Ability:MaxStack()
+	return self.max_stack
+end
+
+function Ability:Capped(deficit)
+	return self:Stack() >= (self:MaxStack() - (deficit or 0))
+end
+
 function Ability:ManaCost()
 	return self.mana_cost > 0 and (self.mana_cost / 100 * Player.mana.base) or 0
 end
@@ -754,6 +779,13 @@ end
 
 function Ability:ShardGain()
 	return self.shard_gain
+end
+
+function Ability:Free()
+	return (
+		(self.mana_cost > 0 and self:ManaCost() == 0) or
+		(self.shard_cost > 0 and self:ShardCost() == 0)
+	)
 end
 
 function Ability:ChargesFractional()
@@ -816,6 +848,10 @@ end
 function Ability:CastTime()
 	local info = GetSpellInfo(self.spellId)
 	return info and info.castTime / 1000 or 0
+end
+
+function Ability:CastRegen()
+	return Player.mana.regen * self:CastTime() - self:ManaCost()
 end
 
 function Ability:Previous(n)
@@ -903,9 +939,6 @@ function Ability:CastSuccess(dstGUID)
 		Player.previous_gcd[10] = nil
 		table.insert(Player.previous_gcd, 1, self)
 	end
-	if self.aura_targets and self.requires_react then
-		self:RemoveAura(self.aura_target == 'player' and Player.guid or dstGUID)
-	end
 	if Opt.auto_aoe and self.auto_aoe and self.auto_aoe.trigger == 'SPELL_CAST_SUCCESS' then
 		AutoAoe:Add(dstGUID, true)
 	end
@@ -960,10 +993,8 @@ end
 
 -- Start DoT tracking
 
-local trackAuras = {}
-
-function trackAuras:Purge()
-	for _, ability in next, Abilities.trackAuras do
+function TrackedAuras:Purge()
+	for _, ability in next, Abilities.tracked do
 		for guid, aura in next, ability.aura_targets do
 			if aura.expires <= Player.time then
 				ability:RemoveAura(guid)
@@ -972,13 +1003,13 @@ function trackAuras:Purge()
 	end
 end
 
-function trackAuras:Remove(guid)
-	for _, ability in next, Abilities.trackAuras do
+function TrackedAuras:Remove(guid)
+	for _, ability in next, Abilities.tracked do
 		ability:RemoveAura(guid)
 	end
 end
 
-function Ability:TrackAuras()
+function Ability:Track()
 	self.aura_targets = {}
 end
 
@@ -1026,7 +1057,8 @@ Note: To get talent_node value for a talent, hover over talent and use macro:
 ]]
 
 -- Warlock Abilities
----- Multiple Specializations
+---- Class
+------ Baseline
 local CreateHealthstone = Ability:Add(6201, true, true)
 CreateHealthstone.mana_cost = 2
 local DrainLife = Ability:Add(234153, false, true)
@@ -1079,14 +1111,14 @@ Agony.mana_cost = 1
 Agony.buff_duration = 18
 Agony.tick_interval = 2
 Agony.hasted_ticks = true
-Agony:TrackAuras()
+Agony:Track()
 local Corruption = Ability:Add(172, false, true, 146739)
 Corruption.mana_cost = 1
 Corruption.buff_duration = 14
 Corruption.tick_interval = 2
 Corruption.hasted_ticks = true
 Corruption.triggers_combat = true
-Corruption:TrackAuras()
+Corruption:Track()
 local MaleficRapture = Ability:Add(324536, false, true)
 MaleficRapture.shard_cost = 1
 MaleficRapture:AutoAoe(false)
@@ -1097,7 +1129,7 @@ SeedOfCorruption:SetVelocity(30)
 SeedOfCorruption.hasted_duration = true
 SeedOfCorruption.triggers_combat = true
 SeedOfCorruption:AutoAoe(true)
-SeedOfCorruption:TrackAuras()
+SeedOfCorruption:Track()
 local ShadowBoltAffliction = Ability:Add(232670, false, true)
 ShadowBoltAffliction.mana_cost = 2
 ShadowBoltAffliction.triggers_combat = true
@@ -1112,7 +1144,7 @@ UnstableAffliction.buff_duration = 16
 UnstableAffliction.tick_interval = 2
 UnstableAffliction.hasted_ticks = true
 UnstableAffliction.triggers_combat = true
-UnstableAffliction:TrackAuras()
+UnstableAffliction:Track()
 ------ Talents
 local AbsoluteCorruption = Ability:Add(196103, false, true)
 local CreepingDeath = Ability:Add(264000, false, true)
@@ -1143,7 +1175,7 @@ PhantomSingularity.tick_interval = 2
 PhantomSingularity.hasted_duration = true
 PhantomSingularity.hasted_ticks = true
 PhantomSingularity:AutoAoe(false, 'periodic')
-PhantomSingularity:TrackAuras()
+PhantomSingularity:Track()
 local ShadowEmbrace = Ability:Add(32388, false, true, 32390)
 ShadowEmbrace.buff_duration = 10
 local Shadowfury = Ability:Add(30283, false, true)
@@ -1153,7 +1185,7 @@ local SiphonLife = Ability:Add(63106, false, true)
 SiphonLife.buff_duration = 15
 SiphonLife.tick_interval = 3
 SiphonLife.hasted_ticks = true
-SiphonLife:TrackAuras()
+SiphonLife:Track()
 local SowTheSeeds = Ability:Add(196226, false, true)
 local VileTaint = Ability:Add(278350, false, true)
 VileTaint.shard_cost = 1
@@ -1163,7 +1195,7 @@ VileTaint.tick_interval = 2
 VileTaint.hasted_ticks = true
 VileTaint.triggers_combat = true
 VileTaint:AutoAoe(true)
-VileTaint:TrackAuras()
+VileTaint:Track()
 local WritheInAgony = Ability:Add(196102, false, true)
 ---- Demonology
 ------ Talents
@@ -1191,7 +1223,7 @@ DemonicStrength.cooldown_duration = 60
 local DemonicPower = Ability:Add(265273, true, true) -- applied to pets after Summon Demonic Tyrant cast
 DemonicPower.aura_target = 'pet'
 DemonicPower.buff_duration = 15
-DemonicPower:TrackAuras()
+DemonicPower:Track()
 local Doom = Ability:Add(603, false, true)
 Doom.mana_cost = 1
 Doom.buff_duration = 20
@@ -1218,7 +1250,7 @@ HandOfGuldan.shard_cost = 1
 HandOfGuldan.triggers_combat = true
 HandOfGuldan:AutoAoe(true)
 local ImpGangBoss = Ability:Add(387445, true, true, 387458)
-ImpGangBoss:TrackAuras()
+ImpGangBoss:Track()
 local InnerDemons = Ability:Add(267216, false, true)
 local Implosion = Ability:Add(196277, false, true, 196278)
 Implosion.mana_cost = 2
@@ -1310,9 +1342,9 @@ Immolate.tick_interval = 3
 Immolate.hasted_ticks = true
 Immolate.triggers_combat = true
 Immolate:AutoAoe(false, 'apply')
-Immolate:TrackAuras()
+Immolate:Track()
 ------ Talents
-local AvatarOfDestruction = Ability:Add(387159, false, true)
+local AvatarOfDestruction = Ability:Add(456975, false, true)
 AvatarOfDestruction.summon_count = 1
 local Backdraft = Ability:Add(196406, true, true, 117828)
 Backdraft.buff_duration = 10
@@ -1346,8 +1378,6 @@ Conflagrate.requires_charge = true
 Conflagrate.hasted_cooldown = true
 local CrashingChaos = Ability:Add(417234, true, true, 417282)
 CrashingChaos.buff_duration = 45
-local CryHavoc = Ability:Add(387522, false, true, 387547)
-CryHavoc:AutoAoe()
 local Decimation = Ability:Add(387176, false, true)
 local DiabolicEmbers = Ability:Add(387173, false, true)
 local DimensionalRift = Ability:Add(387976, true, true)
@@ -1362,7 +1392,7 @@ Havoc.buff_duration = 12
 Havoc.cooldown_duration = 30
 Havoc.mana_cost = 2
 Havoc:AutoAoe(false, 'cast')
-Havoc:TrackAuras()
+Havoc:Track()
 local ImpendingRuin = Ability:Add(387158, true, true) -- Ritual of Ruin progress
 ImpendingRuin.buff_duration = 3600
 ImpendingRuin.max_stack = 20
@@ -1375,7 +1405,6 @@ local Inferno = Ability:Add(270545, false, true)
 local InternalCombustion = Ability:Add(266134, false, true)
 local MasterRitualist = Ability:Add(387165, false, true)
 local Mayhem = Ability:Add(387506, false, true)
-local Pandemonium = Ability:Add(387509, false, true)
 local Pyrogenics = Ability:Add(387095, false, true, 387096)
 Pyrogenics.buff_duration = 2
 local RagingDemonfire = Ability:Add(387166, false, true)
@@ -1416,18 +1445,22 @@ SummonInfernal:AutoAoe(true)
 ------ Pet Abilities
 local Immolation = Ability:Add(20153, false, false)
 Immolation:AutoAoe()
+-- Hero talents
+---- Diabolist
+
+---- Hellcaller
+
+---- Soul Harvester
+
 -- Tier set bonuses
-local DoomBrand = Ability:Add(423583, true, true, 423584) -- T31 2pc
-DoomBrand.buff_duration = 20
-local RiteOfRuvaraad = Ability:Add(409725, true, true) -- T30 4pc
-RiteOfRuvaraad.buff_duration = 17
+
 -- Racials
 
 -- PvP talents
 local RotAndDecay = Ability:Add(212371, false, true)
 -- Trinket effects
-local SolarMaelstrom = Ability:Add(422146, false, true) -- Belor'relos
-SolarMaelstrom:AutoAoe()
+local SpymastersReport = Ability:Add(451199, true, true) -- Spymaster's Web
+SpymastersReport.max_stack = 40
 -- Class cooldowns
 local PowerInfusion = Ability:Add(10060, true)
 PowerInfusion.buff_duration = 15
@@ -1584,7 +1617,7 @@ Pet.VoidTerror = SummonedPet:Add(136403, 15, NetherPortal)
 Pet.Wrathguard = SummonedPet:Add(136407, 15, NetherPortal)
 Pet.WildImpID = SummonedPet:Add(143622, 20, InnerDemons)
 -- Destruction Talents
-Pet.Blasphemy = SummonedPet:Add(185584, 8, AvatarOfDestruction)
+Pet.Overfiend = SummonedPet:Add(217429, 8, AvatarOfDestruction)
 
 -- End Summoned Pets
 
@@ -1665,18 +1698,10 @@ Healthstone.max_charges = 3
 local DreambinderLoomOfTheGreatCycle = InventoryItem:Add(208616)
 DreambinderLoomOfTheGreatCycle.cooldown_duration = 120
 DreambinderLoomOfTheGreatCycle.off_gcd = false
-local IridalTheEarthsMaster = InventoryItem:Add(208321)
-IridalTheEarthsMaster.cooldown_duration = 180
-IridalTheEarthsMaster.off_gcd = false
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
-Trinket.BelorrelosTheSuncaller = InventoryItem:Add(207172)
-Trinket.BelorrelosTheSuncaller.cast_spell = SolarMaelstrom
-Trinket.BelorrelosTheSuncaller.cooldown_duration = 120
-Trinket.BelorrelosTheSuncaller.off_gcd = false
-Trinket.NymuesUnravelingSpindle = InventoryItem:Add(208615)
-Trinket.NymuesUnravelingSpindle.cooldown_duration = 120
-Trinket.NymuesUnravelingSpindle.off_gcd = false
+Trinket.SpymastersWeb = InventoryItem:Add(220202)
+Trinket.SpymastersWeb.cooldown_duration = 20
 -- End Inventory Items
 
 -- Start Abilities Functions
@@ -1685,7 +1710,7 @@ function Abilities:Update()
 	wipe(self.bySpellId)
 	wipe(self.velocity)
 	wipe(self.autoAoe)
-	wipe(self.trackAuras)
+	wipe(self.tracked)
 	for _, ability in next, self.all do
 		if ability.known then
 			self.bySpellId[ability.spellId] = ability
@@ -1699,7 +1724,7 @@ function Abilities:Update()
 				self.autoAoe[#self.autoAoe + 1] = ability
 			end
 			if ability.aura_targets then
-				self.trackAuras[#self.trackAuras + 1] = ability
+				self.tracked[#self.tracked + 1] = ability
 			end
 		end
 	end
@@ -1840,6 +1865,9 @@ function Player:UpdateKnown()
 	if DrainSoul.known then
 		ShadowBolt.known = false
 	end
+	if Mayhem.known then
+		Havoc.known = true
+	end
 	if SummonFelguard.known then
 		AxeToss.known = true
 		Felstorm.known = true
@@ -1851,8 +1879,6 @@ function Player:UpdateKnown()
 	Immolation.known = Pet.Infernal.known
 	DemonicPower.known = Pet.DemonicTyrant.known
 	ImpendingRuin.known = RitualOfRuin.known
-	DoomBrand.known = Player.set_bonus.t31 >= 2 or Player.set_bonus.t32 >= 2
-	RiteOfRuvaraad.known = Player.set_bonus.t30 >= 4
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -1954,7 +1980,7 @@ function Player:Update()
 	self.mana.regen = GetPowerRegenForPowerType(0)
 	self.mana.current = UnitPower('player', 0) + (self.mana.regen * self.execute_remains)
 	if self.spec == SPEC.DESTRUCTION then
-		Pet.infernal_count = Pet.Infernal:Count() + (AvatarOfDestruction.known and Pet.Blasphemy:Count() or 0)
+		Pet.infernal_count = Pet.Infernal:Count() + (AvatarOfDestruction.known and Pet.Overfiend:Count() or 0)
 		self.soul_shards.current = (UnitPower('player', 7, true) + (Pet.infernal_count * 2 * self.execute_remains)) / 10
 	else
 		self.soul_shards.current = UnitPower('player', 7)
@@ -1977,7 +2003,7 @@ function Player:Update()
 	Pet:Update()
 
 	SummonedPets:Purge()
-	trackAuras:Purge()
+	TrackedAuras:Purge()
 	if Opt.auto_aoe then
 		for _, ability in next, Abilities.autoAoe do
 			ability:UpdateTargetsHit()
@@ -2074,7 +2100,7 @@ function Target:UpdateHealth(reset)
 		table.remove(self.health.history, 1)
 		self.health.history[25] = self.health.current
 	end
-	self.timeToDieMax = self.health.current / Player.health.max * (Player.spec == SPEC.SHADOW and 10 or 20)
+	self.timeToDieMax = self.health.current / Player.health.max * 15
 	self.health.pct = self.health.max > 0 and (self.health.current / self.health.max * 100) or 100
 	self.health.loss_per_sec = (self.health.history[1] - self.health.current) / 5
 	self.timeToDie = (
@@ -2159,8 +2185,8 @@ end
 
 -- Start Ability Modifications
 
-function Implosion:Usable()
-	return Pet.imp_count > 0 and Ability.Usable(self)
+function Implosion:Usable(...)
+	return Pet.imp_count > 0 and Ability.Usable(self, ...)
 end
 PowerSiphon.Usable = Implosion.Usable
 
@@ -2202,12 +2228,18 @@ function Incinerate:ShardGain()
 	return gain
 end
 
-function Havoc:Duration()
-	local duration = self.buff_duration
-	if Pandemonium.known then
-		duration = duration + 3
+function Havoc:Usable(...)
+	if Mayhem.known then
+		return false
 	end
-	return duration
+	return Ability.Usable(self, ...)
+end
+
+function Havoc:Duration()
+	if Mayhem.known then
+		return 5
+	end
+	return Ability.Duration(self)
 end
 
 function Havoc:DotRemains(ability)
@@ -2382,8 +2414,8 @@ function SummonDemonicTyrant:ShardGain()
 	return gain
 end
 
-function DemonicStrength:Usable()
-	return not (DemonicStrength:Up() or Guillotine:Up() or Felstorm:Up()) and Ability.Usable(self)
+function DemonicStrength:Usable(...)
+	return not (DemonicStrength:Up() or Guillotine:Up() or Felstorm:Up()) and Ability.Usable(self, ...)
 end
 Guillotine.Usable = DemonicStrength.Usable
 
@@ -2391,22 +2423,22 @@ function Guillotine:Remains()
 	return FiendishWrath:Remains()
 end
 
-function SpellLock:Usable()
+function SpellLock:Usable(...)
 	if not SummonFelhunter:Up() then
 		return false
 	end
-	return Ability.Usable(self)
+	return Ability.Usable(self, ...)
 end
 
-function AxeToss:Usable()
+function AxeToss:Usable(...)
 	if not SummonFelguard:Up() then
 		return false
 	end
-	return Ability.Usable(self)
+	return Ability.Usable(self, ...)
 end
 
-function Shadowfury:Usable()
-	return Target.stunnable and Ability.Usable(self)
+function Shadowfury:Usable(...)
+	return Target.stunnable and Ability.Usable(self, ...)
 end
 MortalCoil.Usable = Shadowfury.Usable
 
@@ -2530,8 +2562,8 @@ function SoulFire:Cooldown()
 	return max(0, remains)
 end
 
-function GrimoireOfSacrifice:Usable()
-	return Pet.alive and Ability.Usable(self)
+function GrimoireOfSacrifice:Usable(...)
+	return Pet.alive and Ability.Usable(self, ...)
 end
 
 function ImpGangBoss:ApplyAura(guid)
@@ -2555,10 +2587,6 @@ function DemonicPower:ApplyAura(guid)
 	end
 end
 DemonicPower.RefreshAura = DemonicPower.ApplyAura
-
-function IridalTheEarthsMaster:Usable(...)
-	return Target.health.pct < 35 and InventoryItem.Usable(self, ...)
-end
 
 -- End Ability Modifications
 
@@ -2747,7 +2775,6 @@ function Pet.Infernal:CastLanded(unit, spellId, ...)
 		Immolation:CastLanded(...)
 	end
 end
-Pet.Blasphemy.CastLanded = Pet.Infernal.CastLanded
 
 function Pet.Dreadstalker:CastLanded(unit, spellId, ...)
 	if Dreadbite:Match(spellId) then
@@ -3210,14 +3237,7 @@ actions+=/shadow_bolt
 			UseCooldown(PowerSiphon)
 		end
 	end
-	if self.use_cds and DemonicStrength:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) and (
-		(Target.timeToDie > 63 and not (Target.timeToDie > (SummonDemonicTyrant:Cooldown() + 69))) or
-		not SummonDemonicTyrant:Ready(30) or
-		(RiteOfRuvaraad.known and RiteOfRuvaraad:Up()) or
-		not SummonDemonicTyrant.known or
-		not GrimoireFelguard.known or
-		Player.set_bonus.t30 < 2
-	) then
+	if self.use_cds and DemonicStrength:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) then
 		UseCooldown(DemonicStrength)
 	end
 	if self.use_cds and BilescourgeBombers:Usable() then
@@ -3226,7 +3246,7 @@ actions+=/shadow_bolt
 	if self.use_cds and Guillotine:Usable() and (not NetherPortal.known or NetherPortal:Remains() < Player.gcd) and (not DemonicStrength.known or not DemonicStrength:Ready()) then
 		UseCooldown(Guillotine)
 	end
-	if CallDreadstalkers:Usable() and (not self.use_cds or not SummonDemonicTyrant:Ready(25) or Pet.tyrant_cd > 25 or (Player.set_bonus.t30 >= 2 and GrimoireFelguard.known and not GrimoireFelguard:Ready(25)) or (NetherPortal.known and NetherPortal:Up())) then
+	if CallDreadstalkers:Usable() and (not self.use_cds or not SummonDemonicTyrant:Ready(25) or Pet.tyrant_cd > 25 or (NetherPortal.known and NetherPortal:Up())) then
 		return CallDreadstalkers
 	end
 	if Implosion:Usable() and self.impl and Pet.imp_count > 8 and (Pet.WildImp:RemainsUnder(3 * Player.haste_factor) + Pet.WildImpID:RemainsUnder(3 * Player.haste_factor)) > 0 then
@@ -3235,14 +3255,7 @@ actions+=/shadow_bolt
 	if self.use_cds and SummonSoulkeeper:Usable() and TormentedSoul:Stack() >= 10 and Player.enemies > 1 then
 		UseCooldown(SummonSoulkeeper)
 	end
-	if self.use_cds and DemonicStrength:Usable() and (
-		(Target.timeToDie > 63 and not (Target.timeToDie > (SummonDemonicTyrant:Cooldown() + 69))) or
-		not SummonDemonicTyrant:Ready(30) or
-		(RiteOfRuvaraad.known and RiteOfRuvaraad:Up()) or
-		not SummonDemonicTyrant.known or
-		not GrimoireFelguard.known or
-		Player.set_bonus.t30 < 2
-	) then
+	if self.use_cds and DemonicStrength:Usable() then
 		UseCooldown(DemonicStrength)
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() and (
@@ -3440,8 +3453,6 @@ actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.c
 			return UseCooldown(Trinket1)
 		elseif Trinket2:Usable() then
 			return UseCooldown(Trinket2)
-		elseif Trinket.NymuesUnravelingSpindle:Usable() and (not DemonicStrength.known or not DemonicStrength:Ready()) then
-			return UseCooldown(Trinket.NymuesUnravelingSpindle)
 		end
 	end
 	if DreambinderLoomOfTheGreatCycle:Usable() and (
@@ -3449,12 +3460,6 @@ actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.c
 		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
 	) then
 		return UseCooldown(DreambinderLoomOfTheGreatCycle)
-	end
-	if IridalTheEarthsMaster:Usable() and (
-		(Pet.tyrant_remains == 0 and (not self.tyrant_prep or self.pet_expire == 0)) or
-		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
-	) then
-		return UseCooldown(IridalTheEarthsMaster)
 	end
 end
 
@@ -3507,8 +3512,7 @@ actions.variables+=/variable,name=pool_cores_for_tyrant,op=set,value=cooldown.su
 	end
 	self.tyrant_condition = self.use_cds and Pet.tyrant_cd < 20 and (
 		(not SummonVilefiend.known or Pet.Vilefiend:Up() or SummonVilefiend:Ready(Player.gcd * 5)) and
-		(Pet.Dreadstalker:Up() or CallDreadstalkers:Ready(Player.gcd * 5)) and
-		(not GrimoireFelguard.known or Player.set_bonus.t30 < 2 or Pet.Felguard:Up() or GrimoireFelguard:Ready(15))
+		(Pet.Dreadstalker:Up() or CallDreadstalkers:Ready(Player.gcd * 5))
 	)
 	self.pool_cores_for_tyrant = self.tyrant_condition and SummonDemonicTyrant:Usable(20) and DemonicCore:Stack() <= 2
 end
@@ -3602,7 +3606,7 @@ actions+=/immolate,if=(((dot.immolate.remains-5*(action.chaos_bolt.in_flight&tal
 actions+=/channel_demonfire,if=dot.immolate.remains>cast_time&set_bonus.tier30_4pc
 actions+=/chaos_bolt,if=cooldown.summon_infernal.remains=0&soul_shard>4&talent.crashing_chaos
 actions+=/summon_infernal
-actions+=/chaos_bolt,if=pet.infernal.active|pet.blasphemy.active|soul_shard>=4
+actions+=/chaos_bolt,if=pet.infernal.active|pet.overfiend.active|soul_shard>=4
 actions+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
 actions+=/chaos_bolt,if=buff.rain_of_chaos.remains>cast_time
 actions+=/chaos_bolt,if=buff.backdraft.up
@@ -3657,9 +3661,6 @@ actions+=/incinerate
 		return Immolate
 	end
 	if self.use_cds then
-		if ChannelDemonfire:Usable() and Immolate:Remains() > (3 * Player.haste_factor) and Player.set_bonus.t30 >= 4 then
-			UseCooldown(ChannelDemonfire)
-		end
 		if CrashingChaos.known and ChaosBolt:Usable() and SummonInfernal:Ready() and Player.soul_shards.current > 4 then
 			return ChaosBolt
 		end
@@ -3706,7 +3707,7 @@ actions.aoe=call_action_list,name=ogcd
 actions.aoe+=/call_action_list,name=items
 actions.aoe+=/call_action_list,name=havoc,if=havoc_active&havoc_remains>gcd.max&active_enemies<5+(talent.cry_havoc&!talent.inferno)&(!cooldown.summon_infernal.up|!talent.summon_infernal)
 actions.aoe+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
-actions.aoe+=/rain_of_fire,if=pet.infernal.active|pet.blasphemy.active
+actions.aoe+=/rain_of_fire,if=pet.infernal.active|pet.overfiend.active
 actions.aoe+=/rain_of_fire,if=fight_remains<12
 actions.aoe+=/rain_of_fire,if=soul_shard>=(4.5-talent.inferno-0.1*active_dot.immolate)&time>5
 actions.aoe+=/chaos_bolt,if=soul_shard>3.5-(0.1*active_enemies)&!talent.rain_of_fire
@@ -3729,7 +3730,7 @@ actions.aoe+=/incinerate
 ]]
 	self:ogcd()
 	self:items()
-	if self.havoc_remains > Player.gcd and Player.enemies < (5 + (CryHavoc.known and not Inferno.known and 1 or 0)) and (not SummonInfernal.known or not SummonInfernal:Ready()) then
+	if self.havoc_remains > Player.gcd and Player.enemies < 5 and (not SummonInfernal.known or not SummonInfernal:Ready()) then
 		local apl = self:havoc()
 		if apl then return apl end
 	end
@@ -3819,7 +3820,7 @@ actions.cleave+=/soul_fire,if=soul_shard<=3.5&(debuff.conflagrate.remains>cast_t
 actions.cleave+=/immolate,target_if=min:dot.immolate.remains+99*debuff.havoc.remains,if=(dot.immolate.refreshable&(dot.immolate.remains<cooldown.havoc.remains|!dot.immolate.ticking))&(!talent.cataclysm|cooldown.cataclysm.remains>remains)&(!talent.soul_fire|cooldown.soul_fire.remains+(!talent.mayhem*action.soul_fire.cast_time)>dot.immolate.remains)&target.time_to_die>15
 actions.cleave+=/havoc,target_if=min:((-target.time_to_die)<?-15)+dot.immolate.remains+99*(self.target=target),if=(!cooldown.summon_infernal.up|!talent.summon_infernal)&target.time_to_die>8
 actions.cleave+=/dimensional_rift,if=soul_shard<4.5&variable.pool_soul_shards
-actions.cleave+=/chaos_bolt,if=pet.infernal.active|pet.blasphemy.active|soul_shard>=4
+actions.cleave+=/chaos_bolt,if=pet.infernal.active|pet.overfiend.active|soul_shard>=4
 actions.cleave+=/summon_infernal
 actions.cleave+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))
 actions.cleave+=/chaos_bolt,if=soul_shard>3.5
@@ -3970,7 +3971,7 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 		return Immolate
 	end
 	if ChaosBolt:Usable() and ChaosBolt:CastTime() < self.havoc_remains and (
-		(not RainOfFire.known or (CryHavoc.known and not Inferno.known)) or
+		not RainOfFire.known or
 		(Player.enemies <= (3 - (Inferno.known and 1 or 0)))
 	) then
 		return ChaosBolt
@@ -4013,13 +4014,8 @@ actions.items+=/use_item,use_off_gcd=1,slot=trinket2,if=!variable.trinket_2_buff
 actions.items+=/use_item,use_off_gcd=1,slot=main_hand
 ]]
 	if Opt.trinket and self.use_cds then
-		if Trinket.BelorrelosTheSuncaller:Usable() and ((Target.boss and Target.timeToDie < 21) or (Player:TimeInCombat() > 20 and not SummonInfernal:Ready(20)) or not (Trinket1:Usable() or Trinket2:Usable())) then
-			return UseCooldown(Trinket.BelorrelosTheSuncaller)
-		end
 		if (self.infernal_active or (Target.boss and Target.timeToDie < 21)) then
-			if Trinket.NymuesUnravelingSpindle:Usable() then
-				return UseCooldown(Trinket.NymuesUnravelingSpindle:Usable())
-			elseif Trinket1:Usable() then
+			if Trinket1:Usable() then
 				return UseCooldown(Trinket1)
 			elseif Trinket2:Usable() then
 				return UseCooldown(Trinket2)
@@ -4028,9 +4024,6 @@ actions.items+=/use_item,use_off_gcd=1,slot=main_hand
 	end
 	if DreambinderLoomOfTheGreatCycle:Usable() then
 		return UseCooldown(DreambinderLoomOfTheGreatCycle)
-	end
-	if IridalTheEarthsMaster:Usable() then
-		return UseCooldown(IridalTheEarthsMaster)
 	end
 end
 
@@ -4468,7 +4461,7 @@ function UI:UpdateDisplay()
 					end
 				end
 			end
-			for _, unit in next, Pet.Blasphemy.active_units do
+			for _, unit in next, Pet.Overfiend.active_units do
 				remains = unit.expires - Player.time
 				if remains > 0 then
 					text_tr = format('%s%.1fs\n', text_tr, remains)
@@ -4497,7 +4490,7 @@ function UI:UpdateCombat()
 
 	if Player.main then
 		doomedPanel.icon:SetTexture(Player.main.icon)
-		Player.main_freecast = (Player.main.shard_cost > 0 and Player.main:ShardCost() == 0) or (Player.main.Free and Player.main.Free())
+		Player.main_freecast = Player.main:Free()
 	end
 	if Player.cd then
 		doomedCooldownPanel.icon:SetTexture(Player.cd.icon)
@@ -4605,7 +4598,7 @@ CombatEvent.UNIT_DIED = function(event, srcGUID, dstGUID)
 	if not uid or Target.Dummies[uid] then
 		return
 	end
-	trackAuras:Remove(dstGUID)
+	TrackedAuras:Remove(dstGUID)
 	if Opt.auto_aoe then
 		AutoAoe:Remove(dstGUID)
 	end
@@ -4671,6 +4664,8 @@ CombatEvent.SPELL_SUMMON = function(event, srcGUID, dstGUID)
 	end
 end
 
+--local UnknownSpell = {}
+
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
 	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
 		local uid = ToUID(srcGUID)
@@ -4688,7 +4683,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 					elseif (event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH') and pet.CastLanded then
 						pet:CastLanded(unit, spellId, dstGUID, event, missType)
 					end
-					--log(format('PET %d EVENT %s SPELL %s ID %d', pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+					--log(format('%.3f PET %d EVENT %s SPELL %s ID %d', Player.time, pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 				end
 			end
 		end
@@ -4705,7 +4700,15 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 
 	local ability = spellId and Abilities.bySpellId[spellId]
 	if not ability then
-		--log(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+--[[
+		if not UnknownSpell[event] then
+			UnknownSpell[event] = {}
+		end
+		if not UnknownSpell[event][spellId] then
+			UnknownSpell[event][spellId] = true
+			log(format('%.3f EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d FROM %s ON %s', Player.time, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0, srcGUID, dstGUID))
+		end
+]]
 		return
 	end
 
@@ -4764,6 +4767,10 @@ function Events:UNIT_HEALTH(unitId)
 		Player.health.current = UnitHealth(unitId)
 		Player.health.max = UnitHealthMax(unitId)
 		Player.health.pct = Player.health.current / Player.health.max * 100
+	elseif unitId == 'pet' then
+		Pet.health.current = UnitHealth(unitId)
+		Pet.health.max = UnitHealthMax(unitId)
+		Pet.health.pct = Pet.health.current / Pet.health.max * 100
 	end
 end
 
@@ -4773,6 +4780,8 @@ function Events:UNIT_MAXPOWER(unitId)
 		Player.mana.base = Player.BaseMana[Player.level]
 		Player.mana.max = UnitPowerMax(unitId, 0)
 		Player.soul_shards.max = UnitPowerMax(unitId, 7)
+	elseif unitId == 'pet' then
+		Pet.mana.max = UnitPowerMax(unitId, 0)
 	end
 end
 
@@ -4878,10 +4887,6 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 		end
 	end
 
-	Player.set_bonus.t29 = (Player:Equipped(200333) and 1 or 0) + (Player:Equipped(200335) and 1 or 0) + (Player:Equipped(200336) and 1 or 0) + (Player:Equipped(200337) and 1 or 0) + (Player:Equipped(200338) and 1 or 0)
-	Player.set_bonus.t30 = (Player:Equipped(202531) and 1 or 0) + (Player:Equipped(202532) and 1 or 0) + (Player:Equipped(202533) and 1 or 0) + (Player:Equipped(202534) and 1 or 0) + (Player:Equipped(202536) and 1 or 0)
-	Player.set_bonus.t31 = (Player:Equipped(207270) and 1 or 0) + (Player:Equipped(207271) and 1 or 0) + (Player:Equipped(207272) and 1 or 0) + (Player:Equipped(207273) and 1 or 0) + (Player:Equipped(207275) and 1 or 0)
-	Player.set_bonus.t32 = (Player:Equipped(217211) and 1 or 0) + (Player:Equipped(217212) and 1 or 0) + (Player:Equipped(217213) and 1 or 0) + (Player:Equipped(217214) and 1 or 0) + (Player:Equipped(217215) and 1 or 0)
 	Player.set_bonus.t33 = (Player:Equipped(212072) and 1 or 0) + (Player:Equipped(212073) and 1 or 0) + (Player:Equipped(212074) and 1 or 0) + (Player:Equipped(212075) and 1 or 0) + (Player:Equipped(212077) and 1 or 0)
 
 	Player:UpdateKnown()
