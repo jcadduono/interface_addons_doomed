@@ -1079,10 +1079,6 @@ DrainLife.buff_duration = 6
 DrainLife.tick_interval = 1
 DrainLife.hasted_duration = true
 DrainLife.hasted_ticks = true
-local SpellLock = Ability:Add(119910, false, true)
-SpellLock.cooldown_duration = 24
-SpellLock.requires_pet = true
-SpellLock.player_triggered = true
 ------ Talents
 local FelDomination = Ability:Add(333889, true, true)
 FelDomination.buff_duration = 15
@@ -1351,6 +1347,11 @@ Pet.LegionStrike = Ability:Add(30213, false, 'pet')
 Pet.LegionStrike.triggers_gcd = false
 Pet.LegionStrike.off_gcd = true
 Pet.LegionStrike:AutoAoe()
+Pet.SpellLock = Ability:Add(119910, false, 'pet')
+Pet.SpellLock.cooldown_duration = 24
+Pet.SpellLock.triggers_gcd = false
+Pet.SpellLock.off_gcd = true
+Pet.SpellLock.player_triggered = true
 ---- Destruction
 local Immolate = Ability:Add(348, false, true, 157736)
 Immolate.buff_duration = 18
@@ -1475,6 +1476,11 @@ Wither.triggers_combat = true
 Wither.learn_spellId = 445465
 Wither:AutoAoe(false, 'apply')
 Wither:Track()
+local Malevolence = Ability:Add(442726, true, true)
+Malevolence.buff_duration = 20
+Malevolence.cooldown_duration = 60
+Malevolence.mana_cost = 1
+Malevolence.learn_spellId = 430014
 ---- Soul Harvester
 
 -- Tier set bonuses
@@ -1909,8 +1915,6 @@ function Player:UpdateKnown()
 	if Mayhem.known then
 		Havoc.known = true
 	end
-	SpellLock.known = SummonFelhunter.known
-	ImpendingRuin.known = RitualOfRuin.known
 	if Wither.known then
 		Immolate.known = false
 		Corruption.known = false
@@ -1923,6 +1927,7 @@ function Player:UpdateKnown()
 		SummonVilefiend.known = false
 		SummonGloomhound.known = true
 	end
+	ImpendingRuin.known = RitualOfRuin.known
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -2163,6 +2168,7 @@ function Pet:UpdateKnown()
 	Pet.LegionStrike.known = SummonFelguard.known
 	Pet.Felstorm.known = SummonFelguard.known
 	Pet.FiendishWrath.known = Guillotine.known
+	Pet.SpellLock.known = SummonFelhunter.known
 
 	Abilities:Update()
 end
@@ -2548,7 +2554,7 @@ function Guillotine:Remains()
 	return Pet.FiendishWrath:Remains()
 end
 
-function SpellLock:Usable(...)
+function Pet.SpellLock:Usable(...)
 	if SummonFelhunter:Down() then
 		return false
 	end
@@ -3320,7 +3326,7 @@ actions.precombat+=/shadow_bolt
 		if Opt.healthstone and CreateHealthstone:Usable() and (Healthstone:Charges() + DemonicHealthstone:Charges()) == 0 then
 			return CreateHealthstone
 		end
-		if not Pet.active then
+		if not Pet.active or SummonFelguard:Down() then
 			if FelDomination:Usable() then
 				UseCooldown(FelDomination)
 			end
@@ -3789,6 +3795,13 @@ actions+=/conflagrate,if=charges>(max_charges-1)|fight_remains<gcd.max*charges
 actions+=/conflagrate,if=talent.backdraft&soul_shard>1.5&charges_fractional>1.5&buff.backdraft.down
 actions+=/incinerate
 ]]
+	if Malevolence:Usable() and self.dot:Ticking() >= min(5, Player.enemies) and (
+		not SummonInfernal.known or
+		SummonInfernal:Up() or
+		not SummonInfernal:Ready(50)
+	) then
+		UseCooldown(Malevolence)
+	end
 	if (Player.enemies >= (3 - (Inferno.known and 1 or 0))) and not self.cleave_apl then
 		local apl = self:aoe()
 		if apl then return apl end
@@ -3836,7 +3849,7 @@ actions+=/incinerate
 		if CrashingChaos.known and ChaosBolt:Usable() and SummonInfernal:Ready() and Player.soul_shards.current > 4 then
 			return ChaosBolt
 		end
-		if SummonInfernal:Usable() then
+		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
 			UseCooldown(SummonInfernal)
 		end
 	end
@@ -3945,7 +3958,7 @@ actions.aoe+=/incinerate
 		if SummonSoulkeeper:Usable() and (TormentedSoul:Stack() >= 10 or (Target.boss and Target.timeToDie < 10 and TormentedSoul:Stack() > 3)) then
 			UseCooldown(SummonSoulkeeper)
 		end
-		if SummonInfernal:Usable() then
+		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
 			UseCooldown(SummonInfernal)
 		end
 	end
@@ -4066,7 +4079,7 @@ actions.cleave+=/incinerate
 		return ChaosBolt
 	end
 	if self.use_cds then
-		if SummonInfernal:Usable() then
+		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
 			UseCooldown(SummonInfernal)
 		end
 		if ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) then
@@ -4235,11 +4248,11 @@ actions.variables+=/variable,name=trinket_2_will_lose_cast,value=((floor((fight_
 end
 
 APL.Interrupt = function(self)
-	if SpellLock:Usable() then
-		return SpellLock
+	if Pet.SpellLock:Usable() then
+		return Pet.SpellLock
 	end
-	if AxeToss:Usable() then
-		return AxeToss
+	if Pet.AxeToss:Usable() then
+		return Pet.AxeToss
 	end
 	if MortalCoil:Usable() then
 		return MortalCoil
