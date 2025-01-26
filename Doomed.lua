@@ -2101,6 +2101,7 @@ function Player:Init()
 	_, self.instance = IsInInstance()
 	Events:GROUP_ROSTER_UPDATE()
 	Events:PLAYER_SPECIALIZATION_CHANGED('player')
+	Implosion:Implode()
 end
 
 function Player:ImpsIn(seconds)
@@ -5254,8 +5255,7 @@ function Events:SPELL_UPDATE_COOLDOWN()
 		doomedPanel.swipe:SetCooldown(cooldown.startTime, cooldown.duration)
 	end
 	if Implosion.known and IsFlying() and GetSpellCount(Implosion.spellId) == 0 then
-		Pet.WildImp:Clear()
-		Pet.WildImpID:Clear()
+		Implosion:Implode()
 	end
 end
 
