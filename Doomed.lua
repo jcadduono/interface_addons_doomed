@@ -1258,6 +1258,7 @@ HandOfGuldan:AutoAoe(true)
 local ImpGangBoss = Ability:Add(387445, true, true, 387458)
 ImpGangBoss:Track()
 local InnerDemons = Ability:Add(267216, false, true)
+InnerDemons.cooldown_duration = 12
 local Implosion = Ability:Add(196277, false, true, 196278)
 Implosion.mana_cost = 2
 Implosion:AutoAoe()
@@ -1465,7 +1466,12 @@ Pet.Immolation = Ability:Add(20153, false, 'pet')
 Pet.Immolation:AutoAoe()
 -- Hero talents
 ---- Diabolist
-
+local Ruination = Ability:Add(434635, false, true, 434636)
+Ruination.triggers_combat = true
+Ruination:AutoAoe(true)
+Ruination.learn_spellId = 428522
+Ruination.buff = Ability:Add(433885, true, true)
+Ruination.buff.buff_duration = 20
 ---- Hellcaller
 local Wither = Ability:Add(445468, false, true, 445474)
 Wither.buff_duration = 18
@@ -1928,6 +1934,7 @@ function Player:UpdateKnown()
 		SummonGloomhound.known = true
 	end
 	ImpendingRuin.known = RitualOfRuin.known
+	Ruination.buff.known = Ruination.known
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -2106,34 +2113,40 @@ end
 
 function Player:ImpsIn(seconds)
 	local count = 0
+	local sec = self.execute_remains + seconds
 	for guid, unit in next, Pet.WildImp.active_units do
-		if Pet.WildImp:UnitRemains(unit) > (self.execute_remains + seconds) then
+		if Pet.WildImp:UnitRemains(unit) > sec then
 			count = count + 1
 		end
 	end
 	for guid, unit in next, HandOfGuldan.imp_pool do
-		if (unit - self.time) < (self.execute_remains + seconds) then
+		if (unit - self.time) < sec then
 			count = count + 1
 		end
 	end
 	if InnerDemons.known then
 		for guid, unit in next, Pet.WildImpID.active_units do
-			if Pet.WildImpID:UnitRemains(unit) > (self.execute_remains + seconds) then
+			if Pet.WildImpID:UnitRemains(unit) > sec then
 				count = count + 1
 			end
 		end
-		if InnerDemons.next_imp and (InnerDemons.next_imp - self.time) < (self.execute_remains + seconds) then
+		if InnerDemons.next_imp and (InnerDemons.next_imp - self.time) < sec then
 			count = count + 1
 		end
 	end
 	if HandOfGuldan:Casting() then
-		if HandOfGuldan.cast_shards >= 3 and (self.execute_remains + seconds) > 1 then
-			count = count + 3
-		elseif HandOfGuldan.cast_shards >= 2 and (self.execute_remains + seconds) > 0.8 then
-			count = count + 2
-		elseif HandOfGuldan.cast_shards >= 1 and (self.execute_remains + seconds) > 0.6 then
-			count = count + 1
-		end
+		count = count + (
+			(HandOfGuldan.cast_shards >= 1 and sec > 0.7 and 1 or 0) +
+			(HandOfGuldan.cast_shards >= 2 and sec > 0.9 and 1 or 0) +
+			(HandOfGuldan.cast_shards >= 3 and sec > 1.1 and 1 or 0)
+		)
+	end
+	if Ruination:Casting() then
+		count = count + (
+			(sec > 0.7 and 1 or 0) +
+			(sec > 0.9 and 1 or 0) +
+			(sec > 1.1 and 1 or 0)
+		)
 	end
 	return count
 end
@@ -2404,17 +2417,21 @@ end
 HandOfGuldan.cast_shards = 0
 HandOfGuldan.imp_pool = {}
 
-function HandOfGuldan:CastSuccess(...)
-	Ability.CastSuccess(self, ...)
-	if self.cast_shards >= 1 then
+function HandOfGuldan:Spawn(shards)
+	if shards >= 1 then
 		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.7
 	end
-	if self.cast_shards >= 2 then
+	if shards >= 2 then
 		self.imp_pool[#self.imp_pool + 1] = Player.time + 0.9
 	end
-	if self.cast_shards >= 3 then
+	if shards >= 3 then
 		self.imp_pool[#self.imp_pool + 1] = Player.time + 1.1
 	end
+end
+
+function HandOfGuldan:CastSuccess(...)
+	self:Spawn(self.cast_shards)
+	Ability.CastSuccess(self, ...)
 end
 
 function HandOfGuldan:ImpSpawned()
@@ -2430,8 +2447,34 @@ function HandOfGuldan:Purge()
 	end
 end
 
+function HandOfGuldan:Usable(...)
+	if Ruination.known and Ruination.buff:Up() then
+		return false
+	end
+	return Ability.Usable(self, ...)
+end
+
+function Ruination:Usable(...)
+	if not self.known or self.buff:Down() then
+		return false
+	end
+	return Ability.Usable(self, ...)
+end
+
+function Ruination:CastSuccess(...)
+	HandOfGuldan:Spawn(3)
+	Ability.CastSuccess(self, ...)
+end
+
+function Ruination.buff:Remains()
+	if Ruination:Casting() then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
 function InnerDemons:ImpSpawned()
-	self.next_imp = Player.time + 12
+	self.next_imp = Player.time + self:CooldownDuration()
 end
 
 function PowerSiphon:Sacrifice()
@@ -3448,6 +3491,9 @@ actions+=/shadow_bolt
 	) then
 		return Demonbolt
 	end
+	if Ruination:Usable() then
+		return Ruination
+	end
 	if HandOfGuldan:Usable() and Player.soul_shards.current > 2 and (
 		self.shard_capped or
 		(not CallDreadstalkers:Ready(Player.gcd * 4) and not SummonDemonicTyrant:Ready(17)) or
@@ -3500,6 +3546,9 @@ actions.tyrant+=/demonbolt,cycle_targets=1,if=soul_shard<4&buff.demonic_core.up&
 actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<3&variable.pet_expire>action.summon_demonic_tyrant.execute_time+gcd.max*3|variable.pet_expire=0
 actions.tyrant+=/shadow_bolt
 ]]
+	if Ruination:Usable() and self.pet_expire > (0.2 + Ruination:CastTime() + SummonDemonicTyrant:CastTime()) and SummonDemonicTyrant:Ready(Ruination:CastTime()) and self.pet_expire < (Player.gcd * 4) then
+		return Ruination
+	end
 	if HandOfGuldan:Usable() and self.pet_expire > (0.2 + HandOfGuldan:CastTime() + SummonDemonicTyrant:CastTime()) and SummonDemonicTyrant:Ready(HandOfGuldan:CastTime()) and self.pet_expire < (Player.gcd * 4) then
 		return HandOfGuldan
 	end
@@ -3551,6 +3600,9 @@ actions.tyrant+=/shadow_bolt
 	end
 	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (0.2 + SummonDemonicTyrant:CastTime() + Player.gcd + HandOfGuldan:CastTime()) and Pet.Dreadstalker:Up() and (not self.fiend.known or self.fiend:Up()) then
 		return Demonbolt
+	end
+	if Ruination:Usable() and (self.fiend:Up() or (not self.fiend.known and Pet.Dreadstalker:Up())) then
+		return Ruination
 	end
 	if ShadowBolt:Usable() and not self.shard_capped and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * (3 + (DemonicCore:Stack() * 2))) and (not self.fiend.known or self.fiend:Up()) then
 		return ShadowBolt
