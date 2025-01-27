@@ -1317,6 +1317,7 @@ TheHoundmastersStratagem.buff_duration = 12
 ------ Procs
 local DemonicCore = Ability:Add(267102, true, true, 264173)
 DemonicCore.buff_duration = 20
+DemonicCore.max_stack = 4
 ------ Pet Abilities
 Pet.AxeToss = Ability:Add(89766, false, 'pet', 119914)
 Pet.AxeToss.cooldown_duration = 30
@@ -3507,7 +3508,7 @@ actions+=/shadow_bolt
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() and (
 		(Player.soul_shards.current < 5 and DemonicCore:Remains() < (Player.gcd * 2)) or
-		(Player.soul_shards.current < 4 and (DemonicCore:Stack() + Pet.Dreadstalker:Expiring(Player.gcd * 2)) > 4)
+		(Player.soul_shards.current < 4 and (DemonicCore:Stack() + Pet.Dreadstalker:Expiring(Player.gcd * 2)) >= DemonicCore:MaxStack())
 	) then
 		return Demonbolt
 	end
@@ -3593,7 +3594,7 @@ actions.tyrant+=/shadow_bolt
 	end
 	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and (
 		DemonicCore:Remains() < (Player.gcd * 2) or
-		(DemonicCore:Stack() + Pet.Dreadstalker:Expiring(Player.gcd * 2)) > 4
+		(DemonicCore:Stack() + Pet.Dreadstalker:Expiring(Player.gcd * 2)) >= DemonicCore:MaxStack()
 	) then
 		return Demonbolt
 	end
