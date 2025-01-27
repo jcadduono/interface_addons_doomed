@@ -574,6 +574,9 @@ function Ability:Usable(seconds)
 	if not self.known then
 		return false
 	end
+	if self.Available and not self:Available(seconds) then
+		return false
+	end
 	if self.requires_pet and not Pet.active then
 		return false
 	end
@@ -1466,6 +1469,13 @@ Pet.Immolation = Ability:Add(20153, false, 'pet')
 Pet.Immolation:AutoAoe()
 -- Hero talents
 ---- Diabolist
+local InfernalBolt = Ability:Add(434506, false, true)
+InfernalBolt.shard_gain = 3
+InfernalBolt.triggers_combat = true
+InfernalBolt.learn_spellId = 428518 -- Secrets of the Coven
+InfernalBolt:SetVelocity(30)
+InfernalBolt.buff = Ability:Add(433891, true, true)
+InfernalBolt.buff.buff_duration = 20
 local Ruination = Ability:Add(434635, false, true, 434636)
 Ruination.triggers_combat = true
 Ruination:AutoAoe(true)
@@ -2298,8 +2308,8 @@ end
 
 -- Start Ability Modifications
 
-function Implosion:Usable(...)
-	return Pet.imp_count > 0 and Ability.Usable(self, ...)
+function Implosion:Available()
+	return Pet.imp_count > 0
 end
 PowerSiphon.Usable = Implosion.Usable
 
@@ -2344,6 +2354,14 @@ function Wither:Remains()
 	return Ability.Remains(self)
 end
 
+function ShadowBolt:Available(seconds)
+	return not InfernalBolt.known or not InfernalBolt:Available(seconds)
+end
+
+function Incinerate:Available(seconds)
+	return not InfernalBolt.known or not InfernalBolt:Available(seconds)
+end
+
 function Incinerate:Free()
 	return Backlash.known and Backlash:Up()
 end
@@ -2356,11 +2374,8 @@ function Incinerate:ShardGain()
 	return gain
 end
 
-function Havoc:Usable(...)
-	if Mayhem.known then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function Havoc:Available()
+	return not Mayhem.known
 end
 
 function Havoc:Duration()
@@ -2447,18 +2462,12 @@ function HandOfGuldan:Purge()
 	end
 end
 
-function HandOfGuldan:Usable(...)
-	if Ruination.known and Ruination.buff:Up() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function HandOfGuldan:Available(seconds)
+	return not Ruination.known or not Ruination:Available(seconds)
 end
 
-function Ruination:Usable(...)
-	if not self.known or self.buff:Down() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function Ruination:Available(seconds)
+	return not self:Casting() and self.buff:Remains() > (seconds or 0)
 end
 
 function Ruination:CastSuccess(...)
@@ -2468,6 +2477,17 @@ end
 
 function Ruination.buff:Remains()
 	if Ruination:Casting() then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function InfernalBolt:Available(seconds)
+	return not self:Casting() and self.buff:Remains() > (seconds or 0)
+end
+
+function InfernalBolt.buff:Remains()
+	if InfernalBolt:Casting() then
 		return 0
 	end
 	return Ability.Remains(self)
@@ -2583,14 +2603,13 @@ function SummonDemonicTyrant:ShardGain()
 	return gain
 end
 
-function DemonicStrength:Usable(...)
-	if SummonFelguard:Down() then
-		return false
-	end
-	if DemonicStrength:Up() or Pet.FiendishWrath:Up() or Pet.Felstorm:Up() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function DemonicStrength:Available(seconds)
+	return (
+		SummonFelguard:Up() and
+		DemonicStrength:Remains() < (seconds or 0) and
+		Pet.FiendishWrath:Remains() < (seconds or 0) and
+		Pet.Felstorm:Remains() < (seconds or 0)
+	)
 end
 Guillotine.Usable = DemonicStrength.Usable
 
@@ -2598,24 +2617,18 @@ function Guillotine:Remains()
 	return Pet.FiendishWrath:Remains()
 end
 
-function Pet.SpellLock:Usable(...)
-	if SummonFelhunter:Down() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function Pet.SpellLock:Available()
+	return SummonFelhunter:Up()
 end
 
-function Pet.AxeToss:Usable(...)
-	if SummonFelguard:Down() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function Pet.AxeToss:Available()
+	return SummonFelguard:Up()
 end
 
-function Shadowfury:Usable(...)
-	return Target.stunnable and Ability.Usable(self, ...)
+function Shadowfury:Available()
+	return Target.stunnable
 end
-MortalCoil.Usable = Shadowfury.Usable
+MortalCoil.Available = Shadowfury.Available
 
 function InevitableDemise:Stack()
 	if DrainLife:Previous() or DrainLife:Channeling() then
@@ -2651,6 +2664,10 @@ function ImpendingRuin:Stack()
 		stack = stack + Player.cast.ability.shard_cost
 	end
 	return clamp(stack, 0, self:MaxStack())
+end
+
+function ChaosBolt:Available(seconds)
+	return not Ruination.known or not Ruination:Available(seconds)
 end
 
 function ChaosBolt:ShardCost()
@@ -2737,8 +2754,8 @@ function SoulFire:Cooldown()
 	return max(0, remains)
 end
 
-function GrimoireOfSacrifice:Usable(...)
-	return Pet.alive and Ability.Usable(self, ...)
+function GrimoireOfSacrifice:Available()
+	return Pet.alive
 end
 
 function ImpGangBoss:ApplyAura(guid)
@@ -3385,6 +3402,9 @@ actions.precombat+=/shadow_bolt
 			if Demonbolt:Usable() and DemonicCore:Down() then
 				return Demonbolt
 			end
+			if InfernalBolt:Usable() and Player.soul_shards.current < 3 then
+				return InfernalBolt
+			end
 			if ShadowBolt:Usable() then
 				return ShadowBolt
 			end
@@ -3498,9 +3518,13 @@ actions+=/shadow_bolt
 		self.shard_capped or
 		(not CallDreadstalkers:Ready(Player.gcd * 4) and not SummonDemonicTyrant:Ready(17)) or
 		(Player.soul_shards.current == 4 and SoulStrike.known and SoulStrike:Ready(Player.gcd * 2) and GrandWarlocksDesign.known and Player.enemies == 1) or
-		not (Player.enemies == 1 and GrandWarlocksDesign.known)
+		not (Player.enemies == 1 and GrandWarlocksDesign.known) or
+		(InfernalBolt.known and InfernalBolt.buff:Up())
 	) then
 		return HandOfGuldan
+	end
+	if InfernalBolt:Usable() and Player.soul_shards.current < 3 and Target.timeToDie > (InfernalBolt:CastTime() + InfernalBolt:TravelTime()) then
+		return InfernalBolt
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() and not self.pool_cores_for_tyrant and (
 		(DemonicCore:Stack() > 1 and (
@@ -3519,6 +3543,9 @@ actions+=/shadow_bolt
 	end
 	if self.use_cds and self.fiend:Usable() and Target.boss and Target.timeToDie < (SummonDemonicTyrant:Cooldown() + 5) then
 		UseCooldown(self.fiend)
+	end
+	if InfernalBolt:Usable() then
+		return InfernalBolt
 	end
 	if ShadowBolt:Usable() then
 		return ShadowBolt
@@ -3607,14 +3634,27 @@ actions.tyrant+=/shadow_bolt
 	if ShadowBolt:Usable() and not self.shard_capped and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * (3 + (DemonicCore:Stack() * 2))) and (not self.fiend.known or self.fiend:Up()) then
 		return ShadowBolt
 	end
-	if HandOfGuldan:Usable() and (self.shard_capped or (Player.soul_shards.current > 2 and (self.fiend:Up() or (not self.fiend.known and Pet.Dreadstalker:Up())))) then
+	if HandOfGuldan:Usable() and (
+		self.shard_capped or
+		(Player.soul_shards.current > 2 and (
+			self.fiend:Up() or
+			(not self.fiend.known and Pet.Dreadstalker:Up()) or
+			(InfernalBolt.known and InfernalBolt.buff:Up())
+		))
+	) then
 		return HandOfGuldan
 	end
 	if Demonbolt:Usable() and DemonicCore:Up() and DemonicCore:Remains() < (Player.gcd * DemonicCore:Stack()) then
 		return Demonbolt
 	end
+	if InfernalBolt:Usable() and Player.soul_shards.current < 3 and Target.timeToDie > (InfernalBolt:CastTime() + InfernalBolt:TravelTime()) then
+		return InfernalBolt
+	end
 	if PowerSiphon:Usable() and Pet.imp_count >= 2 and DemonicCore:Stack() < (3 - Pet.Dreadstalker:Expiring(Player.gcd * 3)) and (self.pet_expire == 0 or self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * (3 + DemonicCore:Stack()))) then
 		UseCooldown(PowerSiphon)
+	end
+	if InfernalBolt:Usable() then
+		return InfernalBolt
 	end
 	if ShadowBolt:Usable() then
 		return ShadowBolt
@@ -3806,6 +3846,9 @@ actions.precombat+=/incinerate
 		if self.use_cds and Cataclysm:Usable() then
 			UseCooldown(Cataclysm)
 		end
+		if InfernalBolt:Usable() and Player.soul_shards.deficit > 3 then
+			return InfernalBolt
+		end
 		if Incinerate:Usable() and Player.soul_shards.deficit > 1.5 then
 			return Incinerate
 		end
@@ -3934,6 +3977,9 @@ actions+=/incinerate
 	) then
 		return Conflagrate
 	end
+	if InfernalBolt:Usable() then
+		return InfernalBolt
+	end
 	if Incinerate:Usable() then
 		return Incinerate
 	end
@@ -4045,6 +4091,9 @@ actions.aoe+=/incinerate
 	end
 	if Conflagrate:Usable() and (not Backdraft.known or Backdraft:Stack() < 2) then
 		return Conflagrate
+	end
+	if InfernalBolt:Usable() then
+		return InfernalBolt
 	end
 	if Incinerate:Usable() then
 		return Incinerate
@@ -4175,6 +4224,9 @@ actions.cleave+=/incinerate
 	) then
 		return Conflagrate
 	end
+	if InfernalBolt:Usable() then
+		return InfernalBolt
+	end
 	if Incinerate:Usable() then
 		return Incinerate
 	end
@@ -4239,6 +4291,9 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 		(Target.boss and Target.timeToDie < DimensionalRift:CooldownDuration())
 	) then
 		UseCooldown(DimensionalRift)
+	end
+	if InfernalBolt:Usable() and InfernalBolt:CastTime() < self.havoc_remains then
+		return InfernalBolt
 	end
 	if Incinerate:Usable() and Incinerate:CastTime() < self.havoc_remains then
 		return Incinerate
