@@ -1303,10 +1303,10 @@ SummonCharhound.cooldown_duration = 30
 SummonCharhound.shard_cost = 1
 SummonCharhound.summon_count = 1
 local SummonGloomhound = Ability:Add(455465, false, true)
-SummonCharhound.buff_duration = 15
-SummonCharhound.cooldown_duration = 30
-SummonCharhound.shard_cost = 1
-SummonCharhound.summon_count = 1
+SummonGloomhound.buff_duration = 15
+SummonGloomhound.cooldown_duration = 30
+SummonGloomhound.shard_cost = 1
+SummonGloomhound.summon_count = 1
 local SummonVilefiend = Ability:Add(264119, false, true)
 SummonVilefiend.buff_duration = 15
 SummonVilefiend.cooldown_duration = 30
@@ -2312,7 +2312,7 @@ end
 function Implosion:Available()
 	return Pet.imp_count > 0
 end
-PowerSiphon.Usable = Implosion.Usable
+PowerSiphon.Available = Implosion.Available
 
 function Corruption:Remains()
 	if SeedOfCorruption:Ticking() > 0 or SeedOfCorruption:Previous() then
@@ -2604,15 +2604,17 @@ function SummonDemonicTyrant:ShardGain()
 	return gain
 end
 
-function DemonicStrength:Available(seconds)
+function SummonFelguard:Busy(seconds)
 	return (
-		SummonFelguard:Up() and
-		DemonicStrength:Remains() < (seconds or 0) and
-		Pet.FiendishWrath:Remains() < (seconds or 0) and
-		Pet.Felstorm:Remains() < (seconds or 0)
+		Pet.FiendishWrath:Remains() > (seconds or 0) or
+		Pet.Felstorm:Remains() > (seconds or 0)
 	)
 end
-Guillotine.Usable = DemonicStrength.Usable
+
+function DemonicStrength:Available(seconds)
+	return SummonFelguard:Up() and not SummonFelguard:Busy(seconds)
+end
+Guillotine.Available = DemonicStrength.Available
 
 function Guillotine:Remains()
 	return Pet.FiendishWrath:Remains()
