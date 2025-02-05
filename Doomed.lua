@@ -5031,13 +5031,16 @@ CombatEvent.TRIGGER = function(timeStamp, event, _, srcGUID, _, _, _, dstGUID, _
 end
 
 CombatEvent.UNIT_DIED = function(event, srcGUID, dstGUID)
-	local uid = ToUID(dstGUID)
-	if not uid or Target.Dummies[uid] then
-		return
-	end
 	TrackedAuras:Remove(dstGUID)
 	if Opt.auto_aoe then
 		AutoAoe:Remove(dstGUID)
+	end
+	if dstGUID == Player.guid then
+		Implosion:Implode()
+	end
+	local uid = ToUID(dstGUID)
+	if not uid or Target.Dummies[uid] then
+		return
 	end
 	local pet = SummonedPets.byUnitId[uid]
 	if pet then
