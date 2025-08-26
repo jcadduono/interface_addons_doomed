@@ -1487,6 +1487,14 @@ Pet.Immolation = Ability:Add(20153, false, 'pet')
 Pet.Immolation:AutoAoe()
 -- Hero talents
 ---- Diabolist
+local DemonicArt = {}
+DemonicArt.MotherOfChaos = Ability:Add(432794, true, true)
+DemonicArt.MotherOfChaos.buff_duration = 60
+DemonicArt.Overlord = Ability:Add(428524, true, true)
+DemonicArt.Overlord.buff_duration = 60
+DemonicArt.PitLord = Ability:Add(432795, true, true)
+DemonicArt.PitLord.buff_duration = 60
+local DiabolicRitual = Ability:Add(428514, true, true, 470479)
 local InfernalBolt = Ability:Add(434506, false, true)
 InfernalBolt.shard_gain = 3
 InfernalBolt.triggers_combat = true
@@ -2108,6 +2116,11 @@ function Player:UpdateKnown()
 		SummonVilefiend.known = false
 		SummonGloomhound.known = true
 	end
+	if DiabolicRitual.known then
+		DemonicArt.MotherOfChaos.known = true
+		DemonicArt.Overlord.known = true
+		DemonicArt.PitLord.known = true
+	end
 	ImpendingRuin.known = RitualOfRuin.known
 	Ruination.buff.known = Ruination.known
 
@@ -2642,6 +2655,9 @@ function Ruination.buff:Remains()
 	if Ruination:Casting() then
 		return 0
 	end
+	if DemonicArt.PitLord:Up() and HandOfGuldan:Casting() then
+		return self:Duration()
+	end
 	return Ability.Remains(self)
 end
 
@@ -2652,6 +2668,9 @@ end
 function InfernalBolt.buff:Remains()
 	if InfernalBolt:Casting() then
 		return 0
+	end
+	if DemonicArt.MotherOfChaos:Up() and HandOfGuldan:Casting() then
+		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
