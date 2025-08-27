@@ -3757,10 +3757,10 @@ actions.tyrant+=/demonbolt,cycle_targets=1,if=soul_shard<4&buff.demonic_core.up&
 actions.tyrant+=/power_siphon,if=buff.demonic_core.stack<3&variable.pet_expire>action.summon_demonic_tyrant.execute_time+gcd.max*3|variable.pet_expire=0
 actions.tyrant+=/shadow_bolt
 ]]
-	if Ruination:Usable() and self.pet_expire > (0.2 + Ruination:CastTime() + SummonDemonicTyrant:CastTime()) and SummonDemonicTyrant:Ready(Ruination:CastTime()) and self.pet_expire < (Player.gcd * 4) then
+	if Ruination:Usable() and SummonDemonicTyrant:Ready(Ruination:CastTime()) and between(self.pet_expire, 0.2 + Ruination:CastTime() + SummonDemonicTyrant:CastTime(), Player.gcd * 4) then
 		return Ruination
 	end
-	if HandOfGuldan:Usable() and self.pet_expire > (0.2 + HandOfGuldan:CastTime() + SummonDemonicTyrant:CastTime()) and SummonDemonicTyrant:Ready(HandOfGuldan:CastTime()) and self.pet_expire < (Player.gcd * 4) then
+	if HandOfGuldan:Usable() and SummonDemonicTyrant:Ready(HandOfGuldan:CastTime()) and between(self.pet_expire, 0.2 + HandOfGuldan:CastTime() + SummonDemonicTyrant:CastTime(), Player.gcd * 4) then
 		return HandOfGuldan
 	end
 	if self.pet_expire > 0 and (
@@ -3812,7 +3812,11 @@ actions.tyrant+=/shadow_bolt
 	if Demonbolt:Usable() and Player.soul_shards.current < 4 and DemonicCore:Up() and self.pet_expire > (0.2 + SummonDemonicTyrant:CastTime() + Player.gcd + HandOfGuldan:CastTime()) and Pet.Dreadstalker:Up() and (not self.fiend.known or self.fiend:Up()) then
 		return Demonbolt
 	end
-	if Ruination:Usable() and (self.fiend:Up() or (not self.fiend.known and Pet.Dreadstalker:Up())) then
+	if Ruination:Usable() and (
+		self.shard_capped or
+		self.fiend:Up() or
+		(not self.fiend.known and Pet.Dreadstalker:Up())
+	) then
 		return Ruination
 	end
 	if ShadowBolt:Usable() and not self.shard_capped and self.pet_expire > (SummonDemonicTyrant:CastTime() + Player.gcd * (3 + (DemonicCore:Stack() * 2))) and (not self.fiend.known or self.fiend:Up()) then
