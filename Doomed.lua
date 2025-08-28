@@ -1418,7 +1418,9 @@ Conflagrate.requires_charge = true
 Conflagrate.hasted_cooldown = true
 local CrashingChaos = Ability:Add(417234, true, true, 417282)
 CrashingChaos.buff_duration = 45
-local Decimation = Ability:Add(387176, false, true)
+local Decimation = Ability:Add(456985, true, true, 457555)
+Decimation.buff_duration = 10
+Decimation.max_stack = 1
 local DiabolicEmbers = Ability:Add(387173, false, true)
 local DimensionalRift = Ability:Add(387976, true, true)
 DimensionalRift.cooldown_duration = 45
@@ -1436,12 +1438,12 @@ Havoc:Track()
 local ImpendingRuin = Ability:Add(387158, true, true) -- Ritual of Ruin progress
 ImpendingRuin.buff_duration = 3600
 ImpendingRuin.max_stack = 20
+local ImprovedChaosBolt = Ability:Add(456951, true, true)
 local Incinerate = Ability:Add(29722, false, true)
 Incinerate.mana_cost = 2
 Incinerate.shard_gain = 0.2
 Incinerate.triggers_combat = true
 Incinerate:SetVelocity(25)
-local Inferno = Ability:Add(270545, false, true)
 local InternalCombustion = Ability:Add(266134, false, true)
 local MasterRitualist = Ability:Add(387165, false, true)
 local Mayhem = Ability:Add(387506, false, true)
@@ -1775,9 +1777,6 @@ local Healthstone = InventoryItem:Add(5512)
 Healthstone.created_by = CreateHealthstone
 Healthstone.max_charges = 3
 -- Equipment
-local DreambinderLoomOfTheGreatCycle = InventoryItem:Add(208616)
-DreambinderLoomOfTheGreatCycle.cooldown_duration = 120
-DreambinderLoomOfTheGreatCycle.off_gcd = false
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
 Trinket.SpymastersWeb = InventoryItem:Add(220202)
@@ -2509,7 +2508,10 @@ function Immolate:Duration()
 end
 
 function Immolate:Remains()
-	if Cataclysm.known and Cataclysm:Casting() then
+	if (
+		(Cataclysm.known and Cataclysm:Casting()) or
+		(SoulFire.known and (Decimation:Casting() or Decimation:Traveling() > 0))
+	) then
 		return self:Duration()
 	end
 	return Ability.Remains(self)
@@ -2524,7 +2526,10 @@ function Wither:Duration()
 end
 
 function Wither:Remains()
-	if Cataclysm.known and Cataclysm:Casting() then
+	if (
+		(Cataclysm.known and Cataclysm:Casting()) or
+		(SoulFire.known and (Decimation:Casting() or Decimation:Traveling() > 0))
+	) then
 		return self:Duration()
 	end
 	return Ability.Remains(self)
@@ -2872,11 +2877,7 @@ function RainOfFire:ShardCost()
 	if RitualOfRuin.known and RitualOfRuin:Up() then
 		return 0
 	end
-	local cost = Ability.ShardCost(self)
-	if Inferno.known then
-		cost = cost - 1
-	end
-	return max(0, cost)
+	return Ability.ShardCost(self)
 end
 
 function Backdraft:Stack()
@@ -2928,14 +2929,6 @@ function Eradication:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
-end
-
-function SoulFire:Cooldown()
-	local remains = Ability.Cooldown(self)
-	if Decimation.known and Incinerate:Casting() and Target.health.pct <= 50 then
-		remains = remains - 5
-	end
-	return max(0, remains)
 end
 
 function GrimoireOfSacrifice:Available()
@@ -2998,6 +2991,11 @@ end
 function SummonCharhound:Remains()
 	return Pet.Charhound:Remains()
 end
+
+function DemonicArt:Remains()
+	return max(self.Overlord:Remains(), self.PitLord:Remains(), self.MotherOfChaos:Remains())
+end
+DemonicArt.Up = Ability.Up
 
 -- End Ability Modifications
 
@@ -3916,12 +3914,6 @@ actions.items+=/use_item,slot=trinket2,if=!variable.trinket_2_buffs&(trinket.1.c
 			return UseCooldown(Trinket2)
 		end
 	end
-	if DreambinderLoomOfTheGreatCycle:Usable() and (
-		(Pet.tyrant_remains == 0 and (not self.tyrant_prep or self.pet_expire == 0)) or
-		(Pet.tyrant_remains > 0 and (not DemonicStrength.known or not DemonicStrength:Ready()))
-	) then
-		return UseCooldown(DreambinderLoomOfTheGreatCycle)
-	end
 end
 
 APL[SPEC.DEMONOLOGY].variables = function(self)
@@ -3992,26 +3984,11 @@ APL[SPEC.DESTRUCTION].Main = function(self)
 
 	if Player:TimeInCombat() == 0 then
 --[[
-actions.precombat=flask
-actions.precombat+=/food
-actions.precombat+=/augmentation
-actions.precombat+=/summon_pet
-actions.precombat+=/variable,name=cleave_apl,default=0,op=reset
-actions.precombat+=/variable,name=trinket_1_buffs,value=trinket.1.has_use_buff
-actions.precombat+=/variable,name=trinket_2_buffs,value=trinket.2.has_use_buff
-actions.precombat+=/variable,name=trinket_1_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_1_buffs&(trinket.1.cooldown.duration%%cooldown.summon_infernal.duration=0|cooldown.summon_infernal.duration%%trinket.1.cooldown.duration=0)
-actions.precombat+=/variable,name=trinket_2_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_2_buffs&(trinket.2.cooldown.duration%%cooldown.summon_infernal.duration=0|cooldown.summon_infernal.duration%%trinket.2.cooldown.duration=0)
-actions.precombat+=/variable,name=trinket_1_manual,value=trinket.1.is.belorrelos_the_suncaller|trinket.1.is.nymues_unraveling_spindle|trinket.1.is.timethiefs_gambit
-actions.precombat+=/variable,name=trinket_2_manual,value=trinket.2.is.belorrelos_the_suncaller|trinket.2.is.nymues_unraveling_spindle|trinket.2.is.timethiefs_gambit
-actions.precombat+=/variable,name=trinket_1_exclude,value=trinket.1.is.ruby_whelp_shell|trinket.1.is.whispering_incarnate_icon
-actions.precombat+=/variable,name=trinket_2_exclude,value=trinket.2.is.ruby_whelp_shell|trinket.2.is.whispering_incarnate_icon
-actions.precombat+=/variable,name=trinket_1_buff_duration,value=trinket.1.proc.any_dps.duration+(trinket.1.is.mirror_of_fractured_tomorrows*20)+(trinket.1.is.nymues_unraveling_spindle*2)
-actions.precombat+=/variable,name=trinket_2_buff_duration,value=trinket.2.proc.any_dps.duration+(trinket.2.is.mirror_of_fractured_tomorrows*20)+(trinket.2.is.nymues_unraveling_spindle*2)
-actions.precombat+=/variable,name=trinket_priority,op=setif,value=2,value_else=1,condition=!variable.trinket_1_buffs&variable.trinket_2_buffs|variable.trinket_2_buffs&((trinket.2.cooldown.duration%variable.trinket_2_buff_duration)*(1+0.5*trinket.2.has_buff.intellect)*(variable.trinket_2_sync)*(1-0.5*trinket.2.is.mirror_of_fractured_tomorrows))>((trinket.1.cooldown.duration%variable.trinket_1_buff_duration)*(1+0.5*trinket.1.has_buff.intellect)*(variable.trinket_1_sync)*(1-0.5*trinket.1.is.mirror_of_fractured_tomorrows))
+actions.precombat=summon_pet
 actions.precombat+=/grimoire_of_sacrifice,if=talent.grimoire_of_sacrifice.enabled
 actions.precombat+=/snapshot_stats
+actions.precombat+=/cataclysm,if=active_enemies>=2&raid_event.adds.in>15
 actions.precombat+=/soul_fire
-actions.precombat+=/cataclysm,if=raid_event.adds.in>15
 actions.precombat+=/incinerate
 ]]
 		if Opt.healthstone and CreateHealthstone:Usable() and (Healthstone:Charges() + DemonicHealthstone:Charges()) == 0 then
@@ -4055,38 +4032,33 @@ actions.precombat+=/incinerate
 	end
 --[[
 actions=call_action_list,name=variables
-actions+=/call_action_list,name=aoe,if=(active_enemies>=3-talent.inferno)&!variable.cleave_apl
+actions+=/call_action_list,name=aoe,if=(active_enemies>=3)&!variable.cleave_apl
 actions+=/call_action_list,name=cleave,if=active_enemies!=1|variable.cleave_apl
 actions+=/call_action_list,name=ogcd
 actions+=/call_action_list,name=items
-actions+=/conflagrate,if=(talent.roaring_blaze&debuff.conflagrate.remains<1.5)&soul_shard>1.5|charges=max_charges
-actions+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
-actions+=/cataclysm,if=raid_event.adds.in>15
-actions+=/channel_demonfire,if=talent.raging_demonfire&(dot.immolate.remains-5*(action.chaos_bolt.in_flight&talent.internal_combustion))>cast_time&(debuff.conflagrate.remains>execute_time|!talent.roaring_blaze)
-actions+=/soul_fire,if=soul_shard<=3.5&(debuff.conflagrate.remains>cast_time+travel_time|!talent.roaring_blaze&buff.backdraft.up)
-actions+=/immolate,if=(((dot.immolate.remains-5*(action.chaos_bolt.in_flight&talent.internal_combustion))<dot.immolate.duration*0.3)|dot.immolate.remains<3|(dot.immolate.remains-action.chaos_bolt.execute_time)<5&talent.internal_combustion&action.chaos_bolt.usable)&(!talent.cataclysm|cooldown.cataclysm.remains>dot.immolate.remains)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.immolate.remains-5*talent.internal_combustion))&target.time_to_die>8
-actions+=/channel_demonfire,if=dot.immolate.remains>cast_time&set_bonus.tier30_4pc
-actions+=/chaos_bolt,if=cooldown.summon_infernal.remains=0&soul_shard>4&talent.crashing_chaos
+actions+=/malevolence,if=cooldown.summon_infernal.remains>=55
+actions+=/summon_infernal,if=demonic_art
+actions+=/chaos_bolt,if=talent.diabolic_ritual&(demonic_art|((buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)<(action.chaos_bolt.execute_time)))
+actions+=/soul_fire,if=buff.decimation.react&(soul_shard<=4|buff.decimation.remains<=gcd.max*2)&debuff.conflagrate.remains>=execute_time
+actions+=/wither,if=talent.internal_combustion&(((dot.wither.remains-5*action.chaos_bolt.in_flight)<dot.wither.duration*0.4)|dot.wither.remains<3|(dot.wither.remains-action.chaos_bolt.execute_time)<5&action.chaos_bolt.usable)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.wither.remains-5))&target.time_to_die>8&!action.soul_fire.in_flight_to_target
+actions+=/conflagrate,if=talent.roaring_blaze&debuff.conflagrate.remains<1.5|full_recharge_time<=gcd.max*2|recharge_time<=8&(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)<gcd.max)&soul_shard>=1.5
+actions+=/shadowburn,if=talent.wither&((cooldown.shadowburn.full_recharge_time<=gcd.max*3|debuff.eradication.remains<=gcd.max&talent.eradication&!action.chaos_bolt.in_flight&!talent.diabolic_ritual)&(talent.conflagration_of_chaos|talent.blistering_atrophy)|fight_remains<=8)
+actions+=/shadowburn,if=(cooldown.summon_infernal.remains>=90&talent.rain_of_chaos)|buff.malevolence.up
+actions+=/chaos_bolt,if=(cooldown.summon_infernal.remains>=90&talent.rain_of_chaos)|buff.malevolence.up
+actions+=/ruination
+actions+=/cataclysm,if=raid_event.adds.in>15&(talent.wither&dot.wither.refreshable)
+actions+=/channel_demonfire,if=talent.raging_demonfire&(dot.immolate.remains+dot.wither.remains-5*(action.chaos_bolt.in_flight&talent.internal_combustion))>cast_time
+actions+=/wither,if=!talent.internal_combustion&(((dot.wither.remains-5*(action.chaos_bolt.in_flight))<dot.wither.duration*0.3)|dot.wither.remains<3)&(!talent.cataclysm|cooldown.cataclysm.remains>dot.wither.remains)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.wither.remains))&target.time_to_die>8&!action.soul_fire.in_flight_to_target
+actions+=/immolate,if=(((dot.immolate.remains-5*(action.chaos_bolt.in_flight&talent.internal_combustion))<dot.immolate.duration*0.3)|dot.immolate.remains<3|(dot.immolate.remains-action.chaos_bolt.execute_time)<5&talent.internal_combustion&action.chaos_bolt.usable)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.immolate.remains-5*talent.internal_combustion))&target.time_to_die>8&!action.soul_fire.in_flight_to_target
 actions+=/summon_infernal
-actions+=/chaos_bolt,if=pet.infernal.active|pet.overfiend.active|soul_shard>=4
-actions+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
-actions+=/chaos_bolt,if=buff.rain_of_chaos.remains>cast_time
-actions+=/chaos_bolt,if=buff.backdraft.up
-actions+=/channel_demonfire,if=!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))&dot.immolate.remains>cast_time
+actions+=/chaos_bolt,if=(variable.pooling_condition_cb&(cooldown.summon_infernal.remains>=gcd.max*3|soul_shard>4))&(talent.wither|((buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)>(action.chaos_bolt.execute_time+2*gcd.max)))
+actions+=/channel_demonfire
 actions+=/dimensional_rift
-actions+=/chaos_bolt,if=fight_remains<5&fight_remains>cast_time+travel_time
+actions+=/infernal_bolt,if=soul_shard<=3
 actions+=/conflagrate,if=charges>(max_charges-1)|fight_remains<gcd.max*charges
-actions+=/conflagrate,if=talent.backdraft&soul_shard>1.5&charges_fractional>1.5&buff.backdraft.down
 actions+=/incinerate
 ]]
-	if Malevolence:Usable() and self.dot:Ticking() >= min(5, Player.enemies) and (
-		not SummonInfernal.known or
-		SummonInfernal:Up() or
-		not SummonInfernal:Ready(50)
-	) then
-		UseCooldown(Malevolence)
-	end
-	if (Player.enemies >= (3 - (Inferno.known and 1 or 0))) and not self.cleave_apl then
+	if Player.enemies >= 3 and not self.cleave_apl then
 		local apl = self:aoe()
 		if apl then return apl end
 	end
@@ -4096,77 +4068,88 @@ actions+=/incinerate
 	end
 	self:ogcd()
 	self:items()
+	if self.use_cds and Malevolence:Usable() and self.dot:Ticking() >= min(5, Player.enemies) and (
+		not SummonInfernal.known or
+		SummonInfernal:Up() or
+		not SummonInfernal:Ready(50)
+	) then
+		UseCooldown(Malevolence)
+	end
+	if self.use_cds and DiabolicRitual.known and SummonInfernal:Usable() and DemonicArt:Up() then
+		UseCooldown(SummonInfernal)
+	end
+	if DiabolicRitual.known and ChaosBolt:Usable() and DemonicArt:Remains() > ChaosBolt:CastTime() then
+		return ChaosBolt
+	end
+	if Decimation.known and SoulFire:Usable() and Decimation:Up() and Conflagrate:Remains() >= SoulFire:CastTime() and (Player.soul_shards.current <= 4 or Decimation:Remains() <= (Player.gcd * 2)) then
+		return SoulFire
+	end
+	if InternalCombustion.known and Wither:Usable() and Target.timeToDie > 8 and Wither:Refreshable() and (not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (Wither:Remains() - 5)) and (
+		Wither:Remains() < 3 or
+		(Wither:Remains() - (ChaosBolt:Traveling() > 0 and 5 or 0)) < (Wither:Duration() * 0.4) or
+		((Wither:Remains() - ChaosBolt:CastTime()) < 5 and ChaosBolt:Usable())
+	) then
+		return Wither
+	end
 	if Conflagrate:Usable() and (
-		((RoaringBlaze.known and Conflagrate:Remains() < 1.5) and Player.soul_shards.current > 1.5) or
-		Conflagrate:FullRechargeTime() == 0
+		(RoaringBlaze.known and Conflagrate:Remains() < 1.5) or
+		(Conflagrate:FullRechargeTime() <= (Player.gcd * 2)) or
+		(DiabolicRitual.known and Player.soul_shards.current >= 1.5 and DemonicArt:Up() and DemonicArt:Remains() < Player.gcd)
 	) then
 		return Conflagrate
 	end
-	if self.use_cds then
-		if DimensionalRift:Usable() and Player.soul_shards.current < 4.7 and (
-			DimensionalRift:Charges() > 2 or
-			(Target.boss and Target.timeToDie < DimensionalRift:CooldownDuration())
-		) then
-			UseCooldown(DimensionalRift)
-		end
-		if Cataclysm:Usable() then
-			UseCooldown(Cataclysm)
-		end
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and (self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) and (not RoaringBlaze.known or Conflagrate:Remains() > (3 * Player.haste_factor)) then
-			UseCooldown(ChannelDemonfire)
-		end
-		if SoulFire:Usable() and Player.soul_shards.current <= 3.5 and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
-			Conflagrate:Remains() > (SoulFire:CastTime() + SoulFire:TravelTime()) or
-			(Backdraft.known and not RoaringBlaze.known and Backdraft:Up())
-		) then
-			UseCooldown(SoulFire)
-		end
+	if Wither.known and Shadowburn:Usable() and (
+		(Target.boss and Target.timeToDie <= 8) or
+		((ConflagrationOfChaos.known or BlisteringAtrophy.known) and (
+			Shadowburn:FullRechargeTime() <= (Player.gcd * 3) or
+			(Eradication.known and not DiabolicRitual.known and Eradication:Remains() <= Player.gcd and ChaosBolt:Traveling() == 0)
+		))
+	) then
+		return Shadowburn
 	end
-	if self.dot:Usable() and Target.timeToDie > 8 and (
-		self.dot:Remains() < 3 or
-		((self.dot:Remains() - ChaosBolt:CastTime()) < 5 and InternalCombustion.known and ChaosBolt:Usable()) or
-		((self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) < (self.dot:Duration() * 0.3))
-	) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (self.dot:Remains() - (InternalCombustion.known and 5 or 0))) then
-		return self.dot
-	end
-	if self.use_cds then
-		if CrashingChaos.known and ChaosBolt:Usable() and SummonInfernal:Ready() and Player.soul_shards.current > 4 then
+	if Malevolence.known and Malevolence:Up() then
+		if Shadowburn:Usable() then
+			return Shadowburn
+		end
+		if ChaosBolt:Usable() then
 			return ChaosBolt
 		end
-		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
-			UseCooldown(SummonInfernal)
-		end
 	end
-	if ChaosBolt:Usable() and (Pet.infernal_count > 0 or Player.soul_shards.current >= 4) then
-		return ChaosBolt
+	if Ruination:Usable() then
+		return Ruination
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and self.dot:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and Wither.known and Cataclysm:Usable() and Wither:Refreshable() then
+		UseCooldown(Cataclysm)
+	end
+	if self.use_cds and RagingDemonfire.known and ChannelDemonfire:Usable() and (self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
+	if self.dot:Usable() and Target.timeToDie > 8 and self.dot:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not self.use_cds or not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (self.dot:Remains() - (InternalCombustion.known and 5 or 0))) then
+		return self.dot
+	end
+	if self.use_cds and SummonInfernal:Usable() then
+		UseCooldown(SummonInfernal)
+	end
 	if ChaosBolt:Usable() and (
-		(RainOfChaos.known and RainOfChaos:Remains() > ChaosBolt:CastTime()) or
-		(Backdraft.known and Backdraft:Up())
+		(self.pooling_condition_cb and (not self.use_cds or Player.soul_shards.current > 4 or not SummonInfernal:Ready(Player.gcd * 3))) and
+		(Wither.known or (DiabolicRitual.known and DemonicArt:Up() and DemonicArt:Remains() > (ChaosBolt:CastTime() + (Player.gcd * 2))))
 	) then
 		return ChaosBolt
 	end
-	if self.use_cds and ChannelDemonfire:Usable() and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) and self.dot:Remains() > (3 * Player.haste_factor) then
+	if self.use_cds and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
 		UseCooldown(ChannelDemonfire)
 	end
 	if self.use_cds and DimensionalRift:Usable() then
 		UseCooldown(DimensionalRift)
 	end
-	if Target.boss and ChaosBolt:Usable() and between(Target.timeToDie, ChaosBolt:CastTime() + ChaosBolt:TravelTime(), 5) then
-		return ChaosBolt
+	if InfernalBolt:Usable() and Player.soul_shards.current < 3 and Target.timeToDie > (InfernalBolt:CastTime() + InfernalBolt:TravelTime()) then
+		return InfernalBolt
 	end
 	if Conflagrate:Usable() and (
 		Conflagrate:Charges() > (Conflagrate:MaxCharges() - 1) or
-		(Target.boss and Target.timeToDie < (Player.gcd * Conflagrate:Charges())) or
-		(Backdraft.known and Player.soul_shards.current > 1.5 and Conflagrate:ChargesFractional() > 1.5 and Backdraft:Down())
+		(Target.boss and Target.timeToDie < (Player.gcd * Conflagrate:Charges()))
 	) then
 		return Conflagrate
-	end
-	if InfernalBolt:Usable() then
-		return InfernalBolt
 	end
 	if Incinerate:Usable() then
 		return Incinerate
@@ -4174,42 +4157,83 @@ actions+=/incinerate
 end
 
 APL[SPEC.DESTRUCTION].precombat_variables = function(self)
+--[[
+actions.precombat+=/variable,name=cleave_apl,default=0,op=reset
+actions.precombat+=/variable,name=trinket_1_buffs,value=trinket.1.has_use_buff|trinket.1.is.funhouse_lens
+actions.precombat+=/variable,name=trinket_2_buffs,value=trinket.2.has_use_buff|trinket.2.is.funhouse_lens
+actions.precombat+=/variable,name=trinket_1_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_1_buffs&(trinket.1.cooldown.duration%%cooldown.summon_infernal.duration=0|cooldown.summon_infernal.duration%%trinket.1.cooldown.duration=0)
+actions.precombat+=/variable,name=trinket_2_sync,op=setif,value=1,value_else=0.5,condition=variable.trinket_2_buffs&(trinket.2.cooldown.duration%%cooldown.summon_infernal.duration=0|cooldown.summon_infernal.duration%%trinket.2.cooldown.duration=0)
+actions.precombat+=/variable,name=trinket_1_manual,value=trinket.1.is.spymasters_web
+actions.precombat+=/variable,name=trinket_2_manual,value=trinket.2.is.spymasters_web
+actions.precombat+=/variable,name=trinket_1_exclude,value=trinket.1.is.whispering_incarnate_icon
+actions.precombat+=/variable,name=trinket_2_exclude,value=trinket.2.is.whispering_incarnate_icon
+actions.precombat+=/variable,name=trinket_1_buff_duration,value=trinket.1.proc.any_dps.duration+(trinket.1.is.funhouse_lens*15)+(trinket.1.is.signet_of_the_priory*20)
+actions.precombat+=/variable,name=trinket_2_buff_duration,value=trinket.2.proc.any_dps.duration+(trinket.2.is.funhouse_lens*15)+(trinket.2.is.signet_of_the_priory*20)
+actions.precombat+=/variable,name=trinket_priority,op=setif,value=2,value_else=1,condition=!variable.trinket_1_buffs&variable.trinket_2_buffs|variable.trinket_2_buffs&((trinket.2.cooldown.duration%variable.trinket_2_buff_duration)*(1+0.5*trinket.2.has_buff.intellect)*(variable.trinket_2_sync))>((trinket.1.cooldown.duration%variable.trinket_1_buff_duration)*(1+0.5*trinket.1.has_buff.intellect)*(variable.trinket_1_sync))
+actions.precombat+=/variable,name=allow_rof_2t_spender,default=2,op=reset
+actions.precombat+=/variable,name=do_rof_2t,value=variable.allow_rof_2t_spender>1.99&!(talent.cataclysm&talent.improved_chaos_bolt),op=set
+actions.precombat+=/variable,name=disable_cb_2t,value=variable.do_rof_2t|variable.allow_rof_2t_spender>0.01&variable.allow_rof_2t_spender<0.99
+]]
 	self.dot = (
 		(Immolate.known and Immolate) or
 		(Wither.known and Wither)
 	)
+	self.cleave_apl = false
+	self.allow_rof_2t_spender = 2
+	self.do_rof_2t = self.allow_rof_2t_spender > 1.99 and not (Cataclysm.known and ImprovedChaosBolt.known)
+	self.disable_cb_2t = self.do_rof_2t or self.allow_rof_2t_spender > 0.01 and self.allow_rof_2t_spender < 0.99
 end
 
 APL[SPEC.DESTRUCTION].aoe = function(self)
 --[[
 actions.aoe=call_action_list,name=ogcd
 actions.aoe+=/call_action_list,name=items
-actions.aoe+=/call_action_list,name=havoc,if=havoc_active&havoc_remains>gcd.max&active_enemies<5+(talent.cry_havoc&!talent.inferno)&(!cooldown.summon_infernal.up|!talent.summon_infernal)
+actions.aoe+=/malevolence,if=cooldown.summon_infernal.remains>=55&soul_shard<4.7&(active_enemies<=3+active_dot.wither|time>30)
+actions.aoe+=/rain_of_fire,if=demonic_art
+actions.aoe+=/wait,sec=((buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)),if=(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)<gcd.max*0.25)&soul_shard>2
+actions.aoe+=/incinerate,if=(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)<=action.incinerate.cast_time&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)>gcd.max*0.25)
+actions.aoe+=/call_action_list,name=havoc,if=havoc_active&havoc_remains>gcd.max&active_enemies<(5+!talent.wither)&(!cooldown.summon_infernal.up|!talent.summon_infernal)
 actions.aoe+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
-actions.aoe+=/rain_of_fire,if=pet.infernal.active|pet.overfiend.active
-actions.aoe+=/rain_of_fire,if=fight_remains<12
-actions.aoe+=/rain_of_fire,if=soul_shard>=(4.5-talent.inferno-0.1*active_dot.immolate)&time>5
-actions.aoe+=/chaos_bolt,if=soul_shard>3.5-(0.1*active_enemies)&!talent.rain_of_fire
-actions.aoe+=/cataclysm,if=raid_event.adds.in>15
-actions.aoe+=/havoc,target_if=min:((-target.time_to_die)<?-15)+dot.immolate.remains+99*(self.target=target),if=(!cooldown.summon_infernal.up|!talent.summon_infernal|(talent.inferno&active_enemies>4))&target.time_to_die>8
-actions.aoe+=/immolate,target_if=min:dot.immolate.remains+99*debuff.havoc.remains,if=dot.immolate.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains)&(!talent.raging_demonfire|cooldown.channel_demonfire.remains>remains|time<5)&active_dot.immolate<=4&target.time_to_die>18
-actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time&talent.raging_demonfire
-actions.aoe+=/summon_soulkeeper,if=buff.tormented_soul.stack=10|buff.tormented_soul.stack>3&fight_remains<10
+actions.aoe+=/rain_of_fire,if=soul_shard>=(4.5-0.1*(active_dot.immolate+active_dot.wither))|soul_shard>=(3.5-0.1*(active_dot.immolate+active_dot.wither))|buff.ritual_of_ruin.up
+actions.aoe+=/wither,if=dot.wither.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.wither.remains)&(!(talent.raging_demonfire&talent.channel_demonfire)|cooldown.channel_demonfire.remains>remains|time<5)&(active_dot.wither<=4|time>15)&target.time_to_die>18
+actions.aoe+=/channel_demonfire,if=dot.immolate.remains+dot.wither.remains>cast_time&talent.raging_demonfire
+actions.aoe+=/shadowburn,if=((buff.malevolence.up&((talent.cataclysm&active_enemies<=10)))|(talent.wither&talent.cataclysm&active_enemies<=6)|(!talent.wither&talent.cataclysm&active_enemies<=4)|active_enemies<=3)&((cooldown.shadowburn.full_recharge_time<=gcd.max*3|debuff.eradication.remains<=gcd.max&talent.eradication&!action.chaos_bolt.in_flight&!talent.diabolic_ritual)&(talent.conflagration_of_chaos|talent.blistering_atrophy)|fight_remains<=8)
+actions.aoe+=/shadowburn,if=((buff.malevolence.up&((talent.cataclysm&active_enemies<=10)))|(talent.wither&talent.cataclysm&active_enemies<=6)|(!talent.wither&talent.cataclysm&active_enemies<=4)|active_enemies<=3)&((cooldown.shadowburn.full_recharge_time<=gcd.max*3|debuff.eradication.remains<=gcd.max&talent.eradication&!action.chaos_bolt.in_flight&!talent.diabolic_ritual)&(talent.conflagration_of_chaos|talent.blistering_atrophy)&time_to_die<5|fight_remains<=8)
+actions.aoe+=/ruination
+actions.aoe+=/rain_of_fire,if=pet.infernal.active&talent.rain_of_chaos
+actions.aoe+=/soul_fire,if=(buff.decimation.up)&!talent.raging_demonfire&havoc_active
+actions.aoe+=/soul_fire,if=buff.decimation.up&active_dot.immolate<=4
+actions.aoe+=/infernal_bolt,if=soul_shard<2.5
+actions.aoe+=/chaos_bolt,if=((soul_shard>3.5-(0.1*active_enemies))&!action.rain_of_fire.enabled)|(!talent.wither&talent.cataclysm&active_enemies<=3)
+actions.aoe+=/cataclysm,if=raid_event.adds.in>15|talent.wither
+actions.aoe+=/havoc,if=(!cooldown.summon_infernal.up|!talent.summon_infernal)&target.time_to_die>8&(cooldown.malevolence.remains>15|!talent.malevolence)|time<5
+actions.aoe+=/wither,if=dot.wither.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.wither.remains)&(!(talent.raging_demonfire&talent.channel_demonfire)|cooldown.channel_demonfire.remains>remains|time<5)&active_dot.wither<=active_enemies&target.time_to_die>18
+actions.aoe+=/immolate,if=dot.immolate.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains)&(!(talent.raging_demonfire&talent.channel_demonfire)|cooldown.channel_demonfire.remains>remains|time<5)&active_dot.immolate<=6&target.time_to_die>18
 actions.aoe+=/call_action_list,name=ogcd
-actions.aoe+=/summon_infernal,if=cooldown.invoke_power_infusion_0.up|cooldown.invoke_power_infusion_0.duration=0|fight_remains>=190&!talent.grand_warlocks_design
-actions.aoe+=/rain_of_fire,if=debuff.pyrogenics.down&active_enemies<=4
-actions.aoe+=/channel_demonfire,if=dot.immolate.remains>cast_time
-actions.aoe+=/immolate,target_if=min:dot.immolate.remains+99*debuff.havoc.remains,if=((dot.immolate.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains))|active_enemies>active_dot.immolate)&target.time_to_die>10&!havoc_active
-actions.aoe+=/immolate,target_if=min:dot.immolate.remains+99*debuff.havoc.remains,if=((dot.immolate.refreshable&variable.havoc_immo_time<5.4)|(dot.immolate.remains<2&dot.immolate.remains<havoc_remains)|!dot.immolate.ticking|(variable.havoc_immo_time<2)*havoc_active)&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains)&target.time_to_die>11
+actions.aoe+=/summon_infernal,if=cooldown.invoke_power_infusion_0.up|cooldown.invoke_power_infusion_0.duration=0|fight_remains>=120
+actions.aoe+=/rain_of_fire,if=debuff.pyrogenics.down&active_enemies<=4&!talent.diabolic_ritual
+actions.aoe+=/channel_demonfire,if=dot.immolate.remains+dot.wither.remains>cast_time
+actions.aoe+=/immolate,if=((dot.immolate.refreshable&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains))|active_enemies>active_dot.immolate)&target.time_to_die>10&!havoc_active
+actions.aoe+=/immolate,if=((dot.immolate.refreshable&variable.havoc_immo_time<5.4)|(dot.immolate.remains<2&dot.immolate.remains<havoc_remains)|!dot.immolate.ticking|(variable.havoc_immo_time<2)*havoc_active)&(!talent.cataclysm.enabled|cooldown.cataclysm.remains>dot.immolate.remains)&target.time_to_die>11
 actions.aoe+=/dimensional_rift
-actions.aoe+=/soul_fire,if=buff.backdraft.up
+actions.aoe+=/soul_fire,if=buff.decimation.up
 actions.aoe+=/incinerate,if=talent.fire_and_brimstone.enabled&buff.backdraft.up
 actions.aoe+=/conflagrate,if=buff.backdraft.stack<2|!talent.backdraft
 actions.aoe+=/incinerate
 ]]
 	self:ogcd()
 	self:items()
-	if self.havoc_remains > Player.gcd and Player.enemies < 5 and (not SummonInfernal.known or not SummonInfernal:Ready()) then
+	if self.use_cds and Malevolence:Usable() and self.dot:Ticking() >= min(5, Player.enemies) and (
+		not SummonInfernal.known or
+		SummonInfernal:Up() or
+		not SummonInfernal:Ready(55)
+	) then
+		UseCooldown(Malevolence)
+	end
+	if DiabolicRitual.known and RainOfFire:Usable() and DemonicArt:Up() then
+		return RainOfFire
+	end
+	if self.havoc_remains > Player.gcd and Player.enemies < (Wither.known and 5 or 6) and (not SummonInfernal.known or not SummonInfernal:Ready()) then
 		local apl = self:havoc()
 		if apl then return apl end
 	end
@@ -4220,36 +4244,71 @@ actions.aoe+=/incinerate
 		UseCooldown(DimensionalRift)
 	end
 	if RainOfFire:Usable() and (
-		Pet.infernal_count > 0 or
-		(Target.boss and Target.timeToDie < 12) or
-		(Player.soul_shards.current >= (4.5 - (Inferno.known and 1 or 0) - (0.1 * self.dot:Ticking())) and Player:TimeInCombat() > 5)
+		(RitualOfRuin.known and RitualOfRuin:Up()) or
+		Player.soul_shards.current >= (3.5 - (0.1 * self.dot:Ticking()))
 	) then
 		return RainOfFire
 	end
-	if not RainOfFire.known and ChaosBolt:Usable() and Player.soul_shards.current > (3.5 - (0.1 * Player.enemies)) then
+	if Wither:Usable() and Target.timeToDie > 18 and Wither:Refreshable() and (
+		(not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > Wither:Remains()) and
+		(not RagingDemonfire.known or ChannelDemonfire:Cooldown() > Wither:Remains() or Player:TimeInCombat() < 5) and
+		(Wither:Ticking() <= 4 or PLayer:TimeInCombat() > 15)
+	) then
+		return Wither
+	end
+	if self.use_cds and RagingDemonfire.known and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
+		UseCooldown(ChannelDemonfire)
+	end
+	if Shadowburn:Usable() and (
+		Player.enemies <= 3 or
+		Cataclysm.known and (
+			(Malevolence.known and Malevolence:Up() and Player.enemies <= 10) or
+			(Wither.known and Player.enemies <= 6) or
+			(not Wither.known and Player.enemies <= 4)
+		)
+	) and (
+		(Target.boss and Target.timeToDie <= 8) or
+		((ConflagrationOfChaos.known or BlisteringAtrophy.known) and (
+			Shadowburn:FullRechargeTime() <= (Player.gcd * 3) or
+			(Eradication.known and not DiabolicRitual.known and Eradication:Remains() <= Player.gcd and ChaosBolt:Traveling() == 0)
+		))
+	) then
+		return Shadowburn
+	end
+	if Ruination:Usable() then
+		return Ruination
+	end
+	if RainOfChaos.known and RainOfFire:Usable() and Pet.infernal_count > 0 then
+		return RainOfFire
+	end
+	if Decimation.known and SoulFire:Usable() and Decimation:Up() and (
+		(not RagingDemonfire.known and self.havoc_remains > SoulFire:CastTime()) or
+		self.dot:Ticking() <= 4
+	) then
+		return SoulFire
+	end
+	if InfernalBolt:Usable() and Player.soul_shards.current < 2.5 and Target.timeToDie > (InfernalBolt:CastTime() + InfernalBolt:TravelTime()) then
+		return InfernalBolt
+	end
+	if ChaosBolt:Usable() and (
+		(not Wither.known and Cataclysm.known and Player.enemies <= 3) or
+		(not RainOfFire.known and Player.soul_shards.current > (3.5 - (0.1 * Player.enemies)))
+	) then
 		return ChaosBolt
 	end
 	if self.use_cds and Cataclysm:Usable() then
 		UseCooldown(Cataclysm)
 	end
-	if self.use_cds and Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready() or (Inferno.known and Player.enemies> 4)) then
+	if self.use_cds and Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready()) and (not Malevolence.known or not Malevolence:Ready(15)) then
 		UseCooldown(Havoc)
 	end
-	if self.dot:Usable() and Target.timeToDie > 18 and self.dot:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not RagingDemonfire.known or ChannelDemonfire:Cooldown() > self.dot:Remains() or Player:TimeInCombat() < 5) and self.dot:Ticking() <= 4 then
+	if self.dot:Usable() and Target.timeToDie > 18 and self.dot:Refreshable() and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not RagingDemonfire.known or ChannelDemonfire:Cooldown() > self.dot:Remains() or Player:TimeInCombat() < 5) and self.dot:Ticking() <= (Wither.known and Player.enemies or 6) then
 		return self.dot
 	end
-	if self.use_cds then
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
-			UseCooldown(ChannelDemonfire)
-		end
-		if SummonSoulkeeper:Usable() and (TormentedSoul:Stack() >= 10 or (Target.boss and Target.timeToDie < 10 and TormentedSoul:Stack() > 3)) then
-			UseCooldown(SummonSoulkeeper)
-		end
-		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
-			UseCooldown(SummonInfernal)
-		end
+	if self.use_cds and SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
+		UseCooldown(SummonInfernal)
 	end
-	if RainOfFire:Usable() and Player.enemies <= 4 and (not Pyrogenics.known or Pyrogenics:Down()) then
+	if not DiabolicRitual.known and RainOfFire:Usable() and Player.enemies <= 4 and (not Pyrogenics.known or Pyrogenics:Down()) then
 		return RainOfFire
 	end
 	if self.use_cds and ChannelDemonfire:Usable() and self.dot:Remains() > (3 * Player.haste_factor) then
@@ -4266,22 +4325,17 @@ actions.aoe+=/incinerate
 	) then
 		return self.dot
 	end
-	if self.use_cds then
-		if DimensionalRift:Usable() then
-			UseCooldown(DimensionalRift)
-		end
-		if SoulFire:Usable() and Backdraft.known and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and Backdraft:Up() then
-			UseCooldown(SoulFire)
-		end
+	if self.use_cds and DimensionalRift:Usable() then
+		UseCooldown(DimensionalRift)
+	end
+	if Decimation.known and SoulFire:Usable() and Decimation:Up() and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) then
+		return SoulFire
 	end
 	if Backdraft.known and FireAndBrimstone.known and Incinerate:Usable() and Backdraft:Up() then
 		return Incinerate
 	end
 	if Conflagrate:Usable() and (not Backdraft.known or Backdraft:Stack() < 2) then
 		return Conflagrate
-	end
-	if InfernalBolt:Usable() then
-		return InfernalBolt
 	end
 	if Incinerate:Usable() then
 		return Incinerate
@@ -4293,28 +4347,34 @@ APL[SPEC.DESTRUCTION].cleave = function(self)
 actions.cleave=call_action_list,name=items
 actions.cleave+=/call_action_list,name=ogcd
 actions.cleave+=/call_action_list,name=havoc,if=havoc_active&havoc_remains>gcd.max
-actions.cleave+=/variable,name=pool_soul_shards,value=cooldown.havoc.remains<=10|talent.mayhem
-actions.cleave+=/conflagrate,if=(talent.roaring_blaze.enabled&debuff.conflagrate.remains<1.5)|charges=max_charges&!variable.pool_soul_shards
-actions.cleave+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
+actions.cleave+=/variable,name=pool_soul_shards,value=cooldown.havoc.remains<=5|talent.mayhem
+actions.cleave+=/malevolence,if=(!cooldown.summon_infernal.up|!talent.summon_infernal)
+actions.cleave+=/havoc,if=(!cooldown.summon_infernal.up|!talent.summon_infernal)&target.time_to_die>8
+actions.cleave+=/chaos_bolt,if=demonic_art
+actions.cleave+=/soul_fire,if=buff.decimation.react&(soul_shard<=4|buff.decimation.remains<=gcd.max*2)&debuff.conflagrate.remains>=execute_time&cooldown.havoc.remains
+actions.cleave+=/wither,if=talent.internal_combustion&(((dot.wither.remains-5*action.chaos_bolt.in_flight)<dot.wither.duration*0.4)|dot.wither.remains<3|(dot.wither.remains-action.chaos_bolt.execute_time)<5&action.chaos_bolt.usable)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.wither.remains-5))&target.time_to_die>8&!action.soul_fire.in_flight_to_target
+actions.cleave+=/wither,if=!talent.internal_combustion&(((dot.wither.remains-5*(action.chaos_bolt.in_flight))<dot.wither.duration*0.3)|dot.wither.remains<3)&(!talent.soul_fire|cooldown.soul_fire.remains+action.soul_fire.cast_time>(dot.wither.remains))&target.time_to_die>8&!action.soul_fire.in_flight_to_target
+actions.cleave+=/conflagrate,if=(talent.roaring_blaze.enabled&full_recharge_time<=gcd.max*2)|recharge_time<=8&(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains)<gcd.max)&!variable.pool_soul_shards
+actions.cleave+=/shadowburn,if=(cooldown.shadowburn.full_recharge_time<=gcd.max*3|debuff.eradication.remains<=gcd.max&talent.eradication&!action.chaos_bolt.in_flight&!talent.diabolic_ritual)&(talent.conflagration_of_chaos|talent.blistering_atrophy)|fight_remains<=8
+actions.cleave+=/chaos_bolt,if=buff.ritual_of_ruin.up
+actions.cleave+=/rain_of_fire,if=cooldown.summon_infernal.remains>=90&talent.rain_of_chaos
+actions.cleave+=/shadowburn,if=cooldown.summon_infernal.remains>=90&talent.rain_of_chaos
+actions.cleave+=/chaos_bolt,if=cooldown.summon_infernal.remains>=90&talent.rain_of_chaos
+actions.cleave+=/ruination,if=(debuff.eradication.remains>=execute_time|!talent.eradication|!talent.shadowburn)
 actions.cleave+=/cataclysm,if=raid_event.adds.in>15
-actions.cleave+=/channel_demonfire,if=talent.raging_demonfire&active_dot.immolate=2
+actions.cleave+=/channel_demonfire,if=talent.raging_demonfire&(dot.immolate.remains+dot.wither.remains-5*(action.chaos_bolt.in_flight&talent.internal_combustion))>cast_time
 actions.cleave+=/soul_fire,if=soul_shard<=3.5&(debuff.conflagrate.remains>cast_time+travel_time|!talent.roaring_blaze&buff.backdraft.up)&!variable.pool_soul_shards
-actions.cleave+=/immolate,target_if=min:dot.immolate.remains+99*debuff.havoc.remains,if=(dot.immolate.refreshable&(dot.immolate.remains<cooldown.havoc.remains|!dot.immolate.ticking))&(!talent.cataclysm|cooldown.cataclysm.remains>remains)&(!talent.soul_fire|cooldown.soul_fire.remains+(!talent.mayhem*action.soul_fire.cast_time)>dot.immolate.remains)&target.time_to_die>15
-actions.cleave+=/havoc,target_if=min:((-target.time_to_die)<?-15)+dot.immolate.remains+99*(self.target=target),if=(!cooldown.summon_infernal.up|!talent.summon_infernal)&target.time_to_die>8
-actions.cleave+=/dimensional_rift,if=soul_shard<4.5&variable.pool_soul_shards
-actions.cleave+=/chaos_bolt,if=pet.infernal.active|pet.overfiend.active|soul_shard>=4
+actions.cleave+=/immolate,if=(dot.immolate.refreshable&(dot.immolate.remains<cooldown.havoc.remains|!dot.immolate.ticking))&(!talent.cataclysm|cooldown.cataclysm.remains>remains)&(!talent.soul_fire|cooldown.soul_fire.remains+(!talent.mayhem*action.soul_fire.cast_time)>dot.immolate.remains)&target.time_to_die>15
 actions.cleave+=/summon_infernal
-actions.cleave+=/channel_demonfire,if=talent.ruin>1&!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))
-actions.cleave+=/chaos_bolt,if=soul_shard>3.5
-actions.cleave+=/chaos_bolt,if=buff.rain_of_chaos.remains>cast_time
-actions.cleave+=/chaos_bolt,if=buff.backdraft.up
+actions.cleave+=/incinerate,if=talent.diabolic_ritual&(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains-2-!variable.disable_cb_2t*action.chaos_bolt.cast_time-variable.disable_cb_2t*gcd.max)<=0)
+actions.cleave+=/rain_of_fire,if=variable.pooling_condition&!talent.wither&buff.rain_of_chaos.up
+actions.cleave+=/rain_of_fire,if=variable.allow_rof_2t_spender>=1&!talent.wither&talent.pyrogenics&debuff.pyrogenics.remains<=gcd.max&(!talent.rain_of_chaos|cooldown.summon_infernal.remains>=gcd.max*3)&variable.pooling_condition
+actions.cleave+=/rain_of_fire,if=variable.do_rof_2t&variable.pooling_condition&(cooldown.summon_infernal.remains>=gcd.max*3|!talent.rain_of_chaos)
 actions.cleave+=/soul_fire,if=soul_shard<=4&talent.mayhem
-actions.cleave+=/chaos_bolt,if=talent.eradication&debuff.eradication.remains<cast_time+action.chaos_bolt.travel_time+1&!action.chaos_bolt.in_flight
-actions.cleave+=/channel_demonfire,if=!(talent.diabolic_embers&talent.avatar_of_destruction&(talent.burn_to_ashes|talent.chaos_incarnate))
+actions.cleave+=/chaos_bolt,if=!variable.disable_cb_2t&variable.pooling_condition_cb&(cooldown.summon_infernal.remains>=gcd.max*3|soul_shard>4|!talent.rain_of_chaos)
+actions.cleave+=/channel_demonfire
 actions.cleave+=/dimensional_rift
-actions.cleave+=/chaos_bolt,if=soul_shard>3.5&!variable.pool_soul_shards
-actions.cleave+=/chaos_bolt,if=fight_remains<5&fight_remains>cast_time+travel_time
-actions.cleave+=/summon_soulkeeper,if=buff.tormented_soul.stack=10|buff.tormented_soul.stack>3&fight_remains<10
+actions.cleave+=/infernal_bolt
 actions.cleave+=/conflagrate,if=charges>(max_charges-1)|fight_remains<gcd.max*charges
 actions.cleave+=/incinerate
 ]]
@@ -4324,96 +4384,119 @@ actions.cleave+=/incinerate
 		local apl = self:havoc()
 		if apl then return apl end
 	end
-	self.pool_soul_shards = Mayhem.known or Havoc:Ready(10)
+	self.pool_soul_shards = Mayhem.known or Havoc:Ready(5)
+	if self.use_cds and Malevolence:Usable() and self.dot:Ticking() >= min(5, Player.enemies) and (
+		not SummonInfernal.known or
+		SummonInfernal:Up() or
+		not SummonInfernal:Ready(55)
+	) then
+		UseCooldown(Malevolence)
+	end
+	if self.use_cds and Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready()) then
+		UseCooldown(Havoc)
+	end
+	if DiabolicRitual.known and ChaosBolt:Usable() and DemonicArt:Up() then
+		return ChaosBolt
+	end
+	if Decimation.known and SoulFire:Usable() and Decimation:Up() and Conflagrate:Remains() >= SoulFire:CastTime() and (not Havoc.known or not Havoc:Ready()) and (Player.soul_shards.current <= 4 or Decimation:Remains() <= (Player.gcd * 2)) then
+		return SoulFire
+	end
+	if Wither:Usable() and Target.timeToDie > 8 and Wither:Refreshable() and (not SoulFire.known or (SoulFire:Cooldown() + SoulFire:CastTime()) > (Wither:Remains() - 5)) and (
+		Wither:Remains() < 3 or
+		(Wither:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) < (Wither:Duration() * (InternalCombustion.known and 0.4 or 0.3)) or
+		(InternalCombustion.known and (Wither:Remains() - ChaosBolt:CastTime()) < 5 and ChaosBolt:Usable())
+	) then
+		return Wither
+	end
 	if Conflagrate:Usable() and (
-		(RoaringBlaze.known and Conflagrate:Remains() < 1.5) or
-		(not self.pool_soul_shards and Conflagrate:FullRechargeTime() == 0)
+		(RoaringBlaze.known and Conflagrate:FullRechargeTime() <= (Player.gcd * 2))
 	) then
 		return Conflagrate
 	end
-	if self.use_cds then
-		if DimensionalRift:Usable() and Player.soul_shards.current < 4.7 and (
-			DimensionalRift:Charges() > 2 or
-			(Target.boss and Target.timeToDie < DimensionalRift:CooldownDuration())
-		) then
-			UseCooldown(DimensionalRift)
+	if Shadowburn:Usable() and (
+		(Target.boss and Target.timeToDie <= 8) or
+		((ConflagrationOfChaos.known or BlisteringAtrophy.known) and (
+			Shadowburn:FullRechargeTime() <= (Player.gcd * 3) or
+			(Eradication.known and not DiabolicRitual.known and Eradication:Remains() <= Player.gcd and ChaosBolt:Traveling() == 0)
+		))
+	) then
+		return Shadowburn
+	end
+	if RitualOfRuin.known and ChaosBolt:Usable() and RitualOfRuin:Up() then
+		return ChaosBolt
+	end
+	if RainOfChaos.known and not SummonInfernal:Ready(90) then
+		if RainOfFire:Usable() then
+			return RainOfFire
 		end
-		if Cataclysm:Usable() then
-			UseCooldown(Cataclysm)
+		if Shadowburn:Usable() then
+			return Shadowburn
 		end
-		if RagingDemonfire.known and ChannelDemonfire:Usable() and self.dot:Ticking() >= 2 then
-			UseCooldown(ChannelDemonfire)
-		end
-		if SoulFire:Usable() and Player.soul_shards.current <= 3.5 and not self.pool_soul_shards and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
-			(Conflagrate:Remains() > (SoulFire:CastTime() + SoulFire:TravelTime())) or
-			(Backdraft.known and not RoaringBlaze.known and Backdraft:Up())
-		) then
-			UseCooldown(SoulFire)
+		if ChaosBolt:Usable() then
+			return ChaosBolt
 		end
 	end
-	if self.dot:Usable() and Target.timeToDie > 15 and self.dot:Refreshable() and (self.dot:Down() or self.dot:Remains() < Havoc:Cooldown()) and (not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and (not SoulFire.known or (SoulFire:Cooldown() + (not Mayhem.known and SoulFire:CastTime() or 0)) > self.dot:Remains()) then
+	if Ruination:Usable() and (not Eradication.known or not Shadowburn.known or Eradication:Remains() >= Ruination:CastTime()) then
+		return Ruination
+	end
+	if self.use_cds and Cataclysm:Usable() then
+		UseCooldown(Cataclysm)
+	end
+	if self.use_cds and RagingDemonfire.known and ChannelDemonfire:Usable() and (self.dot:Remains() - (InternalCombustion.known and ChaosBolt:Traveling() > 0 and 5 or 0)) > (3 * Player.haste_factor) then
+		UseCooldown(ChannelDemonfire)
+	end
+	if SoulFire:Usable() and not self.pool_soul_shards and Player.soul_shards.current <= 3.5 and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) and (
+		Conflagrate:Remains() > (SoulFire:CastTime() + SoulFire:TravelTime()) or
+		(not RoaringBlaze.known and Backdraft:Up())
+	)  then
+		return SoulFire
+	end
+	if self.dot:Usable() and Target.timeToDie > 15 and self.dot:Refreshable() and (
+		(self.dot:Down() or (Havoc.known and self.dot:Remains() < Havoc:Cooldown())) and
+		(not self.use_cds or not Cataclysm.known or Cataclysm:Cooldown() > self.dot:Remains()) and
+		(not SoulFire.known or (SoulFire:Cooldown() + ((not Mayhem.known) and SoulFire:CastTime() or 0)) > self.dot:Remains())
+	) then
 		return self.dot
 	end
-	if self.use_cds then
-		if Havoc:Usable() and Target.timeToDie > 8 and (not SummonInfernal.known or not SummonInfernal:Ready()) then
-			UseCooldown(Havoc)
-		end
-		if DimensionalRift:Usable() and Player.soul_shards.current < 4.5 and self.pool_soul_shards then
-			UseCooldown(DimensionalRift)
-		end
+	if self.use_cds and SummonInfernal:Usable() then
+		UseCooldown(SummonInfernal)
 	end
-	if ChaosBolt:Usable() and (
-		Pet.infernal_count > 0 or
-		Player.soul_shards.current >= 4
+--[[
+actions.cleave+=/incinerate,if=talent.diabolic_ritual&(diabolic_ritual&(buff.diabolic_ritual_mother_of_chaos.remains+buff.diabolic_ritual_overlord.remains+buff.diabolic_ritual_pit_lord.remains-2-!variable.disable_cb_2t*action.chaos_bolt.cast_time-variable.disable_cb_2t*gcd.max)<=0)
+]]
+	if RainOfChaos.known and RainOfFire:Usable() and self.pooling_condition and not Wither.known and RainOfChaos:Up() then
+		return RainOfChaos
+	end
+	if RainOfFire:Usable() and self.pooling_condition and (not RainOfChaos.known or not SummonInfernal:Ready(Player.gcd * 3)) and (
+		self.do_rof_2t or
+		(self.allow_rof_2t_spender >= 1 and not Wither.known and Pyrogenics.known and Pyrogenics:Remains() <= Player.gcd)
+	) then
+		return RainOfFire
+	end
+	if Mayhem.known and SoulFire:Usable() and Player.soul_shards.current <= 4 then
+		return SoulFire
+	end
+	if ChaosBolt:Usable() and self.pooling_condition_cb and (
+		Player.soul_shards.current > 4 or
+		not RainOfChaos.known or
+		not SummonInfernal:Ready(Player.gcd * 3)
 	) then
 		return ChaosBolt
 	end
-	if self.use_cds then
-		if SummonInfernal:Usable() and (not Malevolence.known or Malevolence:Ready(10) or not Malevolence:Ready(50)) then
-			UseCooldown(SummonInfernal)
-		end
-		if ChannelDemonfire:Usable() and Ruin.known and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) then
-			UseCooldown(ChannelDemonfire)
-		end
+	if self.use_cds and ChannelDemonfire:Usable() then
+		UseCooldown(ChannelDemonfire)
 	end
-	if ChaosBolt:Usable() and (
-		Player.soul_shards.current > 3.5 or
-		(RainOfChaos.known and RainOfChaos:Remains() > ChaosBolt:CastTime()) or
-		(Backdraft.known or Backdraft:Up())
-	) then
-		return ChaosBolt
+	if self.use_cds and DimensionalRift:Usable() then
+		UseCooldown(DimensionalRift)
 	end
-	if self.use_cds and SoulFire:Usable() and Mayhem.known and Player.soul_shards.current <= 4 and Target.timeToDie > (SoulFire:CastTime() + SoulFire:TravelTime()) then
-		UseCooldown(SoulFire)
-	end
-	if Eradication.known and ChaosBolt:Usable() and Eradication:Remains() < (ChaosBolt:CastTime() + ChaosBolt:TravelTime() + 1) and ChaosBolt:Traveling() == 0 then
-		return ChaosBolt
-	end
-	if self.use_cds then
-		if ChannelDemonfire:Usable() and not (DiabolicEmbers.known and AvatarOfDestruction.known and (BurnToAshes.known or ChaosIncarnate.known)) then
-			UseCooldown(ChannelDemonfire)
-		end
-		if DimensionalRift:Usable() then
-			UseCooldown(DimensionalRift)
-		end
-	end
-	if ChaosBolt:Usable() and (
-		(Player.soul_shards.current > 3.5 and not self.pool_soul_shards) or
-		(Target.boss and Target.timeToDie < 5 and Target.timeToDie > (ChaosBolt:CastTime() + ChaosBolt:TravelTime()))
-	) then
-		return ChaosBolt
-	end
-	if self.use_cds and SummonSoulkeeper:Usable() and (TormentedSoul:Stack() >= 10 or (Target.boss and Target.timeToDie < 10 and TormentedSoul:Stack() > 3)) then
-		UseCooldown(SummonSoulkeeper)
+	if InfernalBolt:Usable() and Target.timeToDie > (InfernalBolt:CastTime() + InfernalBolt:TravelTime()) then
+		return InfernalBolt
 	end
 	if Conflagrate:Usable() and (
-		Conflagrate:Charges() > (Conflagrate:MaxCharges() - 1) or
+		Conflagrate:FullRechargeTime() < 8 or
 		(Target.boss and Target.timeToDie < (Player.gcd * Conflagrate:Charges()))
 	) then
 		return Conflagrate
-	end
-	if InfernalBolt:Usable() then
-		return InfernalBolt
 	end
 	if Incinerate:Usable() then
 		return Incinerate
@@ -4424,13 +4507,13 @@ APL[SPEC.DESTRUCTION].havoc = function(self)
 --[[
 actions.havoc=conflagrate,if=talent.backdraft&buff.backdraft.down&soul_shard>=1&soul_shard<=4
 actions.havoc+=/soul_fire,if=cast_time<havoc_remains&soul_shard<2.5
-actions.havoc+=/channel_demonfire,if=soul_shard<4.5&talent.raging_demonfire
-actions.havoc+=/immolate,target_if=min:dot.immolate.remains+100*debuff.havoc.remains,if=(((dot.immolate.refreshable&variable.havoc_immo_time<5.4)&target.time_to_die>5)|((dot.immolate.remains<2&dot.immolate.remains<havoc_remains)|!dot.immolate.ticking|variable.havoc_immo_time<2)&target.time_to_die>11)&soul_shard<4.5
-actions.havoc+=/chaos_bolt,if=((talent.cry_havoc&!talent.inferno)|!talent.rain_of_fire)&cast_time<havoc_remains
-actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains&(active_enemies<=3-talent.inferno)
-actions.havoc+=/rain_of_fire,if=active_enemies>=3&talent.inferno
-actions.havoc+=/rain_of_fire,if=active_enemies>=4-talent.inferno
-actions.havoc+=/rain_of_fire,if=active_enemies>2&(talent.avatar_of_destruction|(talent.rain_of_chaos&buff.rain_of_chaos.up))&talent.inferno.enabled
+actions.havoc+=/cataclysm,if=raid_event.adds.in>15|(talent.wither&dot.wither.remains<action.wither.duration*0.3)
+actions.havoc+=/immolate,if=(((dot.immolate.refreshable&variable.havoc_immo_time<5.4)&target.time_to_die>5)|((dot.immolate.remains<2&dot.immolate.remains<havoc_remains)|!dot.immolate.ticking|variable.havoc_immo_time<2)&target.time_to_die>11)&soul_shard<4.5
+actions.havoc+=/wither,if=(((dot.wither.refreshable&variable.havoc_immo_time<5.4)&target.time_to_die>5)|((dot.wither.remains<2&dot.wither.remains<havoc_remains)|!dot.wither.ticking|variable.havoc_immo_time<2)&target.time_to_die>11)&soul_shard<4.5
+actions.havoc+=/shadowburn,if=active_enemies<=4&(cooldown.shadowburn.full_recharge_time<=gcd.max*3|debuff.eradication.remains<=gcd.max&talent.eradication&!action.chaos_bolt.in_flight&!talent.diabolic_ritual)&(talent.conflagration_of_chaos|talent.blistering_atrophy)
+actions.havoc+=/shadowburn,if=active_enemies<=4&havoc_remains<=gcd.max*3
+actions.havoc+=/chaos_bolt,if=cast_time<havoc_remains&((!talent.improved_chaos_bolt&active_enemies<=2)|(talent.improved_chaos_bolt&(active_enemies<=3|(!talent.wither&talent.cataclysm&active_enemies<=5))))
+actions.havoc+=/rain_of_fire,if=active_enemies>=3
 actions.havoc+=/channel_demonfire,if=soul_shard<4.5
 actions.havoc+=/conflagrate,if=!talent.backdraft
 actions.havoc+=/dimensional_rift,if=soul_shard<4.7&(charges>2|fight_remains<cooldown.dimensional_rift.duration)
@@ -4442,9 +4525,6 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	if SoulFire:Usable() and SoulFire:CastTime() < self.havoc_remains and Player.soul_shards.current < 2.5 then
 		return SoulFire
 	end
-	if ChannelDemonfire:Usable() and Player.soul_shards.current < 4.5 and RagingDemonfire.known then
-		UseCooldown(ChannelDemonfire)
-	end
 	if self.dot:Usable() and Player.soul_shards.current < 4.5 and (
 		(self.dot:Refreshable() and self.havoc_immo_time < 5.4 and Target.timeToDie > 5) or
 		(Target.timeToDie > 11 and (
@@ -4455,17 +4535,22 @@ actions.havoc+=/incinerate,if=cast_time<havoc_remains
 	) then
 		return self.dot
 	end
+	if Shadowburn:Usable() and Player.enemies <= 4 and (
+		self.havoc_remains <= (Player.gcd * 3) or
+		((ConflagrationOfChaos.known or BlisteringAtrophy.known) and (
+			Shadowburn:FullRechargeTime() <= (Player.gcd * 3) or
+			(Eradication.known and not DiabolicRitual.known and Eradication:Remains() <= Player.gcd and ChaosBolt:Traveling() == 0)
+		))
+	) then
+		return Shadowburn
+	end
 	if ChaosBolt:Usable() and ChaosBolt:CastTime() < self.havoc_remains and (
-		not RainOfFire.known or
-		(Player.enemies <= (3 - (Inferno.known and 1 or 0)))
+		(not ImprovedChaosBolt.known and Player.enemies <= 2) or
+		(ImprovedChaosBolt.known and (Player.enemies <= 3 or (not Wither.known and Cataclysm.known and Player.enemies <= 5)))
 	) then
 		return ChaosBolt
 	end
-	if RainOfFire:Usable() and (
-		(Player.enemies >= 3 and Inferno.known) or
-		(Player.enemies >= (4 - (Inferno.known and 1 or 0))) or
-		(Player.enemies > 2 and Inferno.known and (AvatarOfDestruction.known or (RainOfChaos.known and RainOfChaos:Up())))
-	) then
+	if RainOfFire:Usable() and Player.enemies >= 3 then
 		return RainOfFire
 	end
 	if ChannelDemonfire:Usable() and Player.soul_shards.current < 4.5 then
@@ -4490,13 +4575,9 @@ end
 
 APL[SPEC.DESTRUCTION].items = function(self)
 --[[
-actions.items=use_item,use_off_gcd=1,name=belorrelos_the_suncaller,if=((time>20&cooldown.summon_infernal.remains>20)|(trinket.1.is.belorrelos_the_suncaller&(trinket.2.cooldown.remains|!variable.trinket_2_buffs|trinket.1.is.time_thiefs_gambit))|(trinket.2.is.belorrelos_the_suncaller&(trinket.1.cooldown.remains|!variable.trinket_1_buffs|trinket.2.is.time_thiefs_gambit)))&(!raid_event.adds.exists|raid_event.adds.up|spell_targets.belorrelos_the_suncaller>=5)|fight_remains<20
-actions.items+=/use_item,name=nymues_unraveling_spindle,if=(variable.infernal_active|!talent.summon_infernal|(variable.trinket_1_will_lose_cast&trinket.1.is.nymues_unraveling_spindle)|(variable.trinket_2_will_lose_cast&trinket.2.is.nymues_unraveling_spindle))|fight_remains<20
-# We want to use trinkets with Infernal unless we will miss a trinket use. The trinket with highest estimated value, will be used first.
+actions.items=use_item,name=spymasters_web,if=pet.infernal.remains>=10&pet.infernal.remains<=20&buff.spymasters_report.stack>=38&(fight_remains>240|fight_remains<=140)|fight_remains<=30
 actions.items+=/use_item,slot=trinket1,if=(variable.infernal_active|!talent.summon_infernal|variable.trinket_1_will_lose_cast)&(variable.trinket_priority=1|variable.trinket_2_exclude|!trinket.2.has_cooldown|(trinket.2.cooldown.remains|variable.trinket_priority=2&cooldown.summon_infernal.remains>20&!variable.infernal_active&trinket.2.cooldown.remains<cooldown.summon_infernal.remains))&variable.trinket_1_buffs&!variable.trinket_1_manual|(variable.trinket_1_buff_duration+1>=fight_remains)
 actions.items+=/use_item,slot=trinket2,if=(variable.infernal_active|!talent.summon_infernal|variable.trinket_2_will_lose_cast)&(variable.trinket_priority=2|variable.trinket_1_exclude|!trinket.1.has_cooldown|(trinket.1.cooldown.remains|variable.trinket_priority=1&cooldown.summon_infernal.remains>20&!variable.infernal_active&trinket.1.cooldown.remains<cooldown.summon_infernal.remains))&variable.trinket_2_buffs&!variable.trinket_2_manual|(variable.trinket_2_buff_duration+1>=fight_remains)
-actions.items+=/use_item,name=time_thiefs_gambit,if=variable.infernal_active|!talent.summon_infernal|fight_remains<15|((trinket.1.cooldown.duration<cooldown.summon_infernal.remains_expected+5)&active_enemies=1)|(active_enemies>1&havoc_active)
-# If only one on use trinket provied a buff, use the other on cooldown, Or if neither trinket provied a buff, use both on cooldown.
 actions.items+=/use_item,use_off_gcd=1,slot=trinket1,if=!variable.trinket_1_buffs&!variable.trinket_1_manual&(!variable.trinket_1_buffs&(trinket.2.cooldown.remains|!variable.trinket_2_buffs)|talent.summon_infernal&cooldown.summon_infernal.remains_expected>20&!prev_gcd.1.summon_infernal|!talent.summon_infernal)
 actions.items+=/use_item,use_off_gcd=1,slot=trinket2,if=!variable.trinket_2_buffs&!variable.trinket_2_manual&(!variable.trinket_2_buffs&(trinket.1.cooldown.remains|!variable.trinket_1_buffs)|talent.summon_infernal&cooldown.summon_infernal.remains_expected>20&!prev_gcd.1.summon_infernal|!talent.summon_infernal)
 actions.items+=/use_item,use_off_gcd=1,slot=main_hand
@@ -4509,9 +4590,6 @@ actions.items+=/use_item,use_off_gcd=1,slot=main_hand
 				return UseCooldown(Trinket2)
 			end
 		end
-	end
-	if DreambinderLoomOfTheGreatCycle:Usable() then
-		return UseCooldown(DreambinderLoomOfTheGreatCycle)
 	end
 end
 
@@ -4530,15 +4608,18 @@ end
 APL[SPEC.DESTRUCTION].variables = function(self)
 --[[
 actions.variables=variable,name=havoc_immo_time,op=reset
-actions.variables+=/cycling_variable,name=havoc_immo_time,op=add,value=dot.immolate.remains*debuff.havoc.up
+actions.variables+=/variable,name=pooling_condition,value=(soul_shard>=3|(talent.secrets_of_the_coven&buff.infernal_bolt.up|buff.decimation.up)&soul_shard>=3),default=1,op=set
+actions.variables+=/variable,name=pooling_condition_cb,value=variable.pooling_condition|pet.infernal.active&soul_shard>=3,default=1,op=set
+actions.variables+=/cycling_variable,name=havoc_immo_time,op=add,value=dot.immolate.remains*debuff.havoc.up<?dot.wither.remains*debuff.havoc.up
 actions.variables+=/variable,name=infernal_active,op=set,value=pet.infernal.active|(cooldown.summon_infernal.duration-cooldown.summon_infernal.remains)<20
-# If we can have more use of trinket than use of infernal, we want to it, but we want to sync if we don't lose a cast, and if we sync we don't lose it too late
 actions.variables+=/variable,name=trinket_1_will_lose_cast,value=((floor((fight_remains%trinket.1.cooldown.duration)+1)!=floor((fight_remains+(cooldown.summon_infernal.duration-cooldown.summon_infernal.remains))%cooldown.summon_infernal.duration))&(floor((fight_remains%trinket.1.cooldown.duration)+1))!=(floor(((fight_remains-cooldown.summon_infernal.remains)%trinket.1.cooldown.duration)+1))|((floor((fight_remains%trinket.1.cooldown.duration)+1)=floor((fight_remains+(cooldown.summon_infernal.duration-cooldown.summon_infernal.remains))%cooldown.summon_infernal.duration))&(((fight_remains-cooldown.summon_infernal.remains%%trinket.1.cooldown.duration)-cooldown.summon_infernal.remains-variable.trinket_1_buff_duration)>0)))&cooldown.summon_infernal.remains>20
 actions.variables+=/variable,name=trinket_2_will_lose_cast,value=((floor((fight_remains%trinket.2.cooldown.duration)+1)!=floor((fight_remains+(cooldown.summon_infernal.duration-cooldown.summon_infernal.remains))%cooldown.summon_infernal.duration))&(floor((fight_remains%trinket.2.cooldown.duration)+1))!=(floor(((fight_remains-cooldown.summon_infernal.remains)%trinket.2.cooldown.duration)+1))|((floor((fight_remains%trinket.2.cooldown.duration)+1)=floor((fight_remains+(cooldown.summon_infernal.duration-cooldown.summon_infernal.remains))%cooldown.summon_infernal.duration))&(((fight_remains-cooldown.summon_infernal.remains%%trinket.2.cooldown.duration)-cooldown.summon_infernal.remains-variable.trinket_2_buff_duration)>0)))&cooldown.summon_infernal.remains>20
 ]]
 	self.infernal_up = Pet.Infernal:Up(true)
 	self.use_cds = Opt.cooldown and (Target.boss or Target.player or (not Opt.boss_only and Target.timeToDie > Opt.cd_ttd) or self.infernal_up)
 	self.havoc_remains = Havoc:HighestRemains()
+	self.pooling_condition = Player.soul_shards.current >= 3
+	self.pooling_condition_cb = self.pooling_condition or self.infernal_up and Player.soul_shards.current >= 3
 	self.havoc_immo_time = self.havoc_remains > 0 and Havoc:DotRemains(self.dot) or 0
 	self.infernal_active = self.infernal_up or (SummonInfernal:CooldownDuration() - SummonInfernal:Cooldown()) < 20
 end
